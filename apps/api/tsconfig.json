@@ -1,0 +1,10 @@
+{
+  "extends": "@floq/config/typescript/server",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["src"]
+}

@@ -1,0 +1,58 @@
+{
+  "name": "floq",
+  "short_name": "floq",
+  "description": "Flow together, own your data.",
+  "start_url": "/home",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#E8593C",
+  "lang": "tr",
+  "dir": "ltr",
+  "orientation": "portrait-primary",
+  "categories": ["social", "communication"],
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Ana Sayfa",
+      "short_name": "Akış",
+      "url": "/home",
+      "description": "Zaman tünelini gör",
+      "icons": [{ "src": "/icons/icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Bildirimler",
+      "short_name": "Bildirimler",
+      "url": "/notifications",
+      "description": "Bildirimleri gör",
+      "icons": [{ "src": "/icons/icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Mesajlar",
+      "short_name": "Mesajlar",
+      "url": "/dm",
+      "description": "Doğrudan mesajlar",
+      "icons": [{ "src": "/icons/icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Keşfet",
+      "short_name": "Keşfet",
+      "url": "/explore",
+      "description": "Yeni içerikleri keşfet",
+      "icons": [{ "src": "/icons/icon.svg", "sizes": "any" }]
+    }
+  ]
+}

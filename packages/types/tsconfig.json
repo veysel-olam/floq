@@ -1,0 +1,9 @@
+{
+  "extends": "@floq/config/typescript/base",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true
+  },
+  "include": ["src"]
+}

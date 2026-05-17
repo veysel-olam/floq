@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "floq",
+    "slug": "floq",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "floq",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.floq.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Fotoğraf paylaşmak için izin gerekli",
+        "NSCameraUsageDescription": "Fotoğraf çekmek için izin gerekli"
+      }
+    },
+    "android": {
+      "package": "com.floq.app",
+      "versionCode": 1
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
