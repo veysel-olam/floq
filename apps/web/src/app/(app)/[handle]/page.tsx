@@ -7,7 +7,7 @@ import { api, type Actor, type Post } from '@/lib/api'
 import { PostCard } from '@/components/posts/post-card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import { Loader2, CalendarDays, MoreHorizontal, ShieldOff, BellOff, Bell, MessageSquare, Pencil, Star, Images, BarChart2, X, Lock, Globe, Shield, MessageCircle, Heart, Film, FileText, Link2, Share2, Check, Copy } from 'lucide-react'
+import { Loader2, CalendarDays, MoreHorizontal, ShieldOff, BellOff, Bell, MessageSquare, Pencil, Star, Images, BarChart2, X, Lock, Globe, Shield, MessageCircle, Heart, Film, FileText, Link2, Share2, Check, Copy, FolderOpen, Plus, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TimelineSkeleton } from '@/components/ui/skeleton'
 import { NotFoundContent } from '@/components/not-found-content'
@@ -28,7 +28,7 @@ function renderBio(bio: string) {
   })
 }
 
-type Tab = 'posts' | 'replies' | 'media' | 'likes'
+type Tab = 'posts' | 'replies' | 'media' | 'likes' | 'collections'
 
 export default function ProfilePage({ params }: { params: Promise<{ handle: string }> }) {
   const { handle } = use(params)
@@ -83,6 +83,13 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
   const [mediaNextCursor, setMediaNextCursor] = useState<string | null>(null)
   const [mediaLoaded, setMediaLoaded] = useState(false)
   const [mediaLoadingMore, setMediaLoadingMore] = useState(false)
+
+  // Collections tab state
+  const [collectionsList, setCollectionsList] = useState<import('@/lib/api').PostCollection[]>([])
+  const [collectionsLoaded, setCollectionsLoaded] = useState(false)
+  const [collectionsLoading, setCollectionsLoading] = useState(false)
+  const [newCollectionName, setNewCollectionName] = useState('')
+  const [creatingCollection, setCreatingCollection] = useState(false)
 
   // Mutual followers state
   const [mutualFollowers, setMutualFollowers] = useState<{ id: string; handle: string; displayName: string | null; avatarUrl: string | null }[]>([])
@@ -196,6 +203,45 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
     if (t === 'replies' && !repliesLoaded) void loadReplies()
     if (t === 'likes' && !likesLoaded) void loadLikes()
     if (t === 'media' && !mediaLoaded) void loadMedia()
+    if (t === 'collections' && !collectionsLoaded) void loadCollections()
+  }
+
+  async function loadCollections() {
+    setCollectionsLoading(true)
+    try {
+      const data = isOwn
+        ? await api.postCollections.list()
+        : await api.postCollections.listByHandle(handle)
+      setCollectionsList(data.collections)
+      setCollectionsLoaded(true)
+    } catch {
+      // ignore
+    } finally {
+      setCollectionsLoading(false)
+    }
+  }
+
+  async function createCollection() {
+    if (!newCollectionName.trim()) return
+    setCreatingCollection(true)
+    try {
+      const col = await api.postCollections.create(newCollectionName.trim())
+      setCollectionsList((prev) => [{ ...col, postCount: 0 }, ...prev])
+      setNewCollectionName('')
+    } catch {
+      // ignore
+    } finally {
+      setCreatingCollection(false)
+    }
+  }
+
+  async function deleteCollection(id: string) {
+    try {
+      await api.postCollections.delete(id)
+      setCollectionsList((prev) => prev.filter((c) => c.id !== id))
+    } catch {
+      // ignore
+    }
   }
 
   const loadMoreRef = useInfiniteScroll(
@@ -380,6 +426,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
     { id: 'replies', label: 'Yorumlar', icon: <MessageCircle className="w-3.5 h-3.5" /> },
     { id: 'media', label: 'Medya', icon: <Film className="w-3.5 h-3.5" /> },
     { id: 'likes', label: 'Beğeniler', icon: <Heart className="w-3.5 h-3.5" />, count: actor.likesCount },
+    { id: 'collections', label: 'Koleksiyonlar', icon: <FolderOpen className="w-3.5 h-3.5" /> },
   ]
 
   return (
@@ -885,6 +932,64 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
             </>
           )}
         </>
+      )}
+
+      {tab === 'collections' && (
+        <div className="px-4 py-4 space-y-3">
+          {/* Create collection form — own profile only */}
+          {isOwn && (
+            <div className="flex items-center gap-2">
+              <input
+                value={newCollectionName}
+                onChange={(e) => setNewCollectionName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') void createCollection() }}
+                maxLength={100}
+                placeholder="Yeni koleksiyon adı…"
+                className="flex-1 text-sm bg-(--color-background-secondary) border border-(--color-border) rounded-xl px-3 py-2 focus:outline-none focus:border-(--color-coral) text-(--color-text-primary) placeholder:text-(--color-text-tertiary)"
+              />
+              <button
+                onClick={() => void createCollection()}
+                disabled={!newCollectionName.trim() || creatingCollection}
+                className="p-2 rounded-xl bg-(--color-coral) text-white hover:bg-(--color-coral-hover) disabled:opacity-40 transition-colors"
+              >
+                {creatingCollection ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              </button>
+            </div>
+          )}
+
+          {collectionsLoading ? (
+            <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-(--color-coral)" /></div>
+          ) : collectionsList.length === 0 ? (
+            <div className="py-10 flex flex-col items-center gap-2 text-center">
+              <FolderOpen className="w-8 h-8 text-(--color-text-tertiary)" />
+              <p className="text-sm font-medium text-(--color-text-secondary)">Henüz koleksiyon yok</p>
+              {isOwn && <p className="text-xs text-(--color-text-tertiary)">Gönderilerini konuya göre grupla</p>}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {collectionsList.map((c) => (
+                <a
+                  key={c.id}
+                  href={`/collections/${c.id}`}
+                  className="group relative rounded-2xl border border-(--color-border) bg-(--color-background-secondary) p-4 hover:border-(--color-coral)/50 hover:bg-(--color-background-tertiary) transition-all"
+                >
+                  <FolderOpen className="w-5 h-5 text-(--color-coral) mb-2" />
+                  <p className="text-sm font-semibold text-(--color-text-primary) line-clamp-1">{c.name}</p>
+                  <p className="text-xs text-(--color-text-tertiary) mt-0.5">{c.postCount ?? 0} gönderi</p>
+                  {!c.isPublic && <span className="text-[10px] font-semibold text-(--color-text-tertiary) mt-1 block">Gizli</span>}
+                  {isOwn && (
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); void deleteCollection(c.id) }}
+                      className="absolute top-2 right-2 p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-500/10 text-red-500 transition-all"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       <div ref={loadMoreRef} className="h-1" />

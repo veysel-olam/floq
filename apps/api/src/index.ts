@@ -34,6 +34,7 @@ import { filtersRoutes } from './routes/filters.js'
 import { adminRoutes } from './routes/admin.js'
 import { proxyRoutes } from './routes/proxy.js'
 import { dmRoutes } from './routes/dm.js'
+import { postCollectionsRoutes } from './routes/postCollections.js'
 import { atProtocolRoutes } from './routes/atprotocol.js'
 import { pollsRoutes } from './routes/polls.js'
 import { gifsRoutes } from './routes/gifs.js'
@@ -133,6 +134,7 @@ await app.register(filtersRoutes)
 await app.register(adminRoutes)
 await app.register(proxyRoutes)
 await app.register(dmRoutes)
+await app.register(postCollectionsRoutes)
 await app.register(atProtocolRoutes)
 await app.register(pollsRoutes)
 await app.register(gifsRoutes)

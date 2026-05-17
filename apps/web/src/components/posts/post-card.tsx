@@ -3,11 +3,11 @@
 import { useState, useReducer, useEffect, useRef, memo, Fragment } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Heart, Repeat2, MessageCircle, Bookmark, MoreHorizontal, Pencil, Trash2, Check, X, Eye, Users, Lock, CornerDownRight, Feather, BarChart2, Pin, PinOff, Loader2, Languages, UserCheck, Flag, Globe, Link2, Code2 } from 'lucide-react'
+import { Heart, Repeat2, MessageCircle, Bookmark, MoreHorizontal, Pencil, Trash2, Check, X, Eye, Users, Lock, CornerDownRight, Feather, BarChart2, Pin, PinOff, Loader2, Languages, UserCheck, Flag, Globe, Link2, Code2, FolderPlus, Plus } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { api, type Post, type Poll, type Actor, proxyMediaUrl } from '@/lib/api'
+import { api, type Post, type Poll, type Actor, type PostCollection, proxyMediaUrl } from '@/lib/api'
 import type { FilterResult } from '@/lib/keyword-filters'
 import { ReportModal } from '@/components/report-modal'
 import { CodeBlock } from '@/components/ui/code-block'
@@ -535,6 +535,10 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
   const [lightbox, setLightbox] = useState<{ index: number } | null>(null)
   const [embedOpen, setEmbedOpen] = useState(false)
   const [altOpen, setAltOpen] = useState<string | null>(null)
+  const [collectionModalOpen, setCollectionModalOpen] = useState(false)
+  const [collections, setCollections] = useState<PostCollection[]>([])
+  const [collectionsLoading, setCollectionsLoading] = useState(false)
+  const [addingToCollection, setAddingToCollection] = useState<string | null>(null)
 
   // Sync repliesCount when parent prop changes (e.g. after reply deleted from post detail)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -756,6 +760,33 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
     }
   }
 
+  async function openCollectionModal() {
+    dispatch({ type: 'MENU_CLOSE' })
+    setCollectionsLoading(true)
+    setCollectionModalOpen(true)
+    try {
+      const data = await api.postCollections.list()
+      setCollections(data.collections)
+    } catch {
+      toast.error('Koleksiyonlar yüklenemedi')
+    } finally {
+      setCollectionsLoading(false)
+    }
+  }
+
+  async function addToCollection(collectionId: string) {
+    setAddingToCollection(collectionId)
+    try {
+      await api.postCollections.addPost(collectionId, post.id)
+      toast.success('Koleksiyona eklendi')
+      setCollectionModalOpen(false)
+    } catch {
+      toast.error('Eklenemedi')
+    } finally {
+      setAddingToCollection(null)
+    }
+  }
+
   async function togglePin() {
     try {
       if (pinned) {
@@ -923,6 +954,12 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
                         className="w-full flex items-center gap-2 px-3.5 py-2 text-[13px] text-(--color-text-primary) hover:bg-(--color-background-secondary) transition-colors"
                       >
                         <Code2 className="w-3.5 h-3.5 text-(--color-text-tertiary)" /> Göm
+                      </button>
+                      <button
+                        onClick={() => void openCollectionModal()}
+                        className="w-full flex items-center gap-2 px-3.5 py-2 text-[13px] text-(--color-text-primary) hover:bg-(--color-background-secondary) transition-colors"
+                      >
+                        <FolderPlus className="w-3.5 h-3.5 text-(--color-text-tertiary)" /> Koleksiyona Ekle
                       </button>
                       <div className="my-1 border-t border-(--color-border-secondary)" />
                       <button
@@ -1607,6 +1644,42 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
     )}
 
     {/* Quotes modal */}
+    {collectionModalOpen && (
+      <>
+        <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={() => setCollectionModalOpen(false)} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+          <div className="pointer-events-auto w-full max-w-sm bg-(--color-background) border border-(--color-border) rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-(--color-border-secondary)">
+              <span className="text-base font-bold text-(--color-text-primary)" style={{ fontFamily: 'var(--font-display)' }}>Koleksiyona Ekle</span>
+              <button onClick={() => setCollectionModalOpen(false)} className="p-1 rounded-full hover:bg-(--color-background-secondary) text-(--color-text-tertiary)"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="max-h-72 overflow-y-auto">
+              {collectionsLoading ? (
+                <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-(--color-text-tertiary)" /></div>
+              ) : collections.length === 0 ? (
+                <div className="px-4 py-6 text-center text-sm text-(--color-text-tertiary)">Henüz koleksiyon yok. Profil sayfandan oluşturabilirsin.</div>
+              ) : (
+                collections.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => void addToCollection(c.id)}
+                    disabled={addingToCollection === c.id}
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-(--color-background-secondary) transition-colors text-left"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-(--color-text-primary)">{c.name}</p>
+                      {c.postCount !== undefined && <p className="text-xs text-(--color-text-tertiary)">{c.postCount} gönderi</p>}
+                    </div>
+                    {addingToCollection === c.id ? <Loader2 className="w-4 h-4 animate-spin text-(--color-text-tertiary)" /> : <Plus className="w-4 h-4 text-(--color-text-tertiary)" />}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </>
+    )}
+
     {embedOpen && (
       <>
         <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={() => setEmbedOpen(false)} />

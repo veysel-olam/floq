@@ -389,6 +389,16 @@ export interface BookmarkCollection {
   createdAt: string
 }
 
+export interface PostCollection {
+  id: string
+  actorId: string
+  name: string
+  description: string | null
+  isPublic: boolean
+  createdAt: string
+  postCount?: number
+}
+
 export interface GifResult {
   id: string
   title: string
@@ -844,6 +854,19 @@ export const api = {
     rename: (id: string, name: string) =>
       apiFetch<BookmarkCollection>(`/api/bookmark-collections/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
     delete: (id: string) => apiFetch<void>(`/api/bookmark-collections/${id}`, { method: 'DELETE' }),
+  },
+  postCollections: {
+    list: () => apiFetch<{ collections: PostCollection[] }>('/api/collections'),
+    listByHandle: (handle: string) => apiFetch<{ collections: PostCollection[] }>(`/api/collections/actor/${handle}`),
+    create: (name: string, description?: string, isPublic?: boolean) =>
+      apiFetch<PostCollection>('/api/collections', { method: 'POST', body: JSON.stringify({ name, description, isPublic }) }),
+    update: (id: string, body: { name?: string; description?: string; isPublic?: boolean }) =>
+      apiFetch<PostCollection>(`/api/collections/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    delete: (id: string) => apiFetch<void>(`/api/collections/${id}`, { method: 'DELETE' }),
+    getPosts: (id: string) => apiFetch<{ posts: Post[]; collection: PostCollection }>(`/api/collections/${id}/posts`),
+    addPost: (id: string, postId: string) =>
+      apiFetch<{ ok: boolean }>(`/api/collections/${id}/posts`, { method: 'POST', body: JSON.stringify({ postId }) }),
+    removePost: (id: string, postId: string) => apiFetch<void>(`/api/collections/${id}/posts/${postId}`, { method: 'DELETE' }),
   },
   filters: {
     list: () => apiFetch<{ filters: KeywordFilter[] }>('/api/filters'),

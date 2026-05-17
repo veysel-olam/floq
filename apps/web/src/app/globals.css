@@ -52,28 +52,7 @@
   --radius-full: 9999px;
 }
 
-/* Dark mode */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-background: #18181A;
-    --color-background-secondary: #212124;
-    --color-background-tertiary: #2C2C30;
-    --color-surface: #212124;
-
-    --color-text-primary: #EFEFED;
-    --color-text-secondary: #D4D3CC;
-    --color-text-tertiary: #A0A099;
-
-    --color-border: #404044;
-    --color-border-secondary: #313135;
-    --color-border-tertiary: #272729;
-
-    --color-code-bg: #111116;
-    --color-code-label: #ffffff;
-  }
-}
-
-/* Dark mode class-based override */
+/* Dark mode — managed entirely by next-themes (.dark class) */
 .dark {
   --color-background: #18181A;
   --color-background-secondary: #212124;
@@ -164,11 +143,6 @@ body {
   -webkit-mask-image: radial-gradient(ellipse 100% 90% at 50% 10%, black 20%, transparent 75%);
 }
 
-@media (prefers-color-scheme: dark) {
-  .hero-grid {
-    background-image: radial-gradient(circle, rgba(250,250,248,0.055) 1px, transparent 1px);
-  }
-}
 
 .dark .hero-grid {
   background-image: radial-gradient(circle, rgba(250,250,248,0.055) 1px, transparent 1px);

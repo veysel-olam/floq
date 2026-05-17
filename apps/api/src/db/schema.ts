@@ -731,6 +731,43 @@ export const bookmarks = pgTable(
   ],
 )
 
+// ─── Post Collections ─────────────────────────────────────────────────────────
+
+export const postCollections = pgTable(
+  'post_collections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => actors.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 100 }).notNull(),
+    description: text('description'),
+    isPublic: boolean('is_public').default(true).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => [
+    index('post_collections_actor_idx').on(t.actorId),
+  ],
+)
+
+export const postCollectionItems = pgTable(
+  'post_collection_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    collectionId: uuid('collection_id')
+      .notNull()
+      .references(() => postCollections.id, { onDelete: 'cascade' }),
+    postId: uuid('post_id')
+      .notNull()
+      .references(() => posts.id, { onDelete: 'cascade' }),
+    addedAt: timestamp('added_at').defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex('post_collection_items_pair_idx').on(t.collectionId, t.postId),
+    index('post_collection_items_collection_idx').on(t.collectionId),
+  ],
+)
+
 // ─── Reactions ────────────────────────────────────────────────────────────────
 
 export const reactions = pgTable(
