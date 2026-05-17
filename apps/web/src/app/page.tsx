@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { FloqLogo } from '@/components/floq-logo'
 
@@ -8,7 +8,6 @@ import { FloqLogo } from '@/components/floq-logo'
 const CHARS = 'abcçdefghiıjklmnoöprsştuüvyz'
 
 function useScramble(target: string, startDelay: number) {
-  // Initialize with target so SSR and initial client render match (no hydration mismatch)
   const [text, setText] = useState(target)
   const done = useRef(false)
 
@@ -16,7 +15,6 @@ function useScramble(target: string, startDelay: number) {
     const chars = target.split('')
     const settled = new Array(chars.length).fill(false)
     let current = chars.map(c => (/[a-zA-ZğüşıöçĞÜŞİÖÇ]/.test(c) ? CHARS[Math.floor(Math.random() * CHARS.length)]! : c))
-    // Show scrambled state immediately on client
     setText(current.join(''))
 
     const timer = setTimeout(() => {
@@ -76,19 +74,19 @@ export default function Page() {
         .animate-fade-in { animation: fade-in 0.5s ease both; }
       `}</style>
 
-      <div className="min-h-screen bg-white text-gray-900">
+      <div className="min-h-screen bg-(--color-background) text-(--color-text-primary)">
 
         {/* Nav */}
-        <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm' : 'bg-transparent'}`}>
+        <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-(--color-background)/95 backdrop-blur-sm border-b border-(--color-border-secondary) shadow-sm' : 'bg-transparent'}`}>
           <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
             <div className="animate-fade-in" style={{ animationDelay: '0ms' }}>
               <FloqLogo size="sm" />
             </div>
             <div className="flex items-center gap-2 animate-fade-in" style={{ animationDelay: '100ms' }}>
-              <Link href="/login" className="px-4 py-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors">
+              <Link href="/login" className="px-4 py-1.5 text-sm text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors">
                 Giriş
               </Link>
-              <Link href="/register" className="px-5 py-2 rounded-full text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-[.97]" style={{ background: '#E8593C' }}>
+              <Link href="/register" className="px-5 py-2 rounded-full text-sm font-semibold text-white bg-(--color-coral) hover:bg-(--color-coral-hover) transition-colors active:scale-[.97]">
                 Katıl
               </Link>
             </div>
@@ -96,40 +94,42 @@ export default function Page() {
         </nav>
 
         {/* Hero */}
-        <section className="pt-32 pb-24 px-6">
-          <div className="max-w-3xl mx-auto text-center">
-            <p className="animate-fade-up text-sm font-medium mb-5" style={{ animationDelay: '100ms', color: '#E8593C' }}>
+        <section className="pt-32 pb-24 px-6 relative overflow-hidden">
+          {/* Subtle background glow */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full opacity-[0.07] blur-3xl pointer-events-none" style={{ background: '#E8593C' }} />
+          <div className="max-w-3xl mx-auto text-center relative">
+            <p className="animate-fade-up text-sm font-semibold mb-5 text-(--color-coral)" style={{ animationDelay: '100ms' }}>
               Açık kaynak · Federe · ActivityPub
             </p>
             <h1
-              className="font-bold tracking-tight text-gray-900 mb-6"
+              className="font-bold tracking-tight mb-6"
               style={{
                 fontFamily: 'var(--font-outfit)',
                 fontSize: 'clamp(2.5rem, 6vw, 4.5rem)',
-                lineHeight: 1.15,
+                lineHeight: 1.1,
+                color: 'var(--color-text-primary)',
               }}
             >
               <span className="block" style={{ animation: 'fade-in 0.3s ease 200ms both' }}>
                 {line1}
               </span>
-              <span className="inline-block" style={{ color: '#E8593C', animation: 'fade-in 0.3s ease 650ms both' }}>
+              <span className="inline-block text-(--color-coral)" style={{ animation: 'fade-in 0.3s ease 650ms both' }}>
                 {line2}
               </span>
             </h1>
-            <p className="animate-fade-up text-lg text-gray-500 leading-relaxed max-w-xl mx-auto mb-10" style={{ animationDelay: '250ms' }}>
+            <p className="animate-fade-up text-lg text-(--color-text-secondary) leading-relaxed max-w-xl mx-auto mb-10" style={{ animationDelay: '250ms' }}>
               Takip ettiğin herkesin her gönderisini, kronolojik sırayla görürsün. Algoritma yok, reklam yok, verin sende kalır.
             </p>
             <div className="animate-fade-up flex flex-col sm:flex-row gap-3 justify-center" style={{ animationDelay: '350ms' }}>
               <Link
                 href="/register"
-                className="px-8 py-3.5 rounded-full font-semibold text-white text-base transition-all hover:opacity-90 hover:-translate-y-px active:scale-[.97] shadow-sm"
-                style={{ background: '#E8593C' }}
+                className="px-8 py-3.5 rounded-full font-semibold text-white text-base bg-(--color-coral) hover:bg-(--color-coral-hover) transition-all hover:-translate-y-px active:scale-[.97] shadow-sm"
               >
                 Ücretsiz Başla
               </Link>
               <a
                 href="#ozellikler"
-                className="px-8 py-3.5 rounded-full font-semibold text-gray-600 text-base border border-gray-200 hover:border-gray-300 hover:text-gray-900 transition-all hover:-translate-y-px"
+                className="px-8 py-3.5 rounded-full font-semibold text-(--color-text-secondary) text-base border border-(--color-border) hover:border-(--color-border-secondary) hover:text-(--color-text-primary) transition-all hover:-translate-y-px"
               >
                 Daha Fazla
               </a>
@@ -139,7 +139,7 @@ export default function Page() {
 
         {/* Divider */}
         <div className="max-w-5xl mx-auto px-6">
-          <div className="border-t border-gray-100" />
+          <div className="border-t border-(--color-border-secondary)" />
         </div>
 
         {/* Three pillars */}
@@ -151,21 +151,21 @@ export default function Page() {
         {/* Feature: Fediverse */}
         <FediverseSection />
 
-        {/* Feature: Privacy */}
-        <PrivacySection />
+        {/* Feature: More */}
+        <MoreSection />
 
         {/* CTA */}
         <CtaSection />
 
         {/* Footer */}
-        <footer className="border-t border-gray-100 py-8">
+        <footer className="border-t border-(--color-border-secondary) py-8">
           <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
             <FloqLogo size="sm" />
-            <p className="text-xs text-gray-400">© 2026 floq</p>
-            <div className="flex gap-5 text-sm text-gray-400">
-              <Link href="/login" className="hover:text-gray-600 transition-colors">Giriş</Link>
-              <Link href="/register" className="hover:text-gray-600 transition-colors">Kayıt</Link>
-              <Link href="/privacy" className="hover:text-gray-600 transition-colors">Gizlilik</Link>
+            <p className="text-xs text-(--color-text-tertiary)">© 2026 floq</p>
+            <div className="flex gap-5 text-sm text-(--color-text-tertiary)">
+              <Link href="/login" className="hover:text-(--color-text-secondary) transition-colors">Giriş</Link>
+              <Link href="/register" className="hover:text-(--color-text-secondary) transition-colors">Kayıt</Link>
+              <Link href="/privacy" className="hover:text-(--color-text-secondary) transition-colors">Gizlilik</Link>
             </div>
           </div>
         </footer>
@@ -221,11 +221,11 @@ function PillarsSection() {
                 opacity: visible ? undefined : 0,
               }}
             >
-              <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center mb-4 text-gray-400 group-hover:text-[#E8593C] group-hover:border-[#E8593C]/20 group-hover:bg-[#E8593C]/5 transition-all duration-200">
+              <div className="w-10 h-10 rounded-xl bg-(--color-background-secondary) border border-(--color-border) flex items-center justify-center mb-4 text-(--color-text-tertiary) group-hover:text-(--color-coral) group-hover:border-(--color-coral)/20 group-hover:bg-(--color-coral)/5 transition-all duration-200">
                 {item.icon}
               </div>
-              <h3 className="font-semibold text-gray-900 mb-2" style={{ fontFamily: 'var(--font-outfit)' }}>{item.title}</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">{item.body}</p>
+              <h3 className="font-semibold text-(--color-text-primary) mb-2" style={{ fontFamily: 'var(--font-outfit)' }}>{item.title}</h3>
+              <p className="text-sm text-(--color-text-tertiary) leading-relaxed">{item.body}</p>
             </div>
           ))}
         </div>
@@ -239,23 +239,23 @@ function FeedSection() {
   const { ref, visible } = useInView()
 
   return (
-    <section className="py-20 px-6 bg-gray-50 border-y border-gray-100">
+    <section className="py-20 px-6 bg-(--color-background-secondary) border-y border-(--color-border-secondary)">
       <div className="max-w-5xl mx-auto" ref={ref}>
         <div className="grid lg:grid-cols-2 gap-16 items-center">
 
           <div style={{ animation: visible ? 'fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both' : 'none', opacity: visible ? undefined : 0 }}>
-            <p className="text-xs font-semibold tracking-wider uppercase text-gray-400 mb-4">Akış</p>
-            <h2 className="font-bold text-gray-900 mb-4 leading-tight" style={{ fontFamily: 'var(--font-outfit)', fontSize: 'clamp(1.6rem, 3vw, 2.4rem)' }}>
+            <p className="text-xs font-semibold tracking-wider uppercase text-(--color-text-tertiary) mb-4">Akış</p>
+            <h2 className="font-bold text-(--color-text-primary) mb-4 leading-tight" style={{ fontFamily: 'var(--font-outfit)', fontSize: 'clamp(1.6rem, 3vw, 2.4rem)' }}>
               Takip ettiğin herkes.<br />
-              <span className="text-gray-400 font-normal">Sırasıyla. Hepsi.</span>
+              <span className="text-(--color-text-tertiary) font-normal">Sırasıyla. Hepsi.</span>
             </h2>
-            <p className="text-gray-500 leading-relaxed mb-6">
+            <p className="text-(--color-text-secondary) leading-relaxed mb-6">
               Algoritmalar etkileşim oranına, reklam bütçesine ya da platform çıkarına göre içerik seçer. floq bunu yapmaz — en son gönderi ilk sıradadır, her zaman.
             </p>
             <ul className="space-y-2.5">
               {['Hiçbir gönderi gizlenmez veya gömülmez', 'Sponsorlu içerik veya öne çıkarma yok', 'Sıralama sadece zamana göredir'].map(item => (
-                <li key={item} className="flex items-center gap-2.5 text-sm text-gray-600">
-                  <span className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: '#E8593C10' }}>
+                <li key={item} className="flex items-center gap-2.5 text-sm text-(--color-text-secondary)">
+                  <span className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center bg-(--color-coral)/10">
                     <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
                       <polyline points="1,4 3,6.5 7,1.5" stroke="#E8593C" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
@@ -267,29 +267,27 @@ function FeedSection() {
           </div>
 
           <div style={{ animation: visible ? 'fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) 120ms both' : 'none', opacity: visible ? undefined : 0 }}>
-            <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm">
-              {/* Header */}
-              <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full" style={{ background: '#E8593C' }} />
-                <span className="text-xs font-semibold text-gray-700" style={{ fontFamily: 'var(--font-outfit)' }}>Ana Akış</span>
-                <span className="ml-auto text-[10px] text-gray-400">Kronolojik</span>
+            <div className="rounded-2xl border border-(--color-border) bg-(--color-background) overflow-hidden shadow-sm">
+              <div className="px-4 py-3 border-b border-(--color-border-secondary) flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-(--color-coral)" />
+                <span className="text-xs font-semibold text-(--color-text-primary)" style={{ fontFamily: 'var(--font-outfit)' }}>Ana Akış</span>
+                <span className="ml-auto text-[10px] text-(--color-text-tertiary)">Kronolojik</span>
               </div>
-              {/* Posts */}
               {[
                 { name: 'Zeynep K.', handle: 'zeynep', time: 'şimdi', text: 'Algoritma yok, reklam yok. Sadece takip ettiğim insanlar.' },
                 { name: 'Mert A.', handle: 'mert_dev', time: '4dk', text: 'Mastodon hesabımdan floq\'taki herkesi takip edebildim.' },
                 { name: 'Elif S.', handle: 'elif', time: '12dk', text: 'Verilerimi dışa aktardım, yeni sunucuya geçtim.' },
               ].map((post, i) => (
-                <div key={i} className="px-4 py-3 border-b border-gray-50 last:border-0 flex gap-3">
-                  <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold text-white" style={{ background: `hsl(${i * 60 + 20}, 60%, 55%)` }}>
+                <div key={i} className="px-4 py-3 border-b border-(--color-border-secondary) last:border-0 flex gap-3">
+                  <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold text-white" style={{ background: `hsl(${i * 60 + 20}, 55%, 52%)` }}>
                     {post.name[0]}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-1.5 mb-0.5">
-                      <span className="text-sm font-semibold text-gray-900">{post.name}</span>
-                      <span className="text-xs text-gray-400">@{post.handle} · {post.time}</span>
+                      <span className="text-sm font-semibold text-(--color-text-primary)">{post.name}</span>
+                      <span className="text-xs text-(--color-text-tertiary)">@{post.handle} · {post.time}</span>
                     </div>
-                    <p className="text-sm text-gray-600 leading-relaxed">{post.text}</p>
+                    <p className="text-sm text-(--color-text-secondary) leading-relaxed">{post.text}</p>
                   </div>
                 </div>
               ))}
@@ -319,43 +317,41 @@ function FediverseSection() {
         <div className="grid lg:grid-cols-2 gap-16 items-center">
 
           <div style={{ animation: visible ? 'fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) 80ms both' : 'none', opacity: visible ? undefined : 0 }} className="order-2 lg:order-1">
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6">
-              {/* Center */}
+            <div className="rounded-2xl border border-(--color-border) bg-(--color-background-secondary) p-6">
               <div className="flex justify-center mb-6">
                 <div className="text-center">
-                  <div className="w-14 h-14 rounded-2xl mx-auto mb-2 flex items-center justify-center" style={{ background: '#E8593C' }}>
+                  <div className="w-14 h-14 rounded-2xl mx-auto mb-2 flex items-center justify-center bg-(--color-coral)">
                     <svg width="28" height="28" viewBox="0 0 44 44" fill="none">
-                      <circle cx="14" cy="15" r="8" fill="white" opacity=".3"/>
-                      <circle cx="30" cy="15" r="8" fill="white" opacity=".2"/>
-                      <circle cx="22" cy="28" r="8" fill="white" opacity=".25"/>
-                      <circle cx="22" cy="19" r="4" fill="white" opacity=".9"/>
+                      <rect x="2" y="2" width="40" height="40" rx="13" fill="white" opacity="0.15"/>
+                      <circle cx="15" cy="17" r="6" fill="white" opacity="0.9"/>
+                      <circle cx="29" cy="17" r="6" fill="white" opacity="0.6"/>
+                      <circle cx="22" cy="29" r="6" fill="white" opacity="0.35"/>
                     </svg>
                   </div>
-                  <span className="text-xs font-bold text-gray-400 tracking-widest">FLOQ</span>
+                  <span className="text-xs font-bold text-(--color-text-tertiary) tracking-widest">FLOQ</span>
                 </div>
               </div>
-              {/* Platforms grid */}
               <div className="grid grid-cols-3 gap-2">
                 {platforms.map(p => (
-                  <div key={p.name} className="flex items-center gap-2 bg-white rounded-xl border border-gray-100 px-3 py-2">
+                  <div key={p.name} className="flex items-center gap-2 bg-(--color-background) rounded-xl border border-(--color-border) px-3 py-2">
                     <div className="w-5 h-5 rounded-md flex-shrink-0" style={{ background: p.color }} />
-                    <span className="text-xs text-gray-600 font-medium">{p.name}</span>
+                    <span className="text-xs text-(--color-text-secondary) font-medium">{p.name}</span>
                   </div>
                 ))}
               </div>
               <div className="mt-3 text-center">
-                <p className="text-xs text-gray-400">+ 850 aktif sunucu</p>
+                <p className="text-xs text-(--color-text-tertiary)">+ 850 aktif sunucu</p>
               </div>
             </div>
           </div>
 
           <div style={{ animation: visible ? 'fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both' : 'none', opacity: visible ? undefined : 0 }} className="order-1 lg:order-2">
-            <p className="text-xs font-semibold tracking-wider uppercase text-gray-400 mb-4">Fediverse</p>
-            <h2 className="font-bold text-gray-900 mb-4 leading-tight" style={{ fontFamily: 'var(--font-outfit)', fontSize: 'clamp(1.6rem, 3vw, 2.4rem)' }}>
+            <p className="text-xs font-semibold tracking-wider uppercase text-(--color-text-tertiary) mb-4">Fediverse</p>
+            <h2 className="font-bold text-(--color-text-primary) mb-4 leading-tight" style={{ fontFamily: 'var(--font-outfit)', fontSize: 'clamp(1.6rem, 3vw, 2.4rem)' }}>
               Tek hesap.<br />
-              <span className="text-gray-400 font-normal">Tüm fediverse.</span>
+              <span className="text-(--color-text-tertiary) font-normal">Tüm fediverse.</span>
             </h2>
-            <p className="text-gray-500 leading-relaxed mb-6">
+            <p className="text-(--color-text-secondary) leading-relaxed mb-6">
               floq hesabınla Mastodon&apos;dan Pixelfed&apos;e kadar tüm federe platformlardaki insanları takip edebilirsin. ActivityPub sayesinde platformlar arası duvarlar ortadan kalkar.
             </p>
             <ul className="space-y-2.5">
@@ -364,8 +360,8 @@ function FediverseSection() {
                 'Hesabını başka sunucuya taşı, takipçilerini kaybetme',
                 'Pixelfed, PeerTube ve Lemmy içerikleri akışında görünsün',
               ].map(item => (
-                <li key={item} className="flex items-center gap-2.5 text-sm text-gray-600">
-                  <span className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: '#E8593C10' }}>
+                <li key={item} className="flex items-center gap-2.5 text-sm text-(--color-text-secondary)">
+                  <span className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center bg-(--color-coral)/10">
                     <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
                       <polyline points="1,4 3,6.5 7,1.5" stroke="#E8593C" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
@@ -381,8 +377,8 @@ function FediverseSection() {
   )
 }
 
-/* ── Gizlilik Bölümü ──────────────────────────────────────────── */
-function PrivacySection() {
+/* ── Daha Fazlası ─────────────────────────────────────────────── */
+function MoreSection() {
   const { ref, visible } = useInView()
   const cards = [
     {
@@ -445,11 +441,11 @@ function PrivacySection() {
   ]
 
   return (
-    <section className="py-20 px-6 bg-gray-50 border-y border-gray-100">
+    <section className="py-20 px-6 bg-(--color-background-secondary) border-y border-(--color-border-secondary)">
       <div className="max-w-5xl mx-auto" ref={ref}>
         <div className="mb-12" style={{ animation: visible ? 'fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both' : 'none', opacity: visible ? undefined : 0 }}>
-          <p className="text-xs font-semibold tracking-wider uppercase text-gray-400 mb-3">Daha fazlası</p>
-          <h2 className="font-bold text-gray-900 leading-tight" style={{ fontFamily: 'var(--font-outfit)', fontSize: 'clamp(1.6rem, 3vw, 2.4rem)' }}>
+          <p className="text-xs font-semibold tracking-wider uppercase text-(--color-text-tertiary) mb-3">Daha fazlası</p>
+          <h2 className="font-bold text-(--color-text-primary) leading-tight" style={{ fontFamily: 'var(--font-outfit)', fontSize: 'clamp(1.6rem, 3vw, 2.4rem)' }}>
             Her şey düşünülerek tasarlandı.
           </h2>
         </div>
@@ -457,14 +453,14 @@ function PrivacySection() {
           {cards.map((card, i) => (
             <div
               key={card.title}
-              className="bg-white rounded-xl border border-gray-100 p-5 hover:border-gray-200 hover:shadow-sm transition-all duration-200"
+              className="bg-(--color-background) rounded-xl border border-(--color-border) p-5 hover:border-(--color-coral)/30 hover:shadow-sm transition-all duration-200"
               style={{ animation: visible ? `fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) ${i * 60}ms both` : 'none', opacity: visible ? undefined : 0 }}
             >
-              <div className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-400 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-(--color-background-secondary) border border-(--color-border) flex items-center justify-center text-(--color-text-tertiary) mb-3">
                 {card.icon}
               </div>
-              <h3 className="font-semibold text-gray-900 text-sm mb-1.5">{card.title}</h3>
-              <p className="text-xs text-gray-500 leading-relaxed">{card.body}</p>
+              <h3 className="font-semibold text-(--color-text-primary) text-sm mb-1.5">{card.title}</h3>
+              <p className="text-xs text-(--color-text-tertiary) leading-relaxed">{card.body}</p>
             </div>
           ))}
         </div>
@@ -490,50 +486,52 @@ function CtaSection() {
   }, [])
 
   return (
-    <section className="py-20 px-6 border-t border-gray-100" ref={ref}>
+    <section className="py-20 px-6" ref={ref}>
       <div className="max-w-5xl mx-auto">
         <div className="grid lg:grid-cols-5 gap-10 items-start">
 
-          {/* Sol: başlık + buton */}
           <div className="lg:col-span-2"
             style={{ animation: visible ? 'fade-up 0.6s cubic-bezier(0.16,1,0.3,1) both' : 'none', opacity: visible ? undefined : 0 }}>
-            <p className="text-xs font-semibold tracking-wider uppercase text-gray-400 mb-4">Neden farklı</p>
-            <h2 className="font-bold text-gray-900 leading-tight mb-6"
+            <p className="text-xs font-semibold tracking-wider uppercase text-(--color-text-tertiary) mb-4">Neden farklı</p>
+            <h2 className="font-bold text-(--color-text-primary) leading-tight mb-6"
               style={{ fontFamily: 'var(--font-outfit)', fontSize: 'clamp(1.6rem, 2.8vw, 2.2rem)' }}>
               Diğerleri değil,<br />
-              <span style={{ color: '#E8593C' }}>sen karar verirsin.</span>
+              <span className="text-(--color-coral)">sen karar verirsin.</span>
             </h2>
-            <div className="flex gap-2 mb-2">
+            <div className="flex gap-2 mb-6">
               {CONTRASTS.map((_, i) => (
                 <button
                   key={i}
                   onClick={() => setActive(i)}
-                  className="h-1 rounded-full transition-all duration-300"
-                  style={{ width: active === i ? 24 : 8, background: active === i ? '#E8593C' : '#E5E7EB' }}
+                  className="h-1 rounded-full transition-all duration-300 bg-(--color-border)"
+                  style={{ width: active === i ? 24 : 8, background: active === i ? '#E8593C' : undefined }}
                 />
               ))}
             </div>
+            <Link
+              href="/register"
+              className="inline-flex px-7 py-3 rounded-full font-semibold text-white text-sm bg-(--color-coral) hover:bg-(--color-coral-hover) transition-all hover:-translate-y-px active:scale-[.97]"
+            >
+              Hemen başla →
+            </Link>
           </div>
 
-          {/* Sağ: karşılaştırma kartı */}
           <div className="lg:col-span-3"
             style={{ animation: visible ? 'fade-up 0.6s cubic-bezier(0.16,1,0.3,1) 120ms both' : 'none', opacity: visible ? undefined : 0 }}>
-            <div className="rounded-2xl border border-gray-200 overflow-hidden bg-white">
-              {/* "Diğerleri" */}
-              <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Diğer platformlar</p>
-                <p key={`them-${active}`} className="text-sm text-gray-500 leading-relaxed"
+            <div className="rounded-2xl border border-(--color-border) overflow-hidden bg-(--color-background)">
+              <div className="px-5 py-4 border-b border-(--color-border-secondary) bg-(--color-background-secondary)">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-(--color-text-tertiary) mb-2">Diğer platformlar</p>
+                <p key={`them-${active}`} className="text-sm text-(--color-text-secondary) leading-relaxed"
                   style={{ animation: 'fade-up 0.35s cubic-bezier(0.16,1,0.3,1) both' }}>
                   {CONTRASTS[active]!.them}
                 </p>
               </div>
-              {/* "floq" */}
               <div className="px-5 py-4">
                 <div className="flex items-center gap-1.5 mb-2">
-                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: '#E8593C' }} />
-                  <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#E8593C' }}>floq</p>
+                  <div className="w-3 h-3 rounded-full flex-shrink-0 bg-(--color-coral)" />
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-(--color-coral)">floq</p>
                 </div>
-                <p key={`us-${active}`} className="text-sm font-medium text-gray-800 leading-relaxed"
+                <p key={`us-${active}`} className="text-sm font-medium text-(--color-text-primary) leading-relaxed"
                   style={{ animation: 'fade-up 0.35s cubic-bezier(0.16,1,0.3,1) 60ms both' }}>
                   {CONTRASTS[active]!.us}
                 </p>

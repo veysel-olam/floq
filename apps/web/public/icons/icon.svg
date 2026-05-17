@@ -1,5 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="114" fill="#E8593C"/>
-  <!-- floq wordmark: stylized "f" letterform -->
-  <text x="256" y="340" font-family="'DM Sans', 'Helvetica Neue', Arial, sans-serif" font-weight="700" font-size="280" text-anchor="middle" fill="white" letter-spacing="-8">f</text>
+  <rect width="512" height="512" rx="120" fill="#E8593C"/>
+  <!-- Three dots — triangular flock formation -->
+  <circle cx="174" cy="198" r="52" fill="white" opacity="1"/>
+  <circle cx="338" cy="198" r="52" fill="white" opacity="0.65"/>
+  <circle cx="256" cy="338" r="52" fill="white" opacity="0.4"/>
 </svg>
