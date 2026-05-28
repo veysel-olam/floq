@@ -251,14 +251,14 @@ export default function FlowsPage() {
           </Button>
         </div>
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-(--color-text-tertiary)" />
-          <Input
+        {/* Search — wrapper provides the pill shape, input is fully transparent */}
+        <div className="flex items-center gap-2 px-3 h-9 rounded-full bg-(--color-background-secondary)">
+          <Search className="w-4 h-4 text-(--color-text-tertiary) flex-shrink-0" />
+          <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Akış ara..."
-            className="pl-9 rounded-full bg-(--color-background-secondary) border-0 focus-visible:ring-1 focus-visible:ring-(--color-coral)"
+            className="flex-1 bg-transparent border-0 outline-none text-sm text-(--color-text-primary) placeholder:text-(--color-text-tertiary)"
           />
         </div>
       </header>
@@ -277,22 +277,21 @@ export default function FlowsPage() {
         </CollapsibleTrigger>
         <CollapsibleContent className="border-b border-(--color-border-secondary)">
           <div className="px-3 pb-3 space-y-2">
-            <div className="flex gap-2 px-3 py-2.5 rounded-2xl bg-(--color-background-secondary)/60">
-              <Input
+            <div className="flex items-center gap-2 px-3 h-9 rounded-full bg-(--color-background-secondary)">
+              <input
                 value={inviteCode}
                 onChange={(e) => setInviteCode(e.target.value)}
                 placeholder="Davet kodunu gir..."
-                className="h-8 text-sm font-mono flex-1 border-0 bg-transparent focus-visible:ring-0 px-0 placeholder:text-(--color-text-tertiary)"
+                className="flex-1 bg-transparent border-0 outline-none text-sm font-mono text-(--color-text-primary) placeholder:text-(--color-text-tertiary)"
                 onKeyDown={(e) => { if (e.key === 'Enter') void handleJoinInvite() }}
               />
-              <Button
-                size="sm"
+              <button
                 onClick={handleJoinInvite}
                 disabled={joiningInvite || !inviteCode.trim()}
-                className="h-7 bg-(--color-coral) hover:bg-(--color-coral-hover) text-white border-0 rounded-full px-4 flex-shrink-0"
+                className="flex-shrink-0 h-6 px-3 rounded-full bg-(--color-coral) hover:bg-(--color-coral-hover) text-white text-xs font-medium disabled:opacity-40 disabled:pointer-events-none transition-opacity"
               >
-                {joiningInvite ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Katıl'}
-              </Button>
+                {joiningInvite ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Katıl'}
+              </button>
             </div>
             {inviteMessage && (
               <p className={cn(
