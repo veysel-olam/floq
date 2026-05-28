@@ -331,23 +331,24 @@ export default function HomePage() {
           <button
             onClick={() => { setSource({ type: 'for_you' }); setListMenuPos(null) }}
             className={cn(
-              'flex items-center px-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0',
+              'relative flex items-center px-4 text-xs font-semibold whitespace-nowrap transition-colors flex-shrink-0',
               isForYou
-                ? 'text-(--color-coral) border-(--color-coral)'
-                : 'text-(--color-text-tertiary) border-transparent hover:text-(--color-text-secondary)',
+                ? 'text-(--color-text-primary)'
+                : 'text-(--color-text-tertiary) hover:text-(--color-text-secondary)',
             )}
           >
             Senin İçin
+            {isForYou && <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-(--color-coral)" />}
           </button>
 
           {/* Following */}
           <button
             onClick={() => { setSource({ type: 'following' }); setListMenuPos(null) }}
             className={cn(
-              'flex items-center gap-2 px-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0',
+              'relative flex items-center gap-1.5 px-4 text-xs font-semibold whitespace-nowrap transition-colors flex-shrink-0',
               isFollowing
-                ? 'text-(--color-coral) border-(--color-coral)'
-                : 'text-(--color-text-tertiary) border-transparent hover:text-(--color-text-secondary)',
+                ? 'text-(--color-text-primary)'
+                : 'text-(--color-text-tertiary) hover:text-(--color-text-secondary)',
             )}
           >
             <span className={cn(
@@ -355,19 +356,21 @@ export default function HomePage() {
               isConnected ? 'bg-emerald-400' : 'bg-red-400',
             )} />
             Takip
+            {isFollowing && <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-(--color-coral)" />}
           </button>
 
           {/* Federated */}
           <button
             onClick={() => { setSource({ type: 'federated' }); setListMenuPos(null) }}
             className={cn(
-              'flex items-center px-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0',
+              'relative flex items-center px-4 text-xs font-semibold whitespace-nowrap transition-colors flex-shrink-0',
               isFederated
-                ? 'text-(--color-coral) border-(--color-coral)'
-                : 'text-(--color-text-tertiary) border-transparent hover:text-(--color-text-secondary)',
+                ? 'text-(--color-text-primary)'
+                : 'text-(--color-text-tertiary) hover:text-(--color-text-secondary)',
             )}
           >
             Federe
+            {isFederated && <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-(--color-coral)" />}
           </button>
 
           {/* Lists */}
@@ -381,14 +384,20 @@ export default function HomePage() {
               setShowSortMenu(false)
             }}
             className={cn(
-              'flex items-center gap-1.5 px-4 h-full text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0',
+              'relative flex items-center gap-1 px-4 h-full text-xs font-semibold whitespace-nowrap transition-colors flex-shrink-0',
               isList
-                ? 'text-(--color-coral) border-(--color-coral)'
-                : 'text-(--color-text-tertiary) border-transparent hover:text-(--color-text-secondary)',
+                ? 'text-(--color-text-primary)'
+                : 'text-(--color-text-tertiary) hover:text-(--color-text-secondary)',
             )}
           >
-            {isList ? (source as { type: 'list'; title: string }).title : 'Listeler'}
-            <ChevronDown className="w-3.5 h-3.5 opacity-50" />
+            {isList ? (
+              <span className="flex items-center gap-1">
+                <span className="max-w-[80px] truncate">{(source as { type: 'list'; title: string }).title}</span>
+                <span className="px-1 py-0.5 rounded-full bg-(--color-coral)/15 text-(--color-coral) text-[10px] font-bold leading-none">Liste</span>
+              </span>
+            ) : 'Listeler'}
+            <ChevronDown className={cn('w-3 h-3 transition-transform', showListMenu && 'rotate-180')} />
+            {isList && <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-(--color-coral)" />}
           </button>
 
           {/* Feeds */}
@@ -402,14 +411,20 @@ export default function HomePage() {
               setShowSortMenu(false)
             }}
             className={cn(
-              'flex items-center gap-1.5 px-4 h-full text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0',
+              'relative flex items-center gap-1 px-4 h-full text-xs font-semibold whitespace-nowrap transition-colors flex-shrink-0',
               isRule
-                ? 'text-(--color-coral) border-(--color-coral)'
-                : 'text-(--color-text-tertiary) border-transparent hover:text-(--color-text-secondary)',
+                ? 'text-(--color-text-primary)'
+                : 'text-(--color-text-tertiary) hover:text-(--color-text-secondary)',
             )}
           >
-            {isRule ? (source as { type: 'rule'; name: string }).name : 'Feedler'}
-            <ChevronDown className="w-3.5 h-3.5 opacity-50" />
+            {isRule ? (
+              <span className="flex items-center gap-1">
+                <span className="max-w-[80px] truncate">{(source as { type: 'rule'; name: string }).name}</span>
+                <span className="px-1 py-0.5 rounded-full bg-(--color-coral)/15 text-(--color-coral) text-[10px] font-bold leading-none">Feed</span>
+              </span>
+            ) : 'Feedler'}
+            <ChevronDown className={cn('w-3 h-3 transition-transform', showFeedMenu && 'rotate-180')} />
+            {isRule && <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-(--color-coral)" />}
           </button>
 
         </div>
