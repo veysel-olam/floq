@@ -1,5 +1,21 @@
 const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'
 
+export interface PostTemplateField {
+  key: string
+  label: string
+  type: 'text' | 'textarea' | 'select'
+  options?: string[]
+  required?: boolean
+  placeholder?: string
+}
+
+export interface PostTemplate {
+  id: string
+  name: string
+  icon: string
+  fields: PostTemplateField[]
+}
+
 export interface Actor {
   id: string
   handle: string
@@ -13,6 +29,7 @@ export interface Actor {
   likesCount: number
   isLocal: boolean
   isLocked: boolean
+  location: string | null
   website: string | null
   profileFields?: Array<{ name: string; value: string; verifiedAt: string | null }> | null
   blueskyHandle: string | null
@@ -23,7 +40,7 @@ export interface Actor {
   createdAt: string
   dmPublicKey?: string | null
   role?: 'user' | 'moderator' | 'admin'
-  viewer?: { following: boolean; followStatus?: 'pending' | 'accepted'; notifyOnActivity?: boolean }
+  viewer?: { following: boolean; followStatus?: 'pending' | 'accepted'; notifyOnActivity?: boolean; isBlocked?: boolean; isMuted?: boolean }
 }
 
 export interface MediaAttachment {
@@ -36,7 +53,6 @@ export interface MediaAttachment {
   height: number | null
   blurhash: string | null
   duration?: number | null
-  fileSize?: number | null
 }
 
 export interface QuotedPost {
@@ -84,6 +100,7 @@ export interface Post {
   replyToId: string | null
   quotedPostId: string | null
   replyToAuthor: { handle: string; displayName: string | null } | null
+  replyTo: { id: string; content: string; author: { handle: string; displayName: string | null } | null } | null
   quotedPost: QuotedPost | null
   poll: Poll | null
   linkPreview: { url: string; title: string | null; description: string | null; image: string | null; siteName: string | null; musicPlatform?: string; musicType?: string; musicEmbedUrl?: string; musicArtist?: string; musicTrack?: string } | null
@@ -92,11 +109,166 @@ export interface Post {
   editedAt: string | null
   scheduledAt?: string | null
   isDraft?: boolean
+  locationName?: string | null
+  locationLat?: number | null
+  locationLng?: number | null
   author: Actor | null
   media: MediaAttachment[]
   reactions: Record<string, number>
   viewer?: { liked: boolean; boosted: boolean; bookmarked: boolean; reactions: string[] }
   boostedBy?: Actor | null
+  group?: { handle: string; name: string } | null
+  templateData?: Record<string, string> | null
+  flair?: { id: string; name: string; emoji: string | null; color: string } | null
+}
+
+export interface Community {
+  id: string
+  handle: string
+  name: string
+  description: string | null
+  avatar_url: string | null
+  banner_url: string | null
+  visibility: 'public' | 'restricted' | 'private'
+  rules: string | null
+  color_index: number
+  topics: string | null
+  member_count: number
+  post_count: number
+  created_at: string
+  viewer_status: 'none' | 'pending' | 'member' | 'mod' | 'owner'
+  pinned_post_id: string | null
+  invite_token: string | null
+  post_templates: PostTemplate[]
+  community_type: CommunityType
+  flairs: CommunityFlair[]
+}
+
+export type CommunityType = 'general' | 'project' | 'event' | 'support' | 'learning' | 'gaming' | 'creative'
+
+export interface CommunityFlair {
+  id: string
+  name: string
+  emoji: string | null
+  color: string
+  sortOrder: number
+}
+
+export interface RemoteCommunityPreview {
+  id: string
+  handle: string
+  displayName: string | null
+  bio: string | null
+  avatarUrl: string | null
+  followersCount: number
+  isLocked: boolean
+  followStatus: 'pending' | 'accepted' | null
+  apId: string | null
+  inboxUrl: string | null
+}
+
+export interface RemoteCommunity {
+  id: string
+  handle: string
+  displayName: string | null
+  avatarUrl: string | null
+  bio: string | null
+  followStatus: string
+  apId: string | null
+}
+
+export type PartnershipStatus = 'pending' | 'active' | 'rejected'
+
+export interface PartnerCommunity {
+  id: string
+  handle: string
+  displayName: string | null
+  avatarUrl: string | null
+  memberCount: number
+}
+
+export interface Partnership {
+  id: string
+  status: PartnershipStatus
+  direction: 'incoming' | 'outgoing'
+  initiatedByUs: boolean
+  createdAt: string
+  partner: PartnerCommunity | null
+}
+
+export interface VoteOption {
+  index: number
+  text: string
+  count: number
+}
+
+export interface ConfederationVote {
+  id: string
+  title: string
+  description: string | null
+  options: VoteOption[]
+  totalVotes: number
+  targetCommunityIds: string[]
+  closed: boolean
+  closesAt: string
+  createdAt: string
+  isInitiator: boolean
+  myVote: number | null
+  initiator: { handle: string; displayName: string | null } | null
+}
+
+export type TrustLevel = 'new' | 'member' | 'regular' | 'trusted' | 'veteran'
+
+export interface CommunityBadge {
+  id: string
+  name: string
+  icon: string
+  description: string | null
+  color: string
+  createdAt: string
+}
+
+export interface AlliedBadge {
+  id: string
+  name: string
+  icon: string
+  color: string
+  communityHandle: string
+  communityName: string | null
+}
+
+export interface MemberTrust {
+  trustLevel: TrustLevel
+  postCount: number
+  likesReceived: number
+  badges: Array<CommunityBadge & { awardedAt: string; note: string | null }>
+  alliedBadges: AlliedBadge[]
+}
+
+export interface ActorCommunityBadge {
+  id: string
+  name: string
+  icon: string
+  color: string
+  description: string | null
+  awardedAt: string
+  community: { handle: string; displayName: string | null; avatarUrl: string | null } | null
+}
+
+export type ModlogAction =
+  | 'ban' | 'unban' | 'remove_post' | 'pin_post' | 'unpin_post'
+  | 'approve_member' | 'reject_member' | 'edit_wiki' | 'update_settings'
+  | 'invite_generated' | 'invite_revoked' | 'add_mod' | 'remove_mod'
+
+export interface ModlogEntry {
+  id: string
+  action: ModlogAction
+  reason: string | null
+  metadata: Record<string, unknown> | null
+  createdAt: string
+  actor: { handle: string; displayName: string | null }
+  targetUser: { handle: string; displayName: string | null } | null
+  targetPostId: string | null
 }
 
 export interface GroupConversation {
@@ -114,12 +286,18 @@ export interface DmConversation {
   partner: Actor
   lastMessage: { id: string; content: string; encryptedContent?: string | null; createdAt: string; authorId: string }
   isRequest?: boolean
+  archived?: boolean
+  muted?: boolean
+  requestAccepted?: boolean | null
 }
 
 export interface DmThread {
   partner: Actor
   messages: Post[]
   nextCursor: string | null
+  myReadId: string | null
+  partnerReadId: string | null
+  settings: { archived: boolean; muted: boolean; requestAccepted: boolean | null }
 }
 
 export interface ThreadContext {
@@ -250,7 +428,7 @@ export interface SocialStats {
   unfollowers: { actor: MiniActor; unfollowedAt: string }[]
   notFollowingBack: MiniActor[]
   notFollowedBack: MiniActor[]
-  recentFollowers: { actor: MiniActor; followedAt: string }[]
+  recentFollowers: { actor: MiniActor; followedAt: string; isFollowing: boolean }[]
   counts: { unfollowers: number; notFollowingBack: number; notFollowedBack: number }
 }
 
@@ -298,6 +476,16 @@ export interface ActorPreferences {
   preferredLanguages: string[]
   hideShortVideos: boolean
   usageTimeLimit: number
+}
+
+export interface NotificationPrefs {
+  notifyLike: boolean
+  notifyBoost: boolean
+  notifyReply: boolean
+  notifyMention: boolean
+  notifyFollow: boolean
+  notifyFollowRequest: boolean
+  notifyPollEnded: boolean
 }
 
 export interface FederationInstance {
@@ -418,10 +606,11 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw Object.assign(new Error((err as { error?: string }).error ?? res.statusText), {
-      status: res.status,
-      path,
-    })
+    const errorCode = (err as { error?: string }).error ?? res.statusText
+    if (errorCode === 'account_frozen' && typeof window !== 'undefined' && !window.location.pathname.includes('/frozen')) {
+      window.location.href = '/frozen'
+    }
+    throw Object.assign(new Error(errorCode), { status: res.status, path })
   }
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
@@ -459,6 +648,12 @@ export const api = {
       poll?: { options: string[]; durationHours: number; multipleChoice?: boolean }
       scheduledAt?: string
       isDraft?: boolean
+      locationName?: string
+      locationLat?: number
+      locationLng?: number
+      groupHandle?: string
+      templateData?: Record<string, string>
+      flairId?: string
     }) => apiFetch<Post>('/api/posts', { method: 'POST', body: JSON.stringify(body) }),
     like: (id: string) => apiFetch<void>(`/api/posts/${id}/like`, { method: 'POST' }),
     unlike: (id: string) => apiFetch<void>(`/api/posts/${id}/like`, { method: 'DELETE' }),
@@ -532,12 +727,16 @@ export const api = {
       ),
     network: () =>
       apiFetch<{ nodes: NetworkNode[]; edges: NetworkEdge[] }>('/api/actors/network'),
+    activity: (handle: string) =>
+      apiFetch<{ activity: { day: string; count: number }[] }>(`/api/actors/${handle}/activity`),
     socialStats: () =>
       apiFetch<SocialStats>('/api/actors/me/social-stats'),
     mutualFollowers: (handle: string) =>
       apiFetch<{ actors: { id: string; handle: string; displayName: string | null; avatarUrl: string | null }[] }>(
         `/api/actors/${handle}/mutual-followers`,
       ),
+    communityBadges: (handle: string) =>
+      apiFetch<ActorCommunityBadge[]>(`/api/actors/${handle}/community-badges`),
   },
   followRequests: {
     list: () =>
@@ -583,7 +782,7 @@ export const api = {
       ),
   },
   account: {
-    updateProfile: (body: { displayName?: string; bio?: string; website?: string | null; isLocked?: boolean; profileFields?: Array<{ name: string; value: string; verifiedAt?: string | null }> }) =>
+    updateProfile: (body: { displayName?: string; bio?: string; location?: string | null; website?: string | null; isLocked?: boolean; profileFields?: Array<{ name: string; value: string; verifiedAt?: string | null }> }) =>
       apiFetch<void>('/api/account/profile', { method: 'PATCH', body: JSON.stringify(body) }),
     uploadAvatar: async (file: File): Promise<{ url: string }> => {
       const form = new FormData()
@@ -621,6 +820,17 @@ export const api = {
     getPreferences: () => apiFetch<ActorPreferences>('/api/account/preferences'),
     updatePreferences: (body: Partial<ActorPreferences>) =>
       apiFetch<void>('/api/account/preferences', { method: 'PATCH', body: JSON.stringify(body) }),
+    getNotificationPrefs: () => apiFetch<NotificationPrefs>('/api/account/notification-prefs'),
+    updateNotificationPrefs: (body: Partial<NotificationPrefs>) =>
+      apiFetch<void>('/api/account/notification-prefs', { method: 'PATCH', body: JSON.stringify(body) }),
+    getMe: () => apiFetch<{ onboardingCompletedAt: string | null }>('/api/account/me'),
+    completeOnboarding: () => apiFetch<void>('/api/account/complete-onboarding', { method: 'POST' }),
+    fediversePreview: (handle: string) =>
+      apiFetch<{ total: number; actors: Array<{ handle: string; displayName: string | null; avatarUrl: string | null }> }>(
+        `/api/onboarding/fediverse-preview?handle=${encodeURIComponent(handle)}`,
+      ),
+    freeze: () => apiFetch<void>('/api/account/freeze', { method: 'POST' }),
+    unfreeze: () => apiFetch<void>('/api/account/unfreeze', { method: 'POST' }),
     delete: () => apiFetch<void>('/api/account', { method: 'DELETE' }),
     analytics: () => apiFetch<AnalyticsData>('/api/account/analytics'),
     sessions: {
@@ -817,18 +1027,38 @@ export const api = {
       apiFetch<DmThread>(
         `/api/dm/${encodeURIComponent(handle)}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
       ),
-    send: (handle: string, content: string, encrypted?: { encryptedContent: string; encryptionIv: string; ephemeralPublicKey: string }, mediaIds?: string[]) =>
+    send: (handle: string, content: string, encrypted?: { encryptedContent: string; encryptionIv: string; ephemeralPublicKey: string }, mediaIds?: string[], replyToId?: string) =>
       apiFetch<Post>(`/api/dm/${encodeURIComponent(handle)}`, {
         method: 'POST',
         body: JSON.stringify(encrypted
-          ? { encryptedContent: encrypted.encryptedContent, encryptionIv: encrypted.encryptionIv, ephemeralPublicKey: encrypted.ephemeralPublicKey, ...(mediaIds?.length ? { mediaIds } : {}) }
-          : { content, ...(mediaIds?.length ? { mediaIds } : {}) }),
+          ? { encryptedContent: encrypted.encryptedContent, encryptionIv: encrypted.encryptionIv, ephemeralPublicKey: encrypted.ephemeralPublicKey, ...(mediaIds?.length ? { mediaIds } : {}), ...(replyToId ? { replyToId } : {}) }
+          : { content, ...(mediaIds?.length ? { mediaIds } : {}), ...(replyToId ? { replyToId } : {}) }),
       }),
     sendMedia: (handle: string, mediaIds: string[]) =>
       apiFetch<Post>(`/api/dm/${encodeURIComponent(handle)}`, {
         method: 'POST',
         body: JSON.stringify({ mediaIds }),
       }),
+    markRead: (handle: string) =>
+      apiFetch<{ lastReadId: string | null }>(`/api/dm/${encodeURIComponent(handle)}/read`, { method: 'POST' }),
+    sendTyping: (handle: string) =>
+      apiFetch<void>(`/api/dm/${encodeURIComponent(handle)}/typing`, { method: 'POST' }),
+    editMessage: (id: string, content: string) =>
+      apiFetch<{ id: string; content: string; editedAt: string }>(`/api/dm/messages/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ content }),
+      }),
+    searchMessages: (handle: string, q: string) =>
+      apiFetch<{ messages: Post[] }>(`/api/dm/${encodeURIComponent(handle)}/search?q=${encodeURIComponent(q)}`),
+    updateSettings: (handle: string, settings: { archived?: boolean; muted?: boolean }) =>
+      apiFetch<void>(`/api/dm/${encodeURIComponent(handle)}/settings`, {
+        method: 'PATCH',
+        body: JSON.stringify(settings),
+      }),
+    acceptRequest: (handle: string) =>
+      apiFetch<void>(`/api/dm/requests/${encodeURIComponent(handle)}/accept`, { method: 'POST' }),
+    declineRequest: (handle: string) =>
+      apiFetch<void>(`/api/dm/requests/${encodeURIComponent(handle)}/decline`, { method: 'POST' }),
     createGroup: (memberHandles: string[], name?: string) =>
       apiFetch<GroupConversation>('/api/dm/conversations', {
         method: 'POST',
@@ -850,8 +1080,19 @@ export const api = {
         `/api/dm/conversations/${encodeURIComponent(id)}/members`,
         { method: 'POST', body: JSON.stringify({ handle }) },
       ),
+    updateGroupInfo: (id: string, info: { name?: string; avatarUrl?: string }) =>
+      apiFetch<GroupConversation>(`/api/dm/conversations/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(info),
+      }),
+    leaveGroup: (id: string) =>
+      apiFetch<void>(`/api/dm/conversations/${encodeURIComponent(id)}/leave`, { method: 'POST' }),
+    removeGroupMember: (id: string, actorId: string) =>
+      apiFetch<void>(`/api/dm/conversations/${encodeURIComponent(id)}/members/${encodeURIComponent(actorId)}`, { method: 'DELETE' }),
     registerDmKey: (publicKey: string) =>
       apiFetch<{ dmPublicKey: string }>('/api/dm/keys', { method: 'POST', body: JSON.stringify({ publicKey }) }),
+    deleteMessage: (id: string, mode: 'self' | 'everyone') =>
+      apiFetch<void>(`/api/dm/messages/${encodeURIComponent(id)}?mode=${mode}`, { method: 'DELETE' }),
   },
   bookmarks: {
     list: (cursor?: string, collectionId?: string | null) => {
@@ -893,9 +1134,15 @@ export const api = {
       apiFetch<KeywordFilter>(`/api/filters/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
     delete: (id: string) => apiFetch<void>(`/api/filters/${id}`, { method: 'DELETE' }),
   },
+  location: {
+    posts: (name: string, cursor?: string) =>
+      apiFetch<{ posts: Post[]; nextCursor: string | null }>(`/api/location/${encodeURIComponent(name)}/posts${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`),
+  },
   polls: {
     vote: (pollId: string, optionIds: string[]) =>
       apiFetch<Poll>(`/api/polls/${pollId}/vote`, { method: 'POST', body: JSON.stringify({ optionIds }) }),
+    retractVote: (pollId: string) =>
+      apiFetch<Poll>(`/api/polls/${pollId}/vote`, { method: 'DELETE' }),
     get: (pollId: string) => apiFetch<Poll>(`/api/polls/${pollId}`),
   },
   moderation: {
@@ -934,5 +1181,124 @@ export const api = {
       apiFetch<{ ok: boolean }>(`/api/admin/users/${handle}/suspend`, { method: 'POST' }),
     unsuspend: (handle: string) =>
       apiFetch<{ ok: boolean }>(`/api/admin/users/${handle}/suspend`, { method: 'DELETE' }),
+  },
+
+  communities: {
+    list: (params?: { q?: string; filter?: 'all' | 'joined'; limit?: number }) => {
+      const qs = new URLSearchParams()
+      if (params?.q) qs.set('q', params.q)
+      if (params?.filter) qs.set('filter', params.filter)
+      if (params?.limit) qs.set('limit', String(params.limit))
+      const query = qs.toString()
+      return apiFetch<{ communities: Community[]; next_cursor: string | null }>(
+        `/api/communities${query ? `?${query}` : ''}`,
+      )
+    },
+    get: (handle: string) => apiFetch<Community>(`/api/communities/${handle}`),
+    create: (body: { handle: string; name: string; description?: string; visibility?: 'public' | 'restricted' | 'private'; rules?: string; color_index?: number; topics?: string }) =>
+      apiFetch<Community>('/api/communities', { method: 'POST', body: JSON.stringify(body) }),
+    update: (handle: string, body: { name?: string; description?: string; visibility?: 'public' | 'restricted' | 'private'; rules?: string; banner_url?: string | null; color_index?: number; topics?: string | null; post_templates?: PostTemplate[] | null; community_type?: CommunityType }) =>
+      apiFetch<Community>(`/api/communities/${handle}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    delete: (handle: string) =>
+      apiFetch<{ ok: boolean }>(`/api/communities/${handle}`, { method: 'DELETE' }),
+    join: (handle: string) =>
+      apiFetch<{ status: 'owner' | 'accepted' | 'pending' }>(`/api/communities/${handle}/join`, { method: 'POST' }),
+    leave: (handle: string) =>
+      apiFetch<{ ok: boolean }>(`/api/communities/${handle}/leave`, { method: 'POST' }),
+    feed: (handle: string, cursor?: string, flairId?: string) => {
+      const params = new URLSearchParams()
+      if (cursor) params.set('cursor', cursor)
+      if (flairId) params.set('flair', flairId)
+      const qs = params.toString()
+      return apiFetch<{ posts: Post[]; next_cursor: string | null }>(
+        `/api/communities/${handle}/feed${qs ? `?${qs}` : ''}`,
+      )
+    },
+    members: (handle: string) =>
+      apiFetch<(Actor & { community_role: 'owner' | 'moderator' | 'member' })[]>(`/api/communities/${handle}/members`),
+    pending: (handle: string) =>
+      apiFetch<Actor[]>(`/api/communities/${handle}/pending`),
+    approve: (handle: string, memberHandle: string) =>
+      apiFetch<{ ok: boolean }>(`/api/communities/${handle}/members/${encodeURIComponent(memberHandle)}/approve`, { method: 'POST' }),
+    reject: (handle: string, memberHandle: string) =>
+      apiFetch<{ ok: boolean }>(`/api/communities/${handle}/members/${encodeURIComponent(memberHandle)}/reject`, { method: 'POST' }),
+    ban: (handle: string, memberHandle: string) =>
+      apiFetch<{ ok: boolean }>(`/api/communities/${handle}/members/${encodeURIComponent(memberHandle)}/ban`, { method: 'POST' }),
+    promote: (handle: string, memberHandle: string) =>
+      apiFetch<{ ok: boolean }>(`/api/communities/${handle}/members/${encodeURIComponent(memberHandle)}/promote`, { method: 'POST' }),
+    demote: (handle: string, memberHandle: string) =>
+      apiFetch<{ ok: boolean }>(`/api/communities/${handle}/members/${encodeURIComponent(memberHandle)}/demote`, { method: 'POST' }),
+    wiki: (handle: string) =>
+      apiFetch<{ content: string; version: number; editedAt: string | null; editedBy: { handle: string; displayName: string | null } | null }>(`/api/communities/${handle}/wiki`),
+    updateWiki: (handle: string, content: string) =>
+      apiFetch<{ content: string; version: number; editedAt: string; editedBy: { handle: string; displayName: string | null } }>(`/api/communities/${handle}/wiki`, { method: 'PUT', body: JSON.stringify({ content }) }),
+    wikiHistory: (handle: string) =>
+      apiFetch<Array<{ version: number; editedAt: string; editedBy: { handle: string; displayName: string | null }; contentPreview: string }>>(`/api/communities/${handle}/wiki/history`),
+    pin: (handle: string, postId: string) =>
+      apiFetch<{ ok: boolean }>(`/api/communities/${handle}/pin/${postId}`, { method: 'POST' }),
+    unpin: (handle: string) =>
+      apiFetch<{ ok: boolean }>(`/api/communities/${handle}/pin`, { method: 'DELETE' }),
+    getInvite: (handle: string) =>
+      apiFetch<{ token: string; url: string }>(`/api/communities/${handle}/invite`),
+    revokeInvite: (handle: string) =>
+      apiFetch<{ ok: boolean }>(`/api/communities/${handle}/invite`, { method: 'DELETE' }),
+    joinByInvite: (token: string) =>
+      apiFetch<{ status: string; handle: string }>('/api/communities/join-by-invite', { method: 'POST', body: JSON.stringify({ token }) }),
+    modlog: (handle: string, limit = 50) =>
+      apiFetch<{ items: ModlogEntry[]; hasMore: boolean }>(`/api/communities/${handle}/modlog?limit=${limit}`),
+    badges: (handle: string) =>
+      apiFetch<CommunityBadge[]>(`/api/communities/${handle}/badges`),
+    createBadge: (handle: string, data: { name: string; icon: string; description?: string; color: string }) =>
+      apiFetch<CommunityBadge>(`/api/communities/${handle}/badges`, { method: 'POST', body: JSON.stringify(data) }),
+    deleteBadge: (handle: string, badgeId: string) =>
+      apiFetch<{ ok: boolean }>(`/api/communities/${handle}/badges/${badgeId}`, { method: 'DELETE' }),
+    memberTrust: (handle: string, memberHandle: string) =>
+      apiFetch<MemberTrust>(`/api/communities/${handle}/members/${encodeURIComponent(memberHandle)}/trust`),
+    awardBadge: (handle: string, memberHandle: string, badgeId: string, note?: string) =>
+      apiFetch<{ ok: boolean }>(`/api/communities/${handle}/members/${encodeURIComponent(memberHandle)}/badges/${badgeId}`, { method: 'POST', body: JSON.stringify({ note }) }),
+    revokeBadge: (handle: string, memberHandle: string, badgeId: string) =>
+      apiFetch<{ ok: boolean }>(`/api/communities/${handle}/members/${encodeURIComponent(memberHandle)}/badges/${badgeId}`, { method: 'DELETE' }),
+    flairs: (handle: string) =>
+      apiFetch<CommunityFlair[]>(`/api/communities/${handle}/flairs`),
+    createFlair: (handle: string, data: { name: string; emoji?: string; color: string; sortOrder?: number }) =>
+      apiFetch<CommunityFlair>(`/api/communities/${handle}/flairs`, { method: 'POST', body: JSON.stringify(data) }),
+    updateFlair: (handle: string, flairId: string, data: { name?: string; emoji?: string | null; color?: string; sortOrder?: number }) =>
+      apiFetch<CommunityFlair>(`/api/communities/${handle}/flairs/${flairId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteFlair: (handle: string, flairId: string) =>
+      apiFetch<{ ok: boolean }>(`/api/communities/${handle}/flairs/${flairId}`, { method: 'DELETE' }),
+    resolveRemote: (handle: string) =>
+      apiFetch<RemoteCommunityPreview>('/api/communities/resolve-remote', { method: 'POST', body: JSON.stringify({ handle }) }),
+    followRemote: (actorId: string) =>
+      apiFetch<{ status: string }>('/api/communities/follow-remote', { method: 'POST', body: JSON.stringify({ actorId }) }),
+    unfollowRemote: (actorId: string) =>
+      apiFetch<{ ok: boolean }>(`/api/communities/follow-remote/${actorId}`, { method: 'DELETE' }),
+    followingRemote: () =>
+      apiFetch<RemoteCommunity[]>('/api/communities/following-remote'),
+    partnerships: (handle: string) =>
+      apiFetch<Partnership[]>(`/api/communities/${handle}/partnerships`),
+    proposePartnership: (handle: string, targetHandle: string) =>
+      apiFetch<{ id: string; status: string }>(`/api/communities/${handle}/partnerships`, {
+        method: 'POST', body: JSON.stringify({ targetHandle }),
+      }),
+    respondPartnership: (handle: string, partnershipId: string, action: 'accept' | 'reject') =>
+      apiFetch<{ ok: boolean; status: string }>(`/api/communities/${handle}/partnerships/${partnershipId}`, {
+        method: 'PATCH', body: JSON.stringify({ action }),
+      }),
+    dissolvePartnership: (handle: string, partnershipId: string) =>
+      apiFetch<{ ok: boolean }>(`/api/communities/${handle}/partnerships/${partnershipId}`, { method: 'DELETE' }),
+    alliedFeed: (handle: string, cursor?: string) =>
+      apiFetch<{ posts: Post[]; next_cursor: string | null }>(
+        `/api/communities/${handle}/allied-feed${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
+      ),
+    votes: (handle: string) =>
+      apiFetch<ConfederationVote[]>(`/api/communities/${handle}/votes`),
+    createVote: (handle: string, body: { title: string; description?: string; options: string[]; targetHandles: string[]; closesInHours: number }) =>
+      apiFetch<{ id: string }>(`/api/communities/${handle}/votes`, { method: 'POST', body: JSON.stringify(body) }),
+    castBallot: (handle: string, voteId: string, optionIndex: number) =>
+      apiFetch<{ ok: boolean }>(`/api/communities/${handle}/votes/${voteId}/ballot`, { method: 'POST', body: JSON.stringify({ optionIndex }) }),
+    deleteVote: (handle: string, voteId: string) =>
+      apiFetch<{ ok: boolean }>(`/api/communities/${handle}/votes/${voteId}`, { method: 'DELETE' }),
+    endorsement: (handle: string, actorHandle: string) =>
+      apiFetch<Record<string, unknown>>(`/api/communities/${handle}/endorsements/${actorHandle}`),
   },
 }

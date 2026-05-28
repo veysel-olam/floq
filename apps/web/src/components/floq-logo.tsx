@@ -1,6 +1,5 @@
 import { cn } from '@/lib/utils'
 
-type LogoVariant = 'light' | 'dark' | 'coral'
 type LogoSize = 'sm' | 'md' | 'lg'
 
 const sizes = {
@@ -10,31 +9,28 @@ const sizes = {
 }
 
 interface FloqLogoProps {
-  variant?: LogoVariant
   size?: LogoSize
   iconOnly?: boolean
+  light?: boolean
   className?: string
 }
 
 export function FloqLogo({
-  variant = 'light',
   size = 'md',
   iconOnly = false,
+  light = false,
   className,
 }: FloqLogoProps) {
   const { icon, wordmark, gap } = sizes[size]
-  const textColor =
-    variant === 'dark' || variant === 'coral' ? 'text-[#FAFAF8]' : 'text-[#1A1A18]'
-
   return (
     <div className={cn('flex items-center', gap, className)}>
-      <FloqIcon size={icon} variant={variant} />
+      <FloqIcon size={icon} />
       {!iconOnly && (
         <span
           className={cn(
             'font-display font-semibold tracking-tight leading-none',
+            light ? 'text-white' : 'text-(--color-text-primary)',
             wordmark,
-            textColor,
           )}
           style={{ fontFamily: 'var(--font-outfit)' }}
         >
@@ -45,24 +41,14 @@ export function FloqLogo({
   )
 }
 
-function FloqIcon({ size, variant }: { size: number; variant: LogoVariant }) {
-  const isOnDark = variant === 'dark' || variant === 'coral'
-
-  // Squircle background: coral on light, white on dark
-  const bgFill = isOnDark ? '#FAFAF8' : '#E8593C'
-  const dotFill = isOnDark ? '#E8593C' : '#FAFAF8'
-
+function FloqIcon({ size }: { size: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 44 44" fill="none" aria-hidden>
-      {/* Squircle background */}
-      <rect x="2" y="2" width="40" height="40" rx="13" fill={bgFill} />
-      {/* Three dots — triangular cluster representing a flock */}
-      {/* Top-left */}
-      <circle cx="15" cy="17" r="4.5" fill={dotFill} opacity="1" />
-      {/* Top-right */}
-      <circle cx="29" cy="17" r="4.5" fill={dotFill} opacity="0.65" />
-      {/* Bottom-center */}
-      <circle cx="22" cy="29" r="4.5" fill={dotFill} opacity="0.4" />
+      <rect x="1" y="1" width="42" height="42" rx="13" fill="#E8593C" />
+      {/* Three dots — triangular flock formation */}
+      <circle cx="17" cy="19" r="7" fill="white" />
+      <circle cx="27" cy="19" r="7" fill="white" opacity="0.65" />
+      <circle cx="22" cy="29" r="7" fill="white" opacity="0.4" />
     </svg>
   )
 }

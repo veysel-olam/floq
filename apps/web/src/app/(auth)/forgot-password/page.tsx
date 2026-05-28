@@ -64,7 +64,7 @@ export default function ForgotPasswordPage() {
         <Link
           href="/login"
           className="flex items-center justify-center gap-2 text-sm font-medium"
-          style={{ color: '#E8593C' }}
+          style={{ color: 'var(--color-coral)' }}
         >
           <ArrowLeft className="w-4 h-4" />
           Giriş sayfasına dön
@@ -78,7 +78,7 @@ export default function ForgotPasswordPage() {
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
           style={{ background: 'rgba(232, 89, 60, 0.1)', border: '1px solid rgba(232, 89, 60, 0.2)' }}>
-          <Mail className="w-5 h-5" style={{ color: '#E8593C' }} />
+          <Mail className="w-5 h-5" style={{ color: 'var(--color-coral)' }} />
         </div>
         <div>
           <h1 className="text-xl font-bold text-(--color-text-primary)" style={{ fontFamily: 'var(--font-outfit)' }}>
@@ -113,14 +113,14 @@ export default function ForgotPasswordPage() {
           type="submit"
           disabled={loading || !email.trim()}
           className="w-full text-white font-semibold h-11 gap-2"
-          style={{ background: 'var(--gradient-avatar)' }}
+          style={{ background: 'var(--color-coral)' }}
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Bağlantı Gönder'}
         </Button>
       </form>
 
       <p className="text-center text-sm text-(--color-text-tertiary)">
-        <Link href="/login" className="flex items-center justify-center gap-1.5 hover:opacity-80 transition-opacity" style={{ color: '#E8593C' }}>
+        <Link href="/login" className="flex items-center justify-center gap-1.5 hover:opacity-80 transition-opacity" style={{ color: 'var(--color-coral)' }}>
           <ArrowLeft className="w-3.5 h-3.5" />
           Giriş sayfasına dön
         </Link>

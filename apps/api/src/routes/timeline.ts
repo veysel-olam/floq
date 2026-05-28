@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { eq, and, inArray, lt, isNull, desc, sql, ne, arrayContains, or } from 'drizzle-orm'
 import { db } from '../db/client.js'
-import { posts, follows, actors, feedRules, lists, listMembers, boosts, closeFriends, actorPreferences, hashtagFollows } from '../db/schema.js'
+import { posts, follows, actors, feedRules, lists, listMembers, boosts, closeFriends, actorPreferences, hashtagFollows, apGroups } from '../db/schema.js'
 import { getSession, requireActor } from '../lib/session.js'
 import { DEFAULT_RULES, type FeedRulesConfig, HOT_SCORE_SQL, RISING_SCORE_SQL, MIXED_SCORE_SQL } from '../lib/feedRules.js'
 import { enrichPosts } from '../lib/enrichPosts.js'
@@ -116,9 +116,27 @@ export async function timelineRoutes(app: FastifyInstance) {
           )
         : null
 
-      const sourceCondition = hashtagCondition
-        ? or(followedUsersCondition, hashtagCondition)!
-        : followedUsersCondition
+      // Community posts: üye olunan toplulukların gönderileri
+      const memberGroupFollows = await db.query.follows.findMany({
+        where: and(eq(follows.followerId, ctx.actor.id), eq(follows.status, 'accepted')),
+      })
+      const memberGroupActorIds = memberGroupFollows.map((f) => f.followingId)
+      const communityActors = memberGroupActorIds.length
+        ? await db.query.actors.findMany({
+            where: and(inArray(actors.id, memberGroupActorIds), eq(actors.actorType, 'Group')),
+            columns: { id: true },
+          })
+        : []
+      const communityActorIds = communityActors.map((a) => a.id)
+
+      const communityCondition = communityActorIds.length > 0
+        ? and(inArray(posts.groupId, communityActorIds), eq(posts.isDeleted, false))
+        : null
+
+      const sourceCondition = [hashtagCondition, communityCondition, followedUsersCondition]
+        .filter(Boolean)
+        .reduce((acc, c) => acc ? or(acc, c!)! : c!)!
+
 
       const conditions = [
         sourceCondition,

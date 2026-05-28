@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { eq, and, desc, ne, notInArray, sql, lt, inArray, or, isNull, isNotNull } from 'drizzle-orm'
 import { db } from '../db/client.js'
-import { actors, posts, follows, likes, boosts, closeFriends, mediaAttachments, followEvents } from '../db/schema.js'
+import { actors, posts, follows, likes, boosts, closeFriends, mediaAttachments, followEvents, blocks, mutes, userCommunityBadges, apGroups } from '../db/schema.js'
 import { getSession, requireActor } from '../lib/session.js'
 import { notifyFollow, notifyFollowRequest } from '../lib/notify.js'
 import { buildFollow, buildUndo, buildAccept, actorUrl } from '../lib/activityPub.js'
@@ -28,14 +28,26 @@ export async function actorsRoutes(app: FastifyInstance) {
 
     let viewerFollowStatus: 'none' | 'pending' | 'accepted' = 'none'
     let viewerNotifyOnActivity = true
+    let viewerIsBlocked = false
+    let viewerIsMuted = false
     if (viewerActorId && viewerActorId !== actor.id) {
-      const follow = await db.query.follows.findFirst({
-        where: and(eq(follows.followerId, viewerActorId), eq(follows.followingId, actor.id)),
-      })
+      const [follow, block, mute] = await Promise.all([
+        db.query.follows.findFirst({
+          where: and(eq(follows.followerId, viewerActorId), eq(follows.followingId, actor.id)),
+        }),
+        db.query.blocks.findFirst({
+          where: and(eq(blocks.blockerId, viewerActorId), eq(blocks.blockedId, actor.id)),
+        }),
+        db.query.mutes.findFirst({
+          where: and(eq(mutes.muterId, viewerActorId), eq(mutes.mutedId, actor.id)),
+        }),
+      ])
       if (follow) {
         viewerFollowStatus = follow.status as 'pending' | 'accepted'
         viewerNotifyOnActivity = follow.notifyOnActivity
       }
+      viewerIsBlocked = !!block
+      viewerIsMuted = !!mute
     }
 
     const [likesRow] = await db
@@ -58,6 +70,8 @@ export async function actorsRoutes(app: FastifyInstance) {
         following: viewerFollowStatus === 'accepted',
         followStatus: viewerFollowStatus === 'none' ? undefined : viewerFollowStatus,
         notifyOnActivity: viewerNotifyOnActivity,
+        isBlocked: viewerIsBlocked,
+        isMuted: viewerIsMuted,
       },
     })
   })
@@ -103,7 +117,7 @@ export async function actorsRoutes(app: FastifyInstance) {
       isNull(posts.scheduledAt),
       visibilityCond,
       ...(mediaCond ? [mediaCond] : []),
-      ...(onlyReplies ? [isNotNull(posts.replyToId)] : []),
+      ...(onlyReplies ? [isNotNull(posts.replyToId)] : onlyMedia ? [] : [isNull(posts.replyToId)]),
       ...(cursor ? [lt(posts.createdAt, cursor)] : []),
     ]
 
@@ -247,26 +261,61 @@ export async function actorsRoutes(app: FastifyInstance) {
     Params: { handle: string }
     Querystring: { cursor?: string; limit?: string }
   }>('/api/actors/:handle/followers', async (req, reply) => {
+    const session = await getSession(req)
     const actor = await db.query.actors.findFirst({
       where: and(eq(actors.handle, req.params.handle), eq(actors.isLocal, true)),
     })
     if (!actor) return reply.code(404).send({ error: 'Not found' })
 
+    const viewer = session ? await db.query.actors.findFirst({ where: eq(actors.userId, session.user.id) }) : null
+
     const limit = Math.min(Number(req.query.limit ?? 20), 40)
+    const offset = req.query.cursor ? parseInt(req.query.cursor, 10) : 0
     const followerRows = await db.query.follows.findMany({
       where: and(eq(follows.followingId, actor.id), eq(follows.status, 'accepted')),
       with: { follower: true },
       orderBy: [desc(follows.createdAt)],
       limit: limit + 1,
-      ...(req.query.cursor ? { offset: parseInt(req.query.cursor, 10) } : {}),
+      offset,
     })
 
-    const offset = req.query.cursor ? parseInt(req.query.cursor, 10) : 0
     const hasMore = followerRows.length > limit
     const items = followerRows.slice(0, limit).map((f) => f.follower)
 
+    const [countRow] = await db
+      .select({ total: sql<number>`COUNT(*)::int` })
+      .from(follows)
+      .where(and(eq(follows.followingId, actor.id), eq(follows.status, 'accepted')))
+
+    const total = countRow?.total ?? 0
+
+    // Sync cached counter if drifted
+    if (total !== actor.followersCount) {
+      db.update(actors).set({ followersCount: total }).where(eq(actors.id, actor.id)).catch(() => {})
+    }
+
+    let viewerFollows: Set<string> = new Set()
+    if (viewer && items.length > 0) {
+      const viewerFollowRows = await db.query.follows.findMany({
+        where: and(
+          eq(follows.followerId, viewer.id),
+          eq(follows.status, 'accepted'),
+          inArray(follows.followingId, items.map((a) => a.id)),
+        ),
+        columns: { followingId: true },
+      })
+      viewerFollows = new Set(viewerFollowRows.map((f) => f.followingId))
+    }
+
     return reply.send({
-      actors: items,
+      actors: items.map((a) => ({
+        ...a,
+        viewer: viewer ? {
+          following: viewerFollows.has(a.id),
+          followStatus: viewerFollows.has(a.id) ? 'accepted' : null,
+        } : undefined,
+      })),
+      total,
       nextCursor: hasMore ? String(offset + limit) : null,
     })
   })
@@ -276,10 +325,13 @@ export async function actorsRoutes(app: FastifyInstance) {
     Params: { handle: string }
     Querystring: { cursor?: string; limit?: string }
   }>('/api/actors/:handle/following', async (req, reply) => {
+    const session = await getSession(req)
     const actor = await db.query.actors.findFirst({
       where: and(eq(actors.handle, req.params.handle), eq(actors.isLocal, true)),
     })
     if (!actor) return reply.code(404).send({ error: 'Not found' })
+
+    const viewer = session ? await db.query.actors.findFirst({ where: eq(actors.userId, session.user.id) }) : null
 
     const limit = Math.min(Number(req.query.limit ?? 20), 40)
     const offset = req.query.cursor ? parseInt(req.query.cursor, 10) : 0
@@ -295,8 +347,39 @@ export async function actorsRoutes(app: FastifyInstance) {
     const hasMore = followingRows.length > limit
     const items = followingRows.slice(0, limit).map((f) => f.following)
 
+    const [countRow] = await db
+      .select({ total: sql<number>`COUNT(*)::int` })
+      .from(follows)
+      .where(and(eq(follows.followerId, actor.id), eq(follows.status, 'accepted')))
+
+    const total = countRow?.total ?? 0
+
+    if (total !== actor.followingCount) {
+      db.update(actors).set({ followingCount: total }).where(eq(actors.id, actor.id)).catch(() => {})
+    }
+
+    let viewerFollows: Set<string> = new Set()
+    if (viewer && items.length > 0) {
+      const viewerFollowRows = await db.query.follows.findMany({
+        where: and(
+          eq(follows.followerId, viewer.id),
+          eq(follows.status, 'accepted'),
+          inArray(follows.followingId, items.map((a) => a.id)),
+        ),
+        columns: { followingId: true },
+      })
+      viewerFollows = new Set(viewerFollowRows.map((f) => f.followingId))
+    }
+
     return reply.send({
-      actors: items,
+      actors: items.map((a) => ({
+        ...a,
+        viewer: viewer ? {
+          following: viewerFollows.has(a.id),
+          followStatus: viewerFollows.has(a.id) ? 'accepted' : null,
+        } : undefined,
+      })),
+      total,
       nextCursor: hasMore ? String(offset + limit) : null,
     })
   })
@@ -330,11 +413,11 @@ export async function actorsRoutes(app: FastifyInstance) {
       await Promise.all([
         db
           .update(actors)
-          .set({ followingCount: ctx.actor.followingCount + 1 })
+          .set({ followingCount: sql`${actors.followingCount} + 1` })
           .where(eq(actors.id, ctx.actor.id)),
         db
           .update(actors)
-          .set({ followersCount: target.followersCount + 1 })
+          .set({ followersCount: sql`${actors.followersCount} + 1` })
           .where(eq(actors.id, target.id)),
       ])
       void notifyFollow(ctx.actor.id, target.id)
@@ -371,11 +454,11 @@ export async function actorsRoutes(app: FastifyInstance) {
       await Promise.all([
         db
           .update(actors)
-          .set({ followingCount: Math.max(ctx.actor.followingCount - 1, 0) })
+          .set({ followingCount: sql`GREATEST(${actors.followingCount} - 1, 0)` })
           .where(eq(actors.id, ctx.actor.id)),
         db
           .update(actors)
-          .set({ followersCount: Math.max(target.followersCount - 1, 0) })
+          .set({ followersCount: sql`GREATEST(${actors.followersCount} - 1, 0)` })
           .where(eq(actors.id, target.id)),
       ])
     }
@@ -728,6 +811,7 @@ export async function actorsRoutes(app: FastifyInstance) {
     const recentFollowers = recentFollowerRows.map((f) => ({
       actor: f.follower,
       followedAt: f.createdAt,
+      isFollowing: iFollowSet.has(f.follower.id),
     }))
 
     return reply.send({
@@ -741,5 +825,103 @@ export async function actorsRoutes(app: FastifyInstance) {
         notFollowedBack: notFollowedBackActors.length,
       },
     })
+  })
+
+  // GET /api/location/:name/posts — bu konumdaki public gönderiler
+  app.get<{ Params: { name: string }; Querystring: { cursor?: string } }>('/api/location/:name/posts', async (req, reply) => {
+    const session = await getSession(req)
+    let actorId: string | undefined
+    if (session) {
+      const viewer = await db.query.actors.findFirst({ where: eq(actors.userId, session.user.id), columns: { id: true } })
+      actorId = viewer?.id
+    }
+    const { name } = req.params
+    const cursor = req.query.cursor ? new Date(req.query.cursor) : undefined
+
+    const rows = await db.query.posts.findMany({
+      where: and(
+        sql`LOWER(${posts.locationName}) = LOWER(${name})`,
+        eq(posts.visibility, 'public'),
+        eq(posts.isDeleted, false),
+        eq(posts.isDraft, false),
+        isNull(posts.scheduledAt),
+        cursor ? lt(posts.createdAt, cursor) : undefined,
+      ),
+      orderBy: [desc(posts.createdAt)],
+      limit: 20,
+    })
+
+    const enriched = await enrichPosts(rows, actorId)
+    const nextCursor = rows.length === 20 ? rows[rows.length - 1]!.createdAt.toISOString() : null
+    return reply.send({ posts: enriched, nextCursor })
+  })
+
+  // GET /api/actors/:handle/community-badges — public community badge list for profile
+  app.get<{ Params: { handle: string } }>('/api/actors/:handle/community-badges', async (req, reply) => {
+    const actor = await db.query.actors.findFirst({
+      where: eq(actors.handle, req.params.handle),
+    })
+    if (!actor) return reply.code(404).send({ error: 'Not found' })
+
+    const awarded = await db.query.userCommunityBadges.findMany({
+      where: eq(userCommunityBadges.actorId, actor.id),
+      with: { badge: true },
+      orderBy: (ub, { desc }) => [desc(ub.awardedAt)],
+    })
+
+    // Enrich each badge entry with the community info (name + handle)
+    const communityIds = [...new Set(awarded.map((ub) => ub.communityId))]
+    const communityGroupRows = communityIds.length
+      ? await db.query.apGroups.findMany({
+          where: inArray(apGroups.id, communityIds),
+          columns: { id: true, actorId: true },
+        })
+      : []
+    const actorIds = communityGroupRows.map((g) => g.actorId)
+    const communityActors = actorIds.length
+      ? await db.query.actors.findMany({
+          where: inArray(actors.id, actorIds),
+          columns: { id: true, handle: true, displayName: true, avatarUrl: true },
+        })
+      : []
+    const actorById = new Map(communityActors.map((a) => [a.id, a]))
+    const communityByGroupId = new Map(communityGroupRows.map((g) => [g.id, actorById.get(g.actorId)]))
+
+    return reply.send(awarded.map((ub) => ({
+      id: ub.badge.id,
+      name: ub.badge.name,
+      icon: ub.badge.icon,
+      color: ub.badge.color,
+      description: ub.badge.description,
+      awardedAt: ub.awardedAt,
+      community: communityByGroupId.get(ub.communityId) ?? null,
+    })))
+  })
+
+  // GET /api/actors/:handle/activity — 52 haftalık gönderi aktivitesi
+  app.get<{ Params: { handle: string } }>('/api/actors/:handle/activity', async (req, reply) => {
+    const actor = await db.query.actors.findFirst({
+      where: and(eq(actors.handle, req.params.handle), eq(actors.isLocal, true)),
+    })
+    if (!actor) return reply.code(404).send({ error: 'Not found' })
+
+    const rows = await db
+      .select({
+        day: sql<string>`DATE(${posts.createdAt})::text`,
+        count: sql<number>`COUNT(*)::int`,
+      })
+      .from(posts)
+      .where(
+        and(
+          eq(posts.authorId, actor.id),
+          eq(posts.isDeleted, false),
+          isNull(posts.scheduledAt),
+          sql`${posts.createdAt} >= NOW() - INTERVAL '364 days'`,
+        ),
+      )
+      .groupBy(sql`DATE(${posts.createdAt})`)
+      .orderBy(sql`DATE(${posts.createdAt})`)
+
+    return reply.send({ activity: rows })
   })
 }

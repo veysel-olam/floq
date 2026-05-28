@@ -3,17 +3,16 @@
 import { useState, useEffect, useCallback, useRef, use } from 'react'
 import Link from 'next/link'
 import { useSession } from '@/lib/auth-client'
-import { api, type Actor, type Post } from '@/lib/api'
+import { api, type Actor, type Post, type ActorCommunityBadge } from '@/lib/api'
 import { PostCard } from '@/components/posts/post-card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Loader2, CalendarDays, MoreHorizontal, ShieldOff, BellOff, Bell, MessageSquare, Pencil, Star, Images, BarChart2, X, Lock, Globe, Shield, MessageCircle, Heart, Film, FileText, Link2, Share2, Check, Copy, FolderOpen, Plus, Trash2 } from 'lucide-react'
+import { Loader2, CalendarDays, MoreHorizontal, ShieldOff, BellOff, Bell, MessageSquare, Pencil, Star, Images, BarChart2, X, Lock, Globe, Shield, MessageCircle, Heart, Film, FileText, Link2, Share2, Check, Copy, FolderOpen, Plus, Trash2, UserPlus, UserMinus, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TimelineSkeleton } from '@/components/ui/skeleton'
 import { NotFoundContent } from '@/components/not-found-content'
 import { useInfiniteScroll } from '@/hooks/use-infinite-scroll'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { triggerHaptic } from '@/hooks/use-haptics'
 
 const BIO_TOKEN = /(#[a-zA-ZğüşıöçĞÜŞİÖÇ0-9_]+|@[a-zA-Z0-9._-]+)/g
 
@@ -21,7 +20,7 @@ function renderBio(bio: string) {
   const parts = bio.split(BIO_TOKEN)
   return parts.map((part, i) => {
     if (part.startsWith('#')) {
-      return <Link key={i} href={`/hashtag/${part.slice(1).toLowerCase()}`} className="text-(--color-coral) hover:underline">{part}</Link>
+      return <Link key={i} href={`/hashtag/${encodeURIComponent(part.slice(1).toLowerCase())}`} className="text-(--color-coral) hover:underline">{part}</Link>
     }
     if (part.startsWith('@')) {
       return <Link key={i} href={`/${part.slice(1)}`} className="text-(--color-coral) hover:underline">{part}</Link>
@@ -47,6 +46,9 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
   const [blocked, setBlocked] = useState(false)
   const [muted, setMuted] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [editForm, setEditForm] = useState({ displayName: '', bio: '', location: '', website: '', isLocked: false })
+  const [editSaving, setEditSaving] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const [ownMenuOpen, setOwnMenuOpen] = useState(false)
   const ownMenuRef = useRef<HTMLDivElement>(null)
@@ -60,6 +62,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
   const [modalNextCursor, setModalNextCursor] = useState<string | null>(null)
   const [modalLoadingMore, setModalLoadingMore] = useState(false)
   const [modalSearch, setModalSearch] = useState('')
+  const [modalTotal, setModalTotal] = useState<number | null>(null)
 
   // Posts tab state
   const [posts, setPosts] = useState<Post[]>([])
@@ -96,6 +99,9 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
   // Mutual followers state
   const [mutualFollowers, setMutualFollowers] = useState<{ id: string; handle: string; displayName: string | null; avatarUrl: string | null }[]>([])
 
+  // Community badges state
+  const [communityBadges, setCommunityBadges] = useState<ActorCommunityBadge[]>([])
+
   const [copied, setCopied] = useState(false)
 
   async function shareProfile() {
@@ -128,12 +134,22 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
         const fs = actorData.viewer?.followStatus
         setFollowStatus(fs === 'accepted' ? 'following' : fs === 'pending' ? 'pending' : 'none')
         setNotifyOnActivity(actorData.viewer?.notifyOnActivity ?? true)
+        setBlocked(actorData.viewer?.isBlocked ?? false)
+        setMuted(actorData.viewer?.isMuted ?? false)
+        setEditForm({
+          displayName: actorData.displayName ?? '',
+          bio: actorData.bio ?? '',
+          location: actorData.location ?? '',
+          website: actorData.website ?? '',
+          isLocked: actorData.isLocked,
+        })
         if (!isOwn && fs === 'accepted') {
           api.closeFriends.check(handle).then((d) => setIsCloseFriend(d.isCloseFriend)).catch(() => {})
         }
         if (!isOwn) {
           api.actors.mutualFollowers(handle).then((d) => setMutualFollowers(d.actors)).catch(() => {})
         }
+        api.actors.communityBadges(handle).then(setCommunityBadges).catch(() => {})
       } catch {
         // actor not found
       } finally {
@@ -272,6 +288,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
     setFollowModal(type)
     setModalList([])
     setModalNextCursor(null)
+    setModalTotal(null)
     setModalLoading(true)
     setModalSearch('')
     try {
@@ -280,6 +297,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
         : await api.actors.following(handle)
       setModalList(data.actors)
       setModalNextCursor(data.nextCursor)
+      setModalTotal((data as { total?: number }).total ?? null)
     } catch {
     } finally {
       setModalLoading(false)
@@ -298,6 +316,32 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
     } catch {
     } finally {
       setModalLoadingMore(false)
+    }
+  }
+
+  async function saveEditProfile() {
+    setEditSaving(true)
+    try {
+      await api.account.updateProfile({
+        displayName: editForm.displayName.trim() || undefined,
+        bio: editForm.bio.trim() || undefined,
+        location: editForm.location.trim() || null,
+        website: editForm.website.trim() || null,
+        isLocked: editForm.isLocked,
+      })
+      setActor((a) => a ? {
+        ...a,
+        displayName: editForm.displayName.trim() || null,
+        bio: editForm.bio.trim() || null,
+        location: editForm.location.trim() || null,
+        website: editForm.website.trim() || null,
+        isLocked: editForm.isLocked,
+      } : a)
+      setEditModalOpen(false)
+    } catch {
+      // ignore
+    } finally {
+      setEditSaving(false)
     }
   }
 
@@ -358,8 +402,10 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
         const res = await api.actors.follow(handle)
         if (res?.status === 'pending') {
           setFollowStatus('pending')
+          void triggerHaptic('selection')
         } else {
           setFollowStatus('following')
+          void triggerHaptic('medium')
           setActor((a) => a ? { ...a, followersCount: a.followersCount + 1 } : a)
         }
       }
@@ -427,7 +473,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
     { id: 'posts', label: 'Gönderiler', icon: <FileText className="w-3.5 h-3.5" />, count: actor.postsCount },
     { id: 'replies', label: 'Yorumlar', icon: <MessageCircle className="w-3.5 h-3.5" /> },
     { id: 'media', label: 'Medya', icon: <Film className="w-3.5 h-3.5" /> },
-    { id: 'likes', label: 'Beğeniler', icon: <Heart className="w-3.5 h-3.5" />, count: actor.likesCount },
+    ...(isOwn ? [{ id: 'likes' as Tab, label: 'Beğeniler', icon: <Heart className="w-3.5 h-3.5" />, count: actor.likesCount }] : []),
     { id: 'collections', label: 'Koleksiyonlar', icon: <FolderOpen className="w-3.5 h-3.5" /> },
   ]
 
@@ -657,22 +703,31 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
               </span>
             )}
             {actor.role === 'moderator' && (
-              <Badge className="gap-1 text-[10px] bg-blue-500/10 text-blue-600 dark:text-blue-400 border-transparent">
+              <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
                 <Shield className="w-2.5 h-2.5" /> MOD
-              </Badge>
+              </span>
             )}
             {actor.role === 'admin' && (
-              <Badge className="gap-1 text-[10px] bg-(--color-coral)/10 text-(--color-coral) border-transparent">
+              <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-(--color-coral)/10 text-(--color-coral)">
                 <Shield className="w-2.5 h-2.5" /> ADMIN
-              </Badge>
+              </span>
             )}
           </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <p className="text-sm text-(--color-text-tertiary)">@{actor.handle}</p>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            <p className="text-sm text-(--color-text-tertiary)">
+              {actor.customHandle && actor.customHandleVerifiedAt
+                ? `@${actor.customHandle}`
+                : `@${actor.handle}`}
+            </p>
+            {actor.customHandle && actor.customHandleVerifiedAt && (
+              <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full" title="Özel alan adı doğrulandı">
+                <Check className="w-3 h-3" /> Doğrulandı
+              </span>
+            )}
             {!actor.isLocal && (
-              <Badge className="gap-1 text-[10px] text-(--color-teal) bg-(--color-teal)/10 border-transparent">
+              <span className="flex items-center gap-1 text-[11px] font-medium text-(--color-teal) bg-(--color-teal)/8 px-1.5 py-0.5 rounded-full">
                 <Globe className="w-3 h-3" /> Federe
-              </Badge>
+              </span>
             )}
           </div>
         </div>
@@ -696,27 +751,31 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
             <span className="font-bold text-(--color-text-primary) tabular-nums">{actor.followingCount >= 1000 ? `${(actor.followingCount / 1000).toFixed(1)}K` : actor.followingCount}</span>
             <span className="text-(--color-text-tertiary) group-hover:text-(--color-text-secondary)">Takip</span>
           </button>
+          <span className="flex items-center gap-1.5">
+            <span className="font-bold text-(--color-text-primary) tabular-nums">{actor.postsCount >= 1000 ? `${(actor.postsCount / 1000).toFixed(1)}K` : actor.postsCount}</span>
+            <span className="text-(--color-text-tertiary)">Gönderi</span>
+          </span>
         </div>
 
         {/* Mutual followers */}
         {!isOwn && mutualFollowers.length > 0 && (
-          <div className="flex items-center gap-2 mb-2">
-            <div className="flex -space-x-1.5">
+          <div className="flex items-center gap-2.5 mb-3 py-2 px-3 rounded-xl bg-(--color-background-secondary)/60">
+            <div className="flex -space-x-1.5 flex-shrink-0">
               {mutualFollowers.slice(0, 3).map((m) => (
-                <Avatar key={m.id} className="w-5 h-5 border-2 border-(--color-background)">
-                  {m.avatarUrl && <img src={m.avatarUrl} alt="" className="w-full h-full object-cover rounded-full" />}
-                  <AvatarFallback className="text-[8px] text-white" style={{ background: 'var(--gradient-avatar)' }}>
+                <Avatar key={m.id} className="w-6 h-6 ring-2 ring-(--color-background)">
+                  {m.avatarUrl && <AvatarImage src={m.avatarUrl} alt="" />}
+                  <AvatarFallback className="text-[9px] text-white" style={{ background: 'var(--gradient-avatar)' }}>
                     {(m.displayName ?? m.handle).slice(0, 1).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
               ))}
             </div>
-            <p className="text-xs text-(--color-text-tertiary) leading-snug">
+            <p className="text-[12px] text-(--color-text-tertiary) leading-snug">
               {mutualFollowers.length === 1
-                ? <><Link href={`/${mutualFollowers[0]!.handle}`} className="font-medium text-(--color-text-secondary) hover:underline">@{mutualFollowers[0]!.handle}</Link> da takip ediyor</>
+                ? <><Link href={`/${mutualFollowers[0]!.handle}`} className="font-medium text-(--color-text-primary) hover:underline">@{mutualFollowers[0]!.handle}</Link> takip ediyor</>
                 : mutualFollowers.length === 2
-                  ? <><Link href={`/${mutualFollowers[0]!.handle}`} className="font-medium text-(--color-text-secondary) hover:underline">@{mutualFollowers[0]!.handle}</Link> ve <Link href={`/${mutualFollowers[1]!.handle}`} className="font-medium text-(--color-text-secondary) hover:underline">@{mutualFollowers[1]!.handle}</Link> da takip ediyor</>
-                  : <><Link href={`/${mutualFollowers[0]!.handle}`} className="font-medium text-(--color-text-secondary) hover:underline">@{mutualFollowers[0]!.handle}</Link>{mutualFollowers.length > 2 ? ` ve ${mutualFollowers.length - 1} diğer takipçin` : ''} de takip ediyor</>
+                  ? <><Link href={`/${mutualFollowers[0]!.handle}`} className="font-medium text-(--color-text-primary) hover:underline">@{mutualFollowers[0]!.handle}</Link> ve <Link href={`/${mutualFollowers[1]!.handle}`} className="font-medium text-(--color-text-primary) hover:underline">@{mutualFollowers[1]!.handle}</Link> takip ediyor</>
+                  : <><Link href={`/${mutualFollowers[0]!.handle}`} className="font-medium text-(--color-text-primary) hover:underline">@{mutualFollowers[0]!.handle}</Link> ve {mutualFollowers.length - 1} kişi daha takip ediyor</>
               }
             </p>
           </div>
@@ -730,15 +789,24 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
               <span className="text-(--color-text-tertiary)/60">· {accountAgeText}</span>
             )}
           </div>
+          {actor.location && (
+            <Link
+              href={`/location/${encodeURIComponent(actor.location)}`}
+              className="flex items-center gap-1 text-xs text-(--color-text-tertiary) hover:text-(--color-coral) transition-colors"
+            >
+              <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+              <span>{actor.location}</span>
+            </Link>
+          )}
           {actor.website && (
             <a
               href={actor.website.startsWith('http') ? actor.website : `https://${actor.website}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 text-xs text-(--color-teal) hover:text-(--color-teal)/80 transition-colors max-w-[180px]"
+              className="flex items-center gap-1 text-xs font-medium text-(--color-teal) bg-(--color-teal)/8 hover:bg-(--color-teal)/15 px-2 py-0.5 rounded-full transition-colors max-w-[200px]"
             >
               <Link2 className="w-3 h-3 flex-shrink-0" />
-              <span className="truncate">{actor.website.replace(/^https?:\/\//, '')}</span>
+              <span className="truncate">{actor.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}</span>
             </a>
           )}
           {actor.profileFields && actor.profileFields.length > 0 && (
@@ -768,9 +836,9 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
               href={`https://bsky.app/profile/${actor.blueskyHandle}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 text-xs text-sky-500 hover:text-sky-400 transition-colors"
+              className="flex items-center gap-1 text-xs font-medium text-sky-600 dark:text-sky-400 bg-sky-500/8 hover:bg-sky-500/15 px-2 py-0.5 rounded-full transition-colors"
             >
-              <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24" aria-hidden="true">
+              <svg className="w-3 h-3 fill-current flex-shrink-0" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 10.8c-1.087-2.114-4.046-6.053-6.798-7.995C2.566.944 1.561 1.266.902 1.565.139 1.908 0 3.08 0 3.768c0 .69.378 5.65.624 6.479.815 2.736 3.713 3.66 6.383 3.364.136-.02.275-.039.415-.056-.138.022-.276.04-.415.056-3.912.58-7.387 2.005-2.83 7.078 5.013 5.19 6.87-1.113 7.823-4.308.953 3.195 2.05 9.271 7.733 4.308 4.267-4.308 1.172-6.498-2.74-7.078a8.741 8.741 0 0 1-.415-.056c.14.017.279.036.415.056 2.67.297 5.568-.628 6.383-3.364.246-.828.624-5.79.624-6.478 0-.69-.139-1.861-.902-2.206-.659-.298-1.664-.62-4.3 1.24C16.046 4.748 13.087 8.687 12 10.8Z" />
               </svg>
               {actor.blueskyHandle}
@@ -791,22 +859,52 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
 
       </div>
 
+      {/* Community Badges */}
+      {communityBadges.length > 0 && (
+        <div className="px-4 pb-3">
+          <p className="text-[10px] font-semibold text-(--color-text-tertiary) uppercase tracking-widest mb-2">Topluluk Rozetleri</p>
+          <div className="flex flex-wrap gap-2">
+            {communityBadges.map((b) => (
+              <Link
+                key={b.id}
+                href={b.community ? `/c/${b.community.handle}` : '#'}
+                className="group inline-flex items-center gap-1.5 text-[12px] font-semibold px-2.5 py-1 rounded-full border border-(--color-border) bg-(--color-background-secondary) hover:border-(--color-coral)/50 transition-colors"
+                title={b.community ? `${b.community.displayName ?? b.community.handle}` : ''}
+              >
+                <span>{b.icon}</span>
+                <span className="text-(--color-text-secondary) group-hover:text-(--color-text-primary) transition-colors">{b.name}</span>
+                {b.community && (
+                  <span className="text-[10px] text-(--color-text-tertiary) font-normal">@{b.community.handle}</span>
+                )}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
-      <Tabs value={tab} onValueChange={(v) => handleTabChange(v as Tab)}>
-        <TabsList>
-          {tabs.map((t) => (
-            <TabsTrigger key={t.id} value={t.id}>
-              {t.icon}
-              <span className="hidden sm:inline">{t.label}</span>
-              {t.count != null && t.count > 0 && (
-                <span className="tabular-nums">
-                  {t.count >= 1000 ? `${(t.count / 1000).toFixed(1)}K` : t.count}
-                </span>
-              )}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      <div className="flex border-b border-(--color-border) sticky top-0 z-10 bg-(--color-background)/90 backdrop-blur-md">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => handleTabChange(t.id)}
+            className={cn(
+              'flex-1 py-3 text-xs font-medium transition-all flex items-center justify-center gap-1.5',
+              tab === t.id
+                ? 'text-(--color-coral) border-b-2 border-(--color-coral)'
+                : 'text-(--color-text-tertiary) hover:text-(--color-text-secondary) hover:bg-(--color-background-secondary)/50',
+            )}
+          >
+            {t.icon}
+            <span className="hidden sm:inline">{t.label}</span>
+            {t.count != null && t.count > 0 && (
+              <span className={cn('tabular-nums', tab === t.id ? 'text-(--color-coral)' : 'text-(--color-text-tertiary)')}>
+                {t.count >= 1000 ? `${(t.count / 1000).toFixed(1)}K` : t.count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
 
       {/* Posts tab */}
       {tab === 'posts' && (
@@ -989,6 +1087,103 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
 
       <div ref={loadMoreRef} className="h-1" />
 
+      {/* ── Profile edit modal ──────────────────────────────── */}
+      {editModalOpen && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={() => setEditModalOpen(false)} />
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 pointer-events-none">
+            <div
+              className="pointer-events-auto w-full sm:max-w-md bg-(--color-background) rounded-t-2xl sm:rounded-2xl border border-(--color-border) shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-4 py-3.5 border-b border-(--color-border-secondary)">
+                <h2 className="text-base font-semibold text-(--color-text-primary)" style={{ fontFamily: 'var(--font-outfit)' }}>Profili Düzenle</h2>
+                <button onClick={() => setEditModalOpen(false)} className="p-1 rounded-full hover:bg-(--color-background-secondary) text-(--color-text-tertiary)">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="px-4 py-4 space-y-4">
+                <div>
+                  <label className="text-xs font-medium text-(--color-text-tertiary) mb-1 block">Görünen ad</label>
+                  <input
+                    value={editForm.displayName}
+                    onChange={(e) => setEditForm((f) => ({ ...f, displayName: e.target.value }))}
+                    maxLength={60}
+                    placeholder="Görünen adın"
+                    className="w-full text-sm bg-(--color-background-secondary) border border-(--color-border) rounded-xl px-3 py-2.5 text-(--color-text-primary) placeholder:text-(--color-text-tertiary) focus:outline-none focus:border-(--color-coral)/60 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-(--color-text-tertiary) mb-1 block">Bio</label>
+                  <textarea
+                    value={editForm.bio}
+                    onChange={(e) => setEditForm((f) => ({ ...f, bio: e.target.value }))}
+                    maxLength={500}
+                    rows={3}
+                    placeholder="Kendinden bahset…"
+                    className="w-full text-sm bg-(--color-background-secondary) border border-(--color-border) rounded-xl px-3 py-2.5 text-(--color-text-primary) placeholder:text-(--color-text-tertiary) focus:outline-none focus:border-(--color-coral)/60 transition-colors resize-none"
+                  />
+                  <p className="text-[11px] text-(--color-text-tertiary) text-right mt-0.5">{500 - editForm.bio.length}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-(--color-text-tertiary) mb-1 block">Konum</label>
+                  <input
+                    value={editForm.location}
+                    onChange={(e) => setEditForm((f) => ({ ...f, location: e.target.value }))}
+                    maxLength={200}
+                    placeholder="İstanbul, Türkiye"
+                    className="w-full text-sm bg-(--color-background-secondary) border border-(--color-border) rounded-xl px-3 py-2.5 text-(--color-text-primary) placeholder:text-(--color-text-tertiary) focus:outline-none focus:border-(--color-coral)/60 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-(--color-text-tertiary) mb-1 block">Website</label>
+                  <input
+                    value={editForm.website}
+                    onChange={(e) => setEditForm((f) => ({ ...f, website: e.target.value }))}
+                    maxLength={200}
+                    placeholder="https://example.com"
+                    type="url"
+                    className="w-full text-sm bg-(--color-background-secondary) border border-(--color-border) rounded-xl px-3 py-2.5 text-(--color-text-primary) placeholder:text-(--color-text-tertiary) focus:outline-none focus:border-(--color-coral)/60 transition-colors"
+                  />
+                </div>
+                <label className="flex items-center justify-between gap-3 cursor-pointer">
+                  <div>
+                    <p className="text-sm font-medium text-(--color-text-primary)">Kilitli hesap</p>
+                    <p className="text-xs text-(--color-text-tertiary)">Takip isteklerini onaylamak zorunda kalırsın</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditForm((f) => ({ ...f, isLocked: !f.isLocked }))}
+                    className={cn(
+                      'relative inline-flex w-10 h-6 flex-shrink-0 rounded-full border-2 transition-colors',
+                      editForm.isLocked ? 'bg-(--color-coral) border-(--color-coral)' : 'bg-(--color-border) border-transparent',
+                    )}
+                  >
+                    <span className={cn('inline-block w-4 h-4 rounded-full bg-white shadow transition-transform mt-0.5', editForm.isLocked ? 'translate-x-4' : 'translate-x-0.5')} />
+                  </button>
+                </label>
+              </div>
+              <div className="flex gap-2 px-4 pb-4">
+                <button
+                  onClick={() => setEditModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-(--color-border) text-sm font-medium text-(--color-text-secondary) hover:bg-(--color-background-secondary) transition-colors"
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={() => void saveEditProfile()}
+                  disabled={editSaving}
+                  className="flex-1 py-2.5 rounded-xl bg-(--color-coral) text-white text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  {editSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  Kaydet
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Follow list modal */}
       {followModal && (
         <div
@@ -997,16 +1192,27 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
         >
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
           <div
-            className="relative w-full sm:max-w-md bg-(--color-background) rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col max-h-[70vh]"
+            className="relative w-full sm:max-w-md bg-(--color-background) rounded-t-3xl sm:rounded-2xl shadow-xl flex flex-col max-h-[80vh] sm:max-h-[70vh] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-(--color-border) flex-shrink-0">
-              <h2 className="text-base font-semibold text-(--color-text-primary)" style={{ fontFamily: 'var(--font-outfit)' }}>
-                {followModal === 'followers' ? 'Takipçiler' : 'Takip Edilenler'}
-              </h2>
+            {/* Handle bar (mobile) */}
+            <div className="sm:hidden flex justify-center pt-3 pb-1 flex-shrink-0">
+              <div className="w-9 h-1 rounded-full bg-(--color-border)" />
+            </div>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-(--color-border-secondary) flex-shrink-0">
+              <div>
+                <h2 className="text-base font-semibold text-(--color-text-primary)" style={{ fontFamily: 'var(--font-outfit)' }}>
+                  {followModal === 'followers' ? 'Takipçiler' : 'Takip Edilenler'}
+                </h2>
+                {!modalLoading && modalTotal !== null && (
+                  <p className="text-xs text-(--color-text-tertiary)">
+                    {modalTotal} kişi
+                  </p>
+                )}
+              </div>
               <button
                 onClick={() => setFollowModal(null)}
-                className="p-1 rounded-full hover:bg-(--color-background-secondary) text-(--color-text-tertiary) transition-colors"
+                className="p-1.5 rounded-full hover:bg-(--color-background-secondary) text-(--color-text-tertiary) transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1039,7 +1245,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                   </div>
                 ) : (
                   <>
-                    {visible.map((a) => <ActorRow key={a.id} actor={a} onNavigate={() => setFollowModal(null)} />)}
+                    {visible.map((a) => <ActorRow key={a.id} actor={a} currentHandle={currentHandle} onNavigate={() => setFollowModal(null)} />)}
                     {!modalSearch && modalNextCursor && (
                       <button
                         onClick={() => void loadMoreModal()}
@@ -1072,8 +1278,33 @@ function EmptyState({ icon, title, desc }: { icon: React.ReactNode; title: strin
   )
 }
 
-function ActorRow({ actor, onNavigate }: { actor: Actor; onNavigate?: () => void }) {
+function ActorRow({ actor, currentHandle, onNavigate }: { actor: Actor; currentHandle?: string; onNavigate?: () => void }) {
   const initials = (actor.displayName ?? actor.handle).slice(0, 2).toUpperCase()
+  const isSelf = currentHandle === actor.handle
+  const [followState, setFollowState] = useState<'none' | 'pending' | 'following'>(
+    actor.viewer?.followStatus === 'accepted' ? 'following'
+    : actor.viewer?.followStatus === 'pending' ? 'pending'
+    : actor.viewer?.following ? 'following'
+    : 'none'
+  )
+  const [busy, setBusy] = useState(false)
+
+  async function toggle(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (busy) return
+    setBusy(true)
+    try {
+      if (followState !== 'none') {
+        await api.actors.unfollow(actor.handle)
+        setFollowState('none')
+      } else {
+        const res = await api.actors.follow(actor.handle)
+        setFollowState(res?.status === 'pending' ? 'pending' : 'following')
+      }
+    } catch { /* ignore */ } finally { setBusy(false) }
+  }
+
   return (
     <Link
       href={`/${actor.handle}`}
@@ -1082,10 +1313,7 @@ function ActorRow({ actor, onNavigate }: { actor: Actor; onNavigate?: () => void
     >
       <Avatar className="w-10 h-10 flex-shrink-0">
         {actor.avatarUrl && <AvatarImage src={actor.avatarUrl} alt={actor.displayName ?? actor.handle} />}
-        <AvatarFallback
-          className="text-sm font-medium text-white"
-          style={{ background: 'var(--gradient-avatar)' }}
-        >
+        <AvatarFallback className="text-sm font-medium text-white" style={{ background: 'var(--gradient-avatar)' }}>
           {initials}
         </AvatarFallback>
       </Avatar>
@@ -1098,6 +1326,23 @@ function ActorRow({ actor, onNavigate }: { actor: Actor; onNavigate?: () => void
           <p className="text-xs text-(--color-text-secondary) truncate mt-0.5">{actor.bio}</p>
         )}
       </div>
+      {!isSelf && currentHandle && (
+        <button
+          onClick={toggle}
+          disabled={busy}
+          className={cn(
+            'flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all disabled:opacity-50',
+            followState !== 'none'
+              ? 'border border-(--color-border) text-(--color-text-secondary) hover:border-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20'
+              : 'bg-(--color-coral) text-white hover:opacity-90',
+          )}
+        >
+          {busy ? <Loader2 className="w-3 h-3 animate-spin" />
+            : followState === 'following' ? <><UserMinus className="w-3 h-3" />Takiptesin</>
+            : followState === 'pending' ? 'İstek gönderildi'
+            : <><UserPlus className="w-3 h-3" />Takip et</>}
+        </button>
+      )}
     </Link>
   )
 }

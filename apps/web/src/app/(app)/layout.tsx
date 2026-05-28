@@ -1,12 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
 import { RightPanel } from '@/components/layout/right-panel'
 import { UserPrefsProvider, useUserPrefs } from '@/lib/user-prefs-context'
 import { useUsageTimer } from '@/hooks/use-usage-timer'
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
 import { KeyboardShortcutsHelp } from '@/components/keyboard-shortcuts-help'
+import { useSession } from '@/lib/auth-client'
+import { api } from '@/lib/api'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Clock, X } from 'lucide-react'
 
@@ -56,6 +59,23 @@ function UsageReminder() {
   )
 }
 
+function OnboardingGuard({ children }: { children: React.ReactNode }) {
+  const { data: session, isPending } = useSession()
+  const router = useRouter()
+  const pathname = usePathname()
+
+  useEffect(() => {
+    if (isPending || !session || pathname === '/onboarding') return
+    api.account.getMe()
+      .then(({ onboardingCompletedAt }) => {
+        if (!onboardingCompletedAt) router.replace('/onboarding')
+      })
+      .catch(() => {})
+  }, [isPending, session, pathname, router])
+
+  return <>{children}</>
+}
+
 function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false)
 
@@ -88,7 +108,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <UserPrefsProvider>
       <TooltipProvider>
-        <AppLayoutInner>{children}</AppLayoutInner>
+        <OnboardingGuard>
+          <AppLayoutInner>{children}</AppLayoutInner>
+        </OnboardingGuard>
       </TooltipProvider>
     </UserPrefsProvider>
   )

@@ -83,7 +83,7 @@ export function ReportModal({ postId, reportedActorHandle, onClose }: ReportModa
                   className={cn(
                     'w-full text-left px-3 py-2 rounded-xl text-sm transition-colors border',
                     reason === r.value
-                      ? 'border-(--color-coral) bg-(--color-blush) text-(--color-coral)'
+                      ? 'border-(--color-coral) bg-(--color-blush) dark:bg-(--color-coral)/12 text-(--color-coral) dark:bg-(--color-coral)/12'
                       : 'border-(--color-border) text-(--color-text-secondary) hover:border-(--color-border-secondary) hover:text-(--color-text-primary)',
                   )}
                 >

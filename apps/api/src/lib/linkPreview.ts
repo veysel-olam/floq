@@ -271,9 +271,9 @@ export async function fetchLinkPreview(rawUrl: string): Promise<LinkPreview | nu
         ...base,
         musicPlatform: musicMeta.platform,
         musicType: musicMeta.type,
-        musicEmbedUrl: musicMeta.embedUrl ?? undefined,
-        musicArtist: artist ?? undefined,
-        musicTrack: track ?? undefined,
+        ...(musicMeta.embedUrl != null && { musicEmbedUrl: musicMeta.embedUrl }),
+        ...(artist != null && { musicArtist: artist }),
+        ...(track != null && { musicTrack: track }),
       }
     }
 
@@ -289,7 +289,7 @@ export async function fetchLinkPreview(rawUrl: string): Promise<LinkPreview | nu
         siteName: null,
         musicPlatform: musicMeta.platform,
         musicType: musicMeta.type,
-        musicEmbedUrl: musicMeta.embedUrl ?? undefined,
+        ...(musicMeta.embedUrl != null && { musicEmbedUrl: musicMeta.embedUrl }),
       }
     }
     return null

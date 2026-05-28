@@ -1,17 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { QRCodeSVG } from 'qrcode.react'
 import { useSession, authClient } from '@/lib/auth-client'
-import { api, type Actor, type MutedActor, type KeywordFilter, type SessionInfo, type FeedRule, type FeedRulesConfig, type ListInfo, type ActorPreferences } from '@/lib/api'
-import { Badge } from '@/components/ui/badge'
+import { api, type Actor, type MutedActor, type KeywordFilter, type SessionInfo, type FeedRule, type FeedRulesConfig, type ListInfo, type ActorPreferences, type NotificationPrefs } from '@/lib/api'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
-import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { useTheme } from 'next-themes'
@@ -66,6 +62,7 @@ import {
   UserCog,
   UserX,
   Palette,
+  Snowflake,
 } from 'lucide-react'
 
 type Tab = 'profile' | 'privacy' | 'moderation' | 'filters' | 'feed' | 'notifications' | 'security' | 'sessions' | 'appearance' | 'account' | 'help'
@@ -118,12 +115,23 @@ const BG_KELVIN: { id: BgToneId; k: number; color: string; label: string; desc: 
   { id: 'pure',  k: 6500, color: '#FFFFFF', label: 'Saf',    desc: 'Bembeyaz'     },
 ]
 
+function deriveBlushDark(main: string): string {
+  const rgb = hexToRgb(main)
+  if (!rgb) return '#3D2420'
+  // 20% of accent color blended into the dark background (#17171B)
+  const r = Math.round(0x17 + 0.20 * (rgb.r - 0x17))
+  const g = Math.round(0x17 + 0.20 * (rgb.g - 0x17))
+  const b = Math.round(0x1B + 0.20 * (rgb.b - 0x1B))
+  return rgbToHex(r, g, b)
+}
+
 function applyAccentColors(c: { main: string; hover: string; blush: string }) {
   const s = document.documentElement.style
   s.setProperty('--color-coral', c.main)
   s.setProperty('--color-coral-hover', c.hover)
   s.setProperty('--color-ember', c.hover)
-  s.setProperty('--color-blush', c.blush)
+  s.setProperty('--color-blush-light', c.blush)
+  s.setProperty('--color-blush-dark', deriveBlushDark(c.main))
 }
 
 function hexToRgb(hex: string) {
@@ -146,6 +154,30 @@ function deriveAccentColors(main: string): { main: string; hover: string; blush:
   const hover = rgbToHex(rgb.r * 0.88, rgb.g * 0.88, rgb.b * 0.88)
   const blush = rgbToHex(rgb.r + (255 - rgb.r) * 0.88, rgb.g + (255 - rgb.g) * 0.88, rgb.b + (255 - rgb.b) * 0.88)
   return { main, hover, blush }
+}
+
+function hexToHsl(hex: string): { h: number; s: number; l: number } | null {
+  const rgb = hexToRgb(hex)
+  if (!rgb) return null
+  const r = rgb.r / 255, g = rgb.g / 255, b = rgb.b / 255
+  const max = Math.max(r, g, b), min = Math.min(r, g, b)
+  const l = (max + min) / 2
+  if (max === min) return { h: 0, s: 0, l: Math.round(l * 100) }
+  const d = max - min
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+  let h = 0
+  if (max === r) h = (g - b) / d + (g < b ? 6 : 0)
+  else if (max === g) h = (b - r) / d + 2
+  else h = (r - g) / d + 4
+  return { h: Math.round(h * 60), s: Math.round(s * 100), l: Math.round(l * 100) }
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const sl = s / 100, ll = l / 100
+  const k = (n: number) => (n + h / 30) % 12
+  const a = sl * Math.min(ll, 1 - ll)
+  const f = (n: number) => ll - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))
+  return rgbToHex(Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255))
 }
 
 // ─── Section wrapper ──────────────────────────────────────────────────────────
@@ -360,7 +392,8 @@ function ThemeTab() {
   const [bgTone,      setBgTone]      = useState<BgToneId>('warm')
   const [postStyle,   setPostStyle]   = useState<'card' | 'stream'>('card')
   const [reduceMotion,setReduceMotion]= useState(false)
-  const colorInputRef = useRef<HTMLInputElement>(null)
+  const [colorPickerOpen, setColorPickerOpen] = useState(false)
+  const [hsl, setHsl] = useState<{ h: number; s: number; l: number }>({ h: 16, s: 78, l: 56 })
 
   useEffect(() => {
     const savedFont    = (localStorage.getItem('floq-font-size')    ?? 'base') as 'sm' | 'base' | 'lg'
@@ -368,7 +401,7 @@ function ThemeTab() {
     const savedFamily  = (localStorage.getItem('floq-font-family')  ?? 'system') as FontFamilyId
     const savedBg      = (localStorage.getItem('floq-bg-tone')      ?? 'warm') as BgToneId
     const savedStyle   = (localStorage.getItem('floq-post-style')   ?? 'card') as 'card' | 'stream'
-    const savedMotion  = localStorage.getItem('floq-reduce-motion') === 'true'
+    const savedMotion   = localStorage.getItem('floq-reduce-motion') === 'true'
     const savedAccent  = localStorage.getItem('floq-accent')
 
     setFontSize(savedFont)
@@ -400,6 +433,8 @@ function ThemeTab() {
         const c = JSON.parse(savedAccent) as { main: string; hover: string; blush: string }
         applyAccentColors(c)
         setAccent(c.main)
+        const h = hexToHsl(c.main)
+        if (h) setHsl(h)
       } catch { /* ignore */ }
     }
   }, [])
@@ -420,6 +455,18 @@ function ThemeTab() {
     applyAccentColors(preset)
     localStorage.setItem('floq-accent', JSON.stringify(preset))
     setAccent(preset.main)
+    const h = hexToHsl(preset.main)
+    if (h) setHsl(h)
+    setColorPickerOpen(false)
+  }
+
+  function applyHsl(h: number, s: number, l: number) {
+    const hex = hslToHex(h, s, l)
+    const derived = deriveAccentColors(hex)
+    if (!derived) return
+    applyAccentColors(derived)
+    localStorage.setItem('floq-accent', JSON.stringify(derived))
+    setAccent(derived.main)
   }
 
   function handleFontFamily(id: FontFamilyId) {
@@ -510,7 +557,7 @@ function ThemeTab() {
                 onClick={() => setTheme(o.value)}
                 className={cn(
                   'w-full flex items-center gap-4 px-4 py-3.5 transition-colors text-left',
-                  active ? 'bg-(--color-blush)/25' : 'hover:bg-(--color-background-secondary)/50',
+                  active ? 'bg-(--color-blush)/25 dark:bg-(--color-coral)/8' : 'hover:bg-(--color-background-secondary)/50',
                 )}
               >
                 <div className="flex -space-x-2 flex-shrink-0">
@@ -573,7 +620,7 @@ function ThemeTab() {
           })}
           <button
             aria-label="Özel renk seç"
-            onClick={() => colorInputRef.current?.click()}
+            onClick={() => setColorPickerOpen((v) => !v)}
             className="flex flex-col items-center gap-2 group focus:outline-none flex-1"
           >
             <div
@@ -598,20 +645,92 @@ function ThemeTab() {
             </span>
           </button>
         </div>
-        <input
-          ref={colorInputRef}
-          type="color"
-          value={accent}
-          onChange={(e) => {
-            const derived = deriveAccentColors(e.target.value)
-            if (!derived) return
-            applyAccentColors(derived)
-            localStorage.setItem('floq-accent', JSON.stringify(derived))
-            setAccent(derived.main)
-          }}
-          aria-label="Özel renk"
-          className="sr-only"
-        />
+
+        {/* HSL Color Picker Panel */}
+        {colorPickerOpen && (
+          <div className="mt-4 p-4 rounded-2xl border border-(--color-border) bg-(--color-background-secondary)/40 space-y-4">
+            {/* Preview */}
+            <div className="flex items-center gap-3">
+              <div
+                className="w-10 h-10 rounded-full shadow-md flex-shrink-0 border-2 border-white/20"
+                style={{ backgroundColor: hslToHex(hsl.h, hsl.s, hsl.l) }}
+              />
+              <div>
+                <p className="text-xs font-medium text-(--color-text-secondary)">Özel Renk</p>
+                <p className="text-[11px] font-mono text-(--color-text-tertiary) uppercase">{hslToHex(hsl.h, hsl.s, hsl.l)}</p>
+              </div>
+            </div>
+
+            {/* Hue */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-(--color-text-tertiary)">Ton</span>
+                <span className="text-[11px] font-mono text-(--color-text-tertiary) tabular-nums w-8 text-right">{hsl.h}°</span>
+              </div>
+              <div className="relative h-4 rounded-full overflow-hidden" style={{ background: 'linear-gradient(to right,#f00 0%,#ff0 17%,#0f0 33%,#0ff 50%,#00f 67%,#f0f 83%,#f00 100%)' }}>
+                <input
+                  type="range" min={0} max={359} value={hsl.h}
+                  onChange={(e) => {
+                    const next = { ...hsl, h: Number(e.target.value) }
+                    setHsl(next)
+                    applyHsl(next.h, next.s, next.l)
+                  }}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-white shadow-md pointer-events-none"
+                  style={{ left: `calc(${(hsl.h / 359) * 100}% - 8px)`, backgroundColor: `hsl(${hsl.h},100%,50%)` }}
+                />
+              </div>
+            </div>
+
+            {/* Saturation */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-(--color-text-tertiary)">Doygunluk</span>
+                <span className="text-[11px] font-mono text-(--color-text-tertiary) tabular-nums w-8 text-right">{hsl.s}%</span>
+              </div>
+              <div className="relative h-4 rounded-full overflow-hidden" style={{ background: `linear-gradient(to right, hsl(${hsl.h},0%,50%), hsl(${hsl.h},100%,50%))` }}>
+                <input
+                  type="range" min={20} max={100} value={hsl.s}
+                  onChange={(e) => {
+                    const next = { ...hsl, s: Number(e.target.value) }
+                    setHsl(next)
+                    applyHsl(next.h, next.s, next.l)
+                  }}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-white shadow-md pointer-events-none"
+                  style={{ left: `calc(${((hsl.s - 20) / 80) * 100}% - 8px)`, backgroundColor: `hsl(${hsl.h},${hsl.s}%,50%)` }}
+                />
+              </div>
+            </div>
+
+            {/* Lightness */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-(--color-text-tertiary)">Parlaklık</span>
+                <span className="text-[11px] font-mono text-(--color-text-tertiary) tabular-nums w-8 text-right">{hsl.l}%</span>
+              </div>
+              <div className="relative h-4 rounded-full overflow-hidden" style={{ background: `linear-gradient(to right, hsl(${hsl.h},${hsl.s}%,20%), hsl(${hsl.h},${hsl.s}%,50%), hsl(${hsl.h},${hsl.s}%,80%))` }}>
+                <input
+                  type="range" min={20} max={75} value={hsl.l}
+                  onChange={(e) => {
+                    const next = { ...hsl, l: Number(e.target.value) }
+                    setHsl(next)
+                    applyHsl(next.h, next.s, next.l)
+                  }}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-white shadow-md pointer-events-none"
+                  style={{ left: `calc(${((hsl.l - 20) / 55) * 100}% - 8px)`, backgroundColor: `hsl(${hsl.h},${hsl.s}%,${hsl.l}%)` }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </Section>
 
       {/* ── Arka Plan Sıcaklığı ── */}
@@ -631,7 +750,7 @@ function ThemeTab() {
               className={cn(
                 'flex flex-col items-center gap-2 py-5 px-3 rounded-2xl border transition-all',
                 fontFamily === f.id
-                  ? 'border-(--color-coral) bg-(--color-blush)/50'
+                  ? 'border-(--color-coral) bg-(--color-blush)/50 dark:bg-(--color-coral)/12'
                   : 'border-(--color-border) hover:bg-(--color-background-secondary)/70',
               )}
             >
@@ -669,7 +788,7 @@ function ThemeTab() {
               className={cn(
                 'flex flex-col items-center gap-2 py-4 rounded-2xl border transition-all',
                 fontSize === o.value
-                  ? 'border-(--color-coral) bg-(--color-blush)/50'
+                  ? 'border-(--color-coral) bg-(--color-blush)/50 dark:bg-(--color-coral)/12'
                   : 'border-(--color-border) hover:bg-(--color-background-secondary)/70',
               )}
             >
@@ -698,7 +817,7 @@ function ThemeTab() {
               className={cn(
                 'flex flex-col items-start gap-3 p-3.5 rounded-2xl border transition-all',
                 postStyle === o.value
-                  ? 'border-(--color-coral) bg-(--color-blush)/50'
+                  ? 'border-(--color-coral) bg-(--color-blush)/50 dark:bg-(--color-coral)/12'
                   : 'border-(--color-border) hover:bg-(--color-background-secondary)/70',
               )}
             >
@@ -747,7 +866,7 @@ function ThemeTab() {
               className={cn(
                 'flex flex-col items-start gap-3 p-3.5 rounded-2xl border transition-all',
                 density === o.value
-                  ? 'border-(--color-coral) bg-(--color-blush)/50'
+                  ? 'border-(--color-coral) bg-(--color-blush)/50 dark:bg-(--color-coral)/12'
                   : 'border-(--color-border) hover:bg-(--color-background-secondary)/70',
               )}
             >
@@ -782,7 +901,7 @@ function ThemeTab() {
           className={cn(
             'flex items-center justify-between w-full px-4 py-3.5 rounded-2xl border transition-all',
             reduceMotion
-              ? 'border-(--color-coral) bg-(--color-blush)/50'
+              ? 'border-(--color-coral) bg-(--color-blush)/50 dark:bg-(--color-coral)/12'
               : 'border-(--color-border) hover:bg-(--color-background-secondary)/70',
           )}
         >
@@ -816,6 +935,7 @@ function CropModal({ file, shape, onSave, onCancel }: CropModalProps) {
   const [imgEl, setImgEl] = useState<HTMLImageElement | null>(null)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const [scale, setScale] = useState(1)
+  const [minScale, setMinScale] = useState(0.1)
   const [dragging, setDragging] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
 
@@ -832,10 +952,13 @@ function CropModal({ file, shape, onSave, onCancel }: CropModalProps) {
       const scaleW = CANVAS_W / img.naturalWidth
       const scaleH = CANVAS_H / img.naturalHeight
       const initialScale = Math.max(scaleW, scaleH)
+      setMinScale(initialScale)
       setScale(initialScale)
       const scaledW = img.naturalWidth * initialScale
       const scaledH = img.naturalHeight * initialScale
-      setOffset({ x: (CANVAS_W - scaledW) / 2, y: (CANVAS_H - scaledH) / 2 })
+      const cx = Math.min(0, Math.max(CANVAS_W - scaledW, (CANVAS_W - scaledW) / 2))
+      const cy = Math.min(0, Math.max(CANVAS_H - scaledH, (CANVAS_H - scaledH) / 2))
+      setOffset({ x: cx, y: cy })
     }
     img.onerror = () => { URL.revokeObjectURL(objectUrl); onCancel() }
     img.src = objectUrl
@@ -852,33 +975,44 @@ function CropModal({ file, shape, onSave, onCancel }: CropModalProps) {
     ctx.drawImage(imgEl, offset.x, offset.y, imgEl.naturalWidth * scale, imgEl.naturalHeight * scale)
     ctx.restore()
 
+    // Overlay: draw ONLY outside the crop area using evenodd fill rule
+    // This avoids destination-out which makes the crop area transparent (shows page bg instead of image)
+    const radius = Math.min(CANVAS_W, CANVAS_H) / 2 - 4
     ctx.save()
-    ctx.globalCompositeOperation = 'source-over'
-    ctx.fillStyle = 'rgba(0,0,0,0.5)'
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H)
-    ctx.globalCompositeOperation = 'destination-out'
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'
+    ctx.beginPath()
+    ctx.rect(0, 0, CANVAS_W, CANVAS_H)  // outer boundary
     if (shape === 'circle') {
-      ctx.beginPath()
-      ctx.arc(CANVAS_W / 2, CANVAS_H / 2, Math.min(CANVAS_W, CANVAS_H) / 2 - 4, 0, Math.PI * 2)
-      ctx.fill()
+      ctx.arc(CANVAS_W / 2, CANVAS_H / 2, radius, 0, Math.PI * 2)
     } else {
-      ctx.fillRect(4, 4, CANVAS_W - 8, CANVAS_H - 8)
+      ctx.rect(4, 4, CANVAS_W - 8, CANVAS_H - 8)  // inner crop rect
     }
+    ctx.fill('evenodd')  // fills only between outer rect and inner shape
     ctx.restore()
 
+    // Border
     ctx.save()
-    ctx.globalCompositeOperation = 'source-over'
-    ctx.strokeStyle = 'white'
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)'
     ctx.lineWidth = 2
     if (shape === 'circle') {
       ctx.beginPath()
-      ctx.arc(CANVAS_W / 2, CANVAS_H / 2, Math.min(CANVAS_W, CANVAS_H) / 2 - 4, 0, Math.PI * 2)
+      ctx.arc(CANVAS_W / 2, CANVAS_H / 2, radius, 0, Math.PI * 2)
       ctx.stroke()
     } else {
       ctx.strokeRect(4, 4, CANVAS_W - 8, CANVAS_H - 8)
     }
     ctx.restore()
   }, [imgEl, offset, scale, shape, CANVAS_W, CANVAS_H])
+
+  function clampOffset(x: number, y: number, currentScale: number) {
+    if (!imgEl) return { x, y }
+    const scaledW = imgEl.naturalWidth * currentScale
+    const scaledH = imgEl.naturalHeight * currentScale
+    return {
+      x: Math.min(0, Math.max(CANVAS_W - scaledW, x)),
+      y: Math.min(0, Math.max(CANVAS_H - scaledH, y)),
+    }
+  }
 
   function cssToCanvas(canvas: HTMLCanvasElement) {
     const rect = canvas.getBoundingClientRect()
@@ -893,10 +1027,11 @@ function CropModal({ file, shape, onSave, onCancel }: CropModalProps) {
   function handleMouseMove(e: React.MouseEvent<HTMLCanvasElement>) {
     if (!dragging) return
     const { sx, sy } = cssToCanvas(e.currentTarget)
-    setOffset((prev) => ({
-      x: prev.x + (e.clientX - dragStart.x) * sx,
-      y: prev.y + (e.clientY - dragStart.y) * sy,
-    }))
+    setOffset((prev) => clampOffset(
+      prev.x + (e.clientX - dragStart.x) * sx,
+      prev.y + (e.clientY - dragStart.y) * sy,
+      scale,
+    ))
     setDragStart({ x: e.clientX, y: e.clientY })
   }
 
@@ -920,7 +1055,7 @@ function CropModal({ file, shape, onSave, onCancel }: CropModalProps) {
       const { sx, sy } = cssToCanvas(e.currentTarget)
       const dx = (t.clientX - lastTouchRef.current.x) * sx
       const dy = (t.clientY - lastTouchRef.current.y) * sy
-      setOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }))
+      setOffset((prev) => clampOffset(prev.x + dx, prev.y + dy, scale))
       lastTouchRef.current = { x: t.clientX, y: t.clientY }
     }
   }
@@ -989,11 +1124,15 @@ function CropModal({ file, shape, onSave, onCancel }: CropModalProps) {
             <span className="text-xs text-(--color-text-tertiary) flex-shrink-0">Yakınlaştır</span>
             <input
               type="range"
-              min={0.1}
-              max={3}
-              step={0.05}
+              min={minScale}
+              max={minScale * 4}
+              step={minScale * 0.05}
               value={scale}
-              onChange={(e) => setScale(Number(e.target.value))}
+              onChange={(e) => {
+                const newScale = Number(e.target.value)
+                setScale(newScale)
+                setOffset((prev) => clampOffset(prev.x, prev.y, newScale))
+              }}
               className="flex-1 accent-[--color-coral]"
             />
           </div>
@@ -1021,6 +1160,7 @@ function CropModal({ file, shape, onSave, onCancel }: CropModalProps) {
 function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'] }) {
   const [displayName, setDisplayName] = useState(session?.user.name ?? '')
   const [bio, setBio] = useState('')
+  const [location, setLocation] = useState('')
   const [website, setWebsite] = useState('')
   const [isLocked, setIsLocked] = useState(false)
   const [profileFields, setProfileFields] = useState<Array<{ name: string; value: string }>>([{ name: '', value: '' }])
@@ -1056,6 +1196,7 @@ function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'
       api.actors.get(handle).then((actor) => {
         setDisplayName(actor.displayName ?? session?.user.name ?? '')
         setBio(actor.bio ?? '')
+        setLocation(actor.location ?? '')
         setWebsite(actor.website ?? '')
         setAvatarUrl(actor.avatarUrl)
         setHeaderUrl(actor.headerUrl)
@@ -1161,6 +1302,7 @@ function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'
       await api.account.updateProfile({
         displayName: displayName || undefined,
         bio: bio || undefined,
+        location: location.trim() || null,
         website: websiteTrimmed ? (websiteTrimmed.startsWith('http') ? websiteTrimmed : `https://${websiteTrimmed}`) : null,
         isLocked,
         profileFields: profileFields.filter((f) => f.name.trim() || f.value.trim()),
@@ -1191,7 +1333,7 @@ function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'
             <div className="absolute inset-0 flex items-center justify-center gap-1.5 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity">
               {uploadingHeader
                 ? <Loader2 className="w-4 h-4 text-white animate-spin" />
-                : <><Camera className="w-4 h-4 text-white" /><span className="text-xs text-white font-medium">Başlık</span></>}
+                : <><Camera className="w-4 h-4 text-white" /><span className="text-xs text-white font-medium">Kapak</span></>}
             </div>
           </div>
           {/* Avatar overlaid on header bottom-left */}
@@ -1263,6 +1405,18 @@ function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'
           <p className="text-xs text-(--color-text-tertiary) mt-1 text-right">{bio.length}/500</p>
         </div>
         <div>
+          <Label htmlFor="location" className="text-xs font-medium text-(--color-text-secondary) mb-1.5 block">
+            Konum
+          </Label>
+          <Input
+            id="location"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            maxLength={200}
+            placeholder="İstanbul, Türkiye"
+          />
+        </div>
+        <div>
           <Label htmlFor="website" className="text-xs font-medium text-(--color-text-secondary) mb-1.5 block">
             Web Sitesi
           </Label>
@@ -1325,7 +1479,15 @@ function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'
           <p className="text-sm font-medium text-(--color-text-primary)">Hesabı Kilitle</p>
           <p className="text-xs text-(--color-text-tertiary) mt-0.5">Takip isteklerini manuel onayla</p>
         </div>
-        <Switch checked={isLocked} onCheckedChange={setIsLocked} aria-label="Hesabı kilitle" />
+        <button
+          onClick={() => setIsLocked((v) => !v)}
+          className={cn(
+            'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none flex-shrink-0',
+            isLocked ? 'bg-(--color-coral)' : 'bg-(--color-border)',
+          )}
+        >
+          <span className={cn('inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform', isLocked ? 'translate-x-6' : 'translate-x-1')} />
+        </button>
       </div>
 
       <Button
@@ -1338,8 +1500,7 @@ function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'
       </Button>
 
       {/* ── Bluesky & AT Protocol ── */}
-      <Separator className="my-2" />
-      <div className="pt-4 space-y-5">
+      <div className="border-t border-(--color-border) pt-6 space-y-5">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <AtSign className="w-4 h-4 text-(--color-text-secondary)" />
@@ -1352,42 +1513,36 @@ function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'
 
         {/* DID badge */}
         {handle && (
-          <Card className="bg-(--color-background-secondary) ring-0 border border-(--color-border) gap-1">
-            <CardContent className="pt-3 pb-2.5">
-              <p className="text-[10px] text-(--color-text-tertiary) uppercase tracking-wide font-medium mb-1">Decentralized ID</p>
-              <p className="text-xs font-mono text-(--color-text-primary) break-all">
-                {`did:web:${typeof window !== 'undefined' ? new URL(process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001').host : '…'}:users:${handle}`}
-              </p>
-            </CardContent>
-          </Card>
+          <div className="rounded-xl border border-(--color-border) bg-(--color-background-secondary) p-3 space-y-1">
+            <p className="text-[10px] text-(--color-text-tertiary) uppercase tracking-wide font-medium">Decentralized ID</p>
+            <p className="text-xs font-mono text-(--color-text-primary) break-all">
+              {`did:web:${typeof window !== 'undefined' ? new URL(process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001').host : '…'}:users:${handle}`}
+            </p>
+          </div>
         )}
 
         {/* Bridgy Fed bridge */}
-        <Card className="bg-(--color-background-secondary) ring-0 border border-(--color-border)">
-          <CardHeader className="pb-0">
-            <CardTitle className="flex items-center gap-2 text-xs font-semibold text-(--color-text-primary)">
-              <Zap className="w-3.5 h-3.5 text-sky-500" />
-              Bridgy Fed Köprüsü
-              <Badge className="text-[10px] bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400 border-transparent">Ücretsiz</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-2 space-y-2.5">
-            <p className="text-xs text-(--color-text-tertiary) leading-relaxed">
-              Bluesky kullanıcıları seni <span className="font-mono text-(--color-text-secondary)">{handle ? `@${handle}.ap.brid.gy` : '@kullanici.ap.brid.gy'}</span> üzerinden takip edebilir. Aktivasyon gerekmez — hesabın zaten görünür.
-            </p>
-            {handle && (
-              <a
-                href={`https://bsky.app/profile/${handle}.${typeof window !== 'undefined' ? new URL(process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001').host : 'floq.com'}.ap.brid.gy`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-xs text-sky-500 hover:text-sky-400 transition-colors"
-              >
-                <ExternalLink className="w-3 h-3" />
-                Bluesky'da profili gör
-              </a>
-            )}
-          </CardContent>
-        </Card>
+        <div className="rounded-xl border border-(--color-border) bg-(--color-background-secondary) p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Zap className="w-3.5 h-3.5 text-sky-500" />
+            <p className="text-xs font-semibold text-(--color-text-primary)">Bridgy Fed Köprüsü</p>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400 font-medium">Ücretsiz</span>
+          </div>
+          <p className="text-xs text-(--color-text-tertiary) leading-relaxed">
+            Bluesky kullanıcıları seni <span className="font-mono text-(--color-text-secondary)">{handle ? `@${handle}.ap.brid.gy` : '@kullanici.ap.brid.gy'}</span> üzerinden takip edebilir. Aktivasyon gerekmez — hesabın zaten görünür.
+          </p>
+          {handle && (
+            <a
+              href={`https://bsky.app/profile/${handle}.${typeof window !== 'undefined' ? new URL(process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001').host : 'floq.com'}.ap.brid.gy`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-sky-500 hover:text-sky-400 transition-colors"
+            >
+              <ExternalLink className="w-3 h-3" />
+              Bluesky'da profili gör
+            </a>
+          )}
+        </div>
 
         {/* Mevcut Bluesky hesabını bağla */}
         <div className="space-y-2">
@@ -1620,7 +1775,7 @@ function ModerationTab() {
             onClick={() => setSection(s)}
             className={cn(
               'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
-              section === s ? 'bg-(--color-blush) text-(--color-coral)' : 'text-(--color-text-tertiary) hover:text-(--color-text-primary)',
+              section === s ? 'bg-(--color-blush) text-(--color-coral) dark:bg-(--color-coral)/12' : 'text-(--color-text-tertiary) hover:text-(--color-text-primary)',
             )}
           >
             {s === 'blocks' ? <ShieldOff className="w-3.5 h-3.5" /> : <BellOff className="w-3.5 h-3.5" />}
@@ -1872,7 +2027,7 @@ function FiltersTab() {
                     className={cn(
                       'px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors',
                       newContext === c.value
-                        ? 'border-(--color-coral) bg-(--color-blush) text-(--color-coral)'
+                        ? 'border-(--color-coral) bg-(--color-blush) text-(--color-coral) dark:bg-(--color-coral)/12'
                         : 'border-(--color-border) text-(--color-text-secondary)',
                     )}
                   >
@@ -1891,7 +2046,7 @@ function FiltersTab() {
                     className={cn(
                       'px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors',
                       newAction === a
-                        ? 'border-(--color-coral) bg-(--color-blush) text-(--color-coral)'
+                        ? 'border-(--color-coral) bg-(--color-blush) text-(--color-coral) dark:bg-(--color-coral)/12'
                         : 'border-(--color-border) text-(--color-text-secondary)',
                     )}
                   >
@@ -1902,12 +2057,15 @@ function FiltersTab() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Switch
-              checked={newWholeWord}
-              onCheckedChange={setNewWholeWord}
-              aria-label="Tam kelime eşleşmesi"
-              className="h-5 w-9 [&>span]:h-3.5 [&>span]:w-3.5 data-[state=checked]:[&>span]:translate-x-4 data-[state=unchecked]:[&>span]:translate-x-0.5"
-            />
+            <button
+              onClick={() => setNewWholeWord((v) => !v)}
+              className={cn(
+                'relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0',
+                newWholeWord ? 'bg-(--color-coral)' : 'bg-(--color-border)',
+              )}
+            >
+              <span className={cn('inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform', newWholeWord ? 'translate-x-4' : 'translate-x-0.5')} />
+            </button>
             <span className="text-xs text-(--color-text-secondary)">Tam kelime eşleşmesi</span>
           </div>
           <div className="flex gap-2">
@@ -1948,7 +2106,7 @@ function FiltersTab() {
                     'text-[10px] px-1.5 py-0.5 rounded-full font-medium',
                     filter.action === 'hide'
                       ? 'bg-red-100 text-red-600 dark:bg-red-900/30'
-                      : 'bg-(--color-blush) text-(--color-coral)',
+                      : 'bg-(--color-blush) text-(--color-coral) dark:bg-(--color-coral)/12',
                   )}>
                     {filter.action === 'hide' ? 'Gizle' : 'Uyar'}
                   </span>
@@ -2320,7 +2478,7 @@ function SessionsTab() {
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-medium text-(--color-text-primary)">{parseUA(s.userAgent)}</p>
                   {s.current && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-(--color-blush) text-(--color-coral) font-medium">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-(--color-blush) dark:bg-(--color-coral)/12 text-(--color-coral) font-medium">
                       Bu oturum
                     </span>
                   )}
@@ -2353,6 +2511,67 @@ function SessionsTab() {
           {revoking === 'all' && <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />}
           Diğer tüm oturumları kapat
         </Button>
+      )}
+    </div>
+  )
+}
+
+// ─── Freeze Section ───────────────────────────────────────────────────────────
+
+function FreezeSection() {
+  const router = useRouter()
+  const [confirm, setConfirm] = useState(false)
+  const [freezing, setFreezing] = useState(false)
+
+  async function freeze() {
+    setFreezing(true)
+    try {
+      await api.account.freeze()
+      router.push('/login')
+    } catch {
+      setFreezing(false)
+    }
+  }
+
+  return (
+    <div className="border-t border-(--color-border) pt-6 space-y-3">
+      <div>
+        <h3 className="text-sm font-semibold text-(--color-text-primary) mb-1">Hesabı Geçici Olarak Dondur</h3>
+        <p className="text-xs text-(--color-text-tertiary) leading-relaxed">
+          Profilin ve gönderilerin gizlenir. İstediğin zaman giriş yaparak hesabını yeniden etkinleştirebilirsin.
+        </p>
+      </div>
+      {!confirm ? (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setConfirm(true)}
+          className="gap-2"
+        >
+          <Snowflake className="w-4 h-4" />
+          Hesabımı Dondur
+        </Button>
+      ) : (
+        <div className="rounded-xl border border-(--color-border) bg-(--color-background-secondary) p-4 space-y-3">
+          <p className="text-sm font-medium text-(--color-text-primary)">Emin misin?</p>
+          <p className="text-xs text-(--color-text-tertiary)">
+            Hesabın dondurulacak ve oturum kapatılacak. Giriş yaparak istediğin zaman geri dönebilirsin.
+          </p>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={() => void freeze()}
+              disabled={freezing}
+              className="bg-(--color-coral) hover:bg-(--color-coral-hover) text-white gap-2"
+            >
+              {freezing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Snowflake className="w-3.5 h-3.5" />}
+              Evet, dondur
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setConfirm(false)}>
+              Vazgeç
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -2447,7 +2666,8 @@ function AccountTab() {
     setDeleting(true)
     try {
       await api.account.delete()
-      router.push('/login')
+      await authClient.signOut()
+      router.replace('/login')
     } catch {
     } finally {
       setDeleting(false)
@@ -2566,7 +2786,7 @@ function AccountTab() {
                   <code className="text-xs text-(--color-text-primary) flex-1 break-all">{localActorUrl}</code>
                   <button
                     onClick={copyActorUrl}
-                    className="flex-shrink-0 p-1.5 rounded-md text-(--color-text-tertiary) hover:text-(--color-coral) hover:bg-(--color-blush) transition-colors"
+                    className="flex-shrink-0 p-1.5 rounded-md text-(--color-text-tertiary) hover:text-(--color-coral) hover:bg-(--color-blush) dark:hover:bg-(--color-coral)/12 transition-colors"
                     title="Kopyala"
                   >
                     {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
@@ -2616,6 +2836,9 @@ function AccountTab() {
           </>
         )}
       </div>
+
+      {/* ── Hesabı Dondur ── */}
+      <FreezeSection />
 
       {/* ── Hesap Silme ── */}
       <div className="border-t border-(--color-border) pt-6 space-y-3">
@@ -2973,14 +3196,23 @@ function LanguageFilter({ value, onChange, saving }: { value: string[]; onChange
   )
 }
 
-// Mini toggle component — uses Switch primitive with compact size
+// Mini toggle component
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
-    <Switch
-      checked={on}
-      onCheckedChange={onChange}
-      className="h-5 w-9 [&>span]:h-3.5 [&>span]:w-3.5 data-[state=checked]:[&>span]:translate-x-4 data-[state=unchecked]:[&>span]:translate-x-0.5"
-    />
+    <button
+      role="switch"
+      aria-checked={on}
+      onClick={() => onChange(!on)}
+      className={cn(
+        'relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors',
+        on ? 'bg-(--color-coral)' : 'bg-(--color-border)',
+      )}
+    >
+      <span className={cn(
+        'inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform',
+        on ? 'translate-x-4' : 'translate-x-0.5',
+      )} />
+    </button>
   )
 }
 
@@ -3148,7 +3380,7 @@ function FeedTab() {
       {/* ── Active preset summary ── */}
       {activePreset && (
         <div className="flex items-center gap-3 px-3 py-2.5 mb-4 rounded-xl bg-(--color-background-secondary) border border-(--color-border)">
-          <div className="w-7 h-7 rounded-lg bg-(--color-blush)/60 flex items-center justify-center flex-shrink-0">
+          <div className="w-7 h-7 rounded-lg bg-(--color-blush)/60 dark:bg-(--color-coral)/15 flex items-center justify-center flex-shrink-0">
             <activePreset.icon className="w-3.5 h-3.5 text-(--color-coral)" />
           </div>
           <div className="flex-1 min-w-0">
@@ -3157,9 +3389,9 @@ function FeedTab() {
             </p>
             <p className="text-[11px] text-(--color-text-tertiary) truncate">{activePreset.tagline}</p>
           </div>
-          <Badge className={cn('text-[10px] border-transparent flex-shrink-0', activePreset.badgeColor)}>
+          <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0', activePreset.badgeColor)}>
             {activePreset.badge}
-          </Badge>
+          </span>
         </div>
       )}
 
@@ -3180,7 +3412,7 @@ function FeedTab() {
                 className={cn(
                   'w-full text-left p-4 rounded-2xl border transition-all',
                   isActive
-                    ? 'border-(--color-coral) bg-(--color-blush)/40'
+                    ? 'border-(--color-coral) bg-(--color-blush)/40 dark:bg-(--color-coral)/12'
                     : 'border-(--color-border) hover:bg-(--color-background-secondary)/70',
                 )}
               >
@@ -3199,9 +3431,9 @@ function FeedTab() {
                       <p className={cn('text-sm font-semibold', isActive ? 'text-(--color-coral)' : 'text-(--color-text-primary)')}>
                         {p.name}
                       </p>
-                      <Badge className={cn('text-[10px] border-transparent', p.badgeColor)}>
+                      <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full', p.badgeColor)}>
                         {p.badge}
-                      </Badge>
+                      </span>
                       {isActive && <Check className="w-3.5 h-3.5 text-(--color-coral) ml-auto flex-shrink-0" />}
                     </div>
                     <p className="text-[11px] text-(--color-text-tertiary) leading-relaxed">{p.desc}</p>
@@ -3271,7 +3503,7 @@ function FeedTab() {
                     className={cn(
                       'flex flex-col items-center gap-1.5 py-3 rounded-xl border transition-all',
                       active
-                        ? 'border-(--color-coral) bg-(--color-blush)/40'
+                        ? 'border-(--color-coral) bg-(--color-blush)/40 dark:bg-(--color-coral)/12'
                         : 'border-(--color-border) hover:bg-(--color-background-secondary)/70',
                     )}
                   >
@@ -3363,7 +3595,7 @@ function FeedTab() {
               className={cn(
                 'flex items-center gap-3 p-3.5 rounded-2xl border transition-all',
                 rule.isDefault
-                  ? 'border-(--color-coral) bg-(--color-blush)/30'
+                  ? 'border-(--color-coral) bg-(--color-blush)/30 dark:bg-(--color-coral)/10'
                   : 'border-(--color-border)',
               )}
             >
@@ -3396,7 +3628,7 @@ function FeedTab() {
                 {!rule.isDefault && (
                   <button
                     onClick={() => void setDefault(rule.id)}
-                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-(--color-coral) hover:bg-(--color-blush)/50 transition-colors"
+                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-(--color-coral) hover:bg-(--color-blush)/50 dark:bg-(--color-coral)/12 transition-colors"
                   >
                     Aktifleştir
                   </button>
@@ -3477,7 +3709,7 @@ function HelpTab() {
     <div className="space-y-6 max-w-lg">
       <div className="grid gap-3">
         <div className="flex items-center gap-3 p-4 rounded-xl border border-(--color-border) bg-(--color-background-secondary) hover:bg-(--color-background) transition-colors">
-          <div className="w-9 h-9 rounded-xl bg-(--color-blush) flex items-center justify-center flex-shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-(--color-blush) dark:bg-(--color-coral)/12 flex items-center justify-center flex-shrink-0">
             <GitBranch className="w-4 h-4 text-(--color-coral)" />
           </div>
           <div className="flex-1 min-w-0">
@@ -3495,7 +3727,7 @@ function HelpTab() {
         </div>
 
         <div className="flex items-center gap-3 p-4 rounded-xl border border-(--color-border) bg-(--color-background-secondary)">
-          <div className="w-9 h-9 rounded-xl bg-(--color-blush) flex items-center justify-center flex-shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-(--color-blush) dark:bg-(--color-coral)/12 flex items-center justify-center flex-shrink-0">
             <BookOpen className="w-4 h-4 text-(--color-coral)" />
           </div>
           <div className="flex-1 min-w-0">
@@ -3513,7 +3745,7 @@ function HelpTab() {
         </div>
 
         <div className="flex items-center gap-3 p-4 rounded-xl border border-(--color-border) bg-(--color-background-secondary)">
-          <div className="w-9 h-9 rounded-xl bg-(--color-blush) flex items-center justify-center flex-shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-(--color-blush) dark:bg-(--color-coral)/12 flex items-center justify-center flex-shrink-0">
             <MessageCircle className="w-4 h-4 text-(--color-coral)" />
           </div>
           <div className="flex-1 min-w-0">
@@ -3528,7 +3760,7 @@ function HelpTab() {
           rel="noopener noreferrer"
           className="flex items-center gap-3 p-4 rounded-xl border border-(--color-border) bg-(--color-background-secondary) hover:bg-(--color-background) transition-colors"
         >
-          <div className="w-9 h-9 rounded-xl bg-(--color-blush) flex items-center justify-center flex-shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-(--color-blush) dark:bg-(--color-coral)/12 flex items-center justify-center flex-shrink-0">
             <FileText className="w-4 h-4 text-(--color-coral)" />
           </div>
           <div className="flex-1 min-w-0">
@@ -3544,7 +3776,7 @@ function HelpTab() {
           rel="noopener noreferrer"
           className="flex items-center gap-3 p-4 rounded-xl border border-(--color-border) bg-(--color-background-secondary) hover:bg-(--color-background) transition-colors"
         >
-          <div className="w-9 h-9 rounded-xl bg-(--color-blush) flex items-center justify-center flex-shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-(--color-blush) dark:bg-(--color-coral)/12 flex items-center justify-center flex-shrink-0">
             <Lock className="w-4 h-4 text-(--color-coral)" />
           </div>
           <div className="flex-1 min-w-0">
@@ -3583,8 +3815,73 @@ function HelpTab() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+const DEFAULT_NOTIF_PREFS: NotificationPrefs = {
+  notifyLike: true, notifyBoost: true, notifyReply: true,
+  notifyMention: true, notifyFollow: true, notifyFollowRequest: true, notifyPollEnded: true,
+}
+
+const NOTIF_TYPES: { key: keyof NotificationPrefs; label: string; desc: string; icon: React.ReactNode }[] = [
+  { key: 'notifyReply',         label: 'Yanıtlar',        desc: 'Birisi gönderini yanıtladığında',         icon: <MessageCircle className="w-4 h-4" /> },
+  { key: 'notifyMention',       label: 'Bahsetmeler',     desc: 'Birisi senden @bahsettiğinde',             icon: <AtSign className="w-4 h-4" /> },
+  { key: 'notifyLike',          label: 'Beğeniler',       desc: 'Birisi gönderini beğendiğinde',            icon: <Bell className="w-4 h-4" /> },
+  { key: 'notifyBoost',         label: 'Boostlar',        desc: 'Birisi gönderini boostladığında',          icon: <Zap className="w-4 h-4" /> },
+  { key: 'notifyFollow',        label: 'Takip',           desc: 'Birisi seni takip ettiğinde',              icon: <Bell className="w-4 h-4" /> },
+  { key: 'notifyFollowRequest', label: 'Takip isteği',    desc: 'Hesabın kilitliyken takip isteği geldiğinde', icon: <Bell className="w-4 h-4" /> },
+  { key: 'notifyPollEnded',     label: 'Anket sonuçları', desc: 'Oy verdiğin anket sona erdiğinde',         icon: <Activity className="w-4 h-4" /> },
+]
+
+function ToggleSwitch({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50',
+        checked ? 'bg-(--color-coral)' : 'bg-(--color-border)',
+      )}
+    >
+      <span
+        className={cn(
+          'pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform duration-200 ease-in-out',
+          checked ? 'translate-x-4' : 'translate-x-0',
+        )}
+      />
+    </button>
+  )
+}
+
 function NotificationsTab() {
   const { state, subscribe, unsubscribe } = usePushNotifications()
+  const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_NOTIF_PREFS)
+  const [prefsLoading, setPrefsLoading] = useState(true)
+  const [saving, setSaving] = useState<keyof NotificationPrefs | null>(null)
+  const [hapticsOn, setHapticsOn] = useState(true)
+
+  useEffect(() => {
+    setHapticsOn(localStorage.getItem('floq-haptics') !== 'false')
+  }, [])
+
+  useEffect(() => {
+    api.account.getNotificationPrefs()
+      .then(setPrefs)
+      .catch(() => {})
+      .finally(() => setPrefsLoading(false))
+  }, [])
+
+  async function toggle(key: keyof NotificationPrefs, value: boolean) {
+    setSaving(key)
+    const prev = prefs[key]
+    setPrefs((p) => ({ ...p, [key]: value }))
+    try {
+      await api.account.updateNotificationPrefs({ [key]: value })
+    } catch {
+      setPrefs((p) => ({ ...p, [key]: prev }))
+    } finally {
+      setSaving(null)
+    }
+  }
 
   const statusMap: Record<typeof state, { label: string; desc: string; color: string }> = {
     unsupported: { label: 'Desteklenmiyor', desc: 'Tarayıcın veya cihazın push bildirimlerini desteklemiyor.', color: 'text-(--color-text-tertiary)' },
@@ -3593,21 +3890,67 @@ function NotificationsTab() {
     subscribed:  { label: 'Açık',           desc: 'Push bildirimleri aktif. Yeni etkileşimlerde anında haberdar olursun.', color: 'text-green-500' },
     error:       { label: 'Hata',           desc: 'Bir sorun oluştu. Tekrar dene.',                             color: 'text-red-500' },
   }
-
   const s = statusMap[state]
 
   return (
     <div className="space-y-6">
+      {/* In-app notification types */}
+      <div>
+        <h2 className="text-base font-semibold text-(--color-text-primary) mb-1" style={{ fontFamily: 'var(--font-outfit)' }}>
+          Bildirim Tercihleri
+        </h2>
+        <p className="text-sm text-(--color-text-tertiary)">
+          Hangi durumlarda bildirim almak istediğini seç. Bu ayarlar hem uygulama içi hem de push bildirimleri için geçerlidir.
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-(--color-border) bg-(--color-background) overflow-hidden">
+        {prefsLoading ? (
+          <div className="p-5 flex items-center justify-center">
+            <Loader2 className="w-4 h-4 animate-spin text-(--color-text-tertiary)" />
+          </div>
+        ) : (
+          NOTIF_TYPES.map((item, i) => (
+            <div
+              key={item.key}
+              className={cn(
+                'flex items-center justify-between gap-4 px-5 py-3.5',
+                i < NOTIF_TYPES.length - 1 && 'border-b border-(--color-border-secondary)',
+              )}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={cn(
+                  'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
+                  prefs[item.key] ? 'bg-(--color-coral)/10 text-(--color-coral)' : 'bg-(--color-background-secondary) text-(--color-text-tertiary)',
+                )}>
+                  {item.icon}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-(--color-text-primary)">{item.label}</p>
+                  <p className="text-xs text-(--color-text-tertiary) truncate">{item.desc}</p>
+                </div>
+              </div>
+              <ToggleSwitch
+                checked={prefs[item.key]}
+                onChange={(v) => void toggle(item.key, v)}
+                disabled={saving === item.key}
+              />
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Push notification toggle */}
       <div>
         <h2 className="text-base font-semibold text-(--color-text-primary) mb-1" style={{ fontFamily: 'var(--font-outfit)' }}>
           Push Bildirimleri
         </h2>
         <p className="text-sm text-(--color-text-tertiary)">
-          Tarayıcı push bildirimleri sayesinde uygulamayı açmadan bildirim alabilirsin.
+          Tarayıcı push bildirimleri sayesinde uygulamayı açmadan anlık bildirim alabilirsin.
         </p>
       </div>
 
-      <div className="rounded-2xl border border-(--color-border) bg-(--color-background) p-5 space-y-4">
+      <div className="rounded-2xl border border-(--color-border) bg-(--color-background) p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3">
             <div className={cn(
@@ -3626,7 +3969,6 @@ function NotificationsTab() {
               {s.desc && <p className="text-xs text-(--color-text-tertiary) mt-0.5 max-w-xs">{s.desc}</p>}
             </div>
           </div>
-
           {state !== 'unsupported' && state !== 'loading' && (
             <Button
               size="sm"
@@ -3641,24 +3983,6 @@ function NotificationsTab() {
             </Button>
           )}
         </div>
-
-        {state === 'subscribed' && (
-          <div className="pt-3 border-t border-(--color-border-secondary) space-y-2">
-            <p className="text-xs font-medium text-(--color-text-secondary)">Bildirim Aldığın Durumlar</p>
-            {[
-              'Birisi gönderini beğendiğinde',
-              'Birisi gönderini boostladığında',
-              'Birisinden yanıt aldığında',
-              'Birisi seni takip ettiğinde',
-              'Birisi senden bahsettiğinde',
-            ].map((item) => (
-              <div key={item} className="flex items-center gap-2 text-xs text-(--color-text-secondary)">
-                <Check className="w-3 h-3 text-green-500 flex-shrink-0" />
-                {item}
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {state === 'disabled' && Notification.permission === 'denied' && (
@@ -3668,11 +3992,52 @@ function NotificationsTab() {
           </p>
         </div>
       )}
+
+      {/* ── Titreşim ── */}
+      <Section title="Titreşim">
+        <button
+          role="switch"
+          aria-checked={hapticsOn}
+          onClick={() => {
+            const next = !hapticsOn
+            setHapticsOn(next)
+            localStorage.setItem('floq-haptics', String(next))
+          }}
+          className={cn(
+            'flex items-center justify-between w-full px-4 py-3.5 rounded-2xl border transition-all',
+            hapticsOn
+              ? 'border-(--color-coral) bg-(--color-blush)/50 dark:bg-(--color-coral)/12'
+              : 'border-(--color-border) hover:bg-(--color-background-secondary)/70',
+          )}
+        >
+          <div className="text-left">
+            <p className={cn('text-sm font-semibold', hapticsOn ? 'text-(--color-coral)' : 'text-(--color-text-primary)')}>
+              Dokunsal Geri Bildirim
+            </p>
+            <p className="text-xs text-(--color-text-tertiary) mt-0.5">Beğeni, gönderi, hata gibi etkileşimlerde titreşim</p>
+          </div>
+          <div className={cn('w-11 h-6 rounded-full transition-colors flex items-center px-0.5 flex-shrink-0', hapticsOn ? 'bg-(--color-coral)' : 'bg-(--color-border)')}>
+            <div className={cn('w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200', hapticsOn ? 'translate-x-5' : 'translate-x-0')} />
+          </div>
+        </button>
+        <button
+          onClick={() => {
+            const label = document.querySelector<HTMLElement>('label[for^="web-haptics-"]')
+            label?.click()
+          }}
+          className="mt-2 w-full py-2 rounded-xl border border-dashed border-(--color-border) text-xs text-(--color-text-tertiary) hover:text-(--color-text-primary) hover:border-(--color-border-hover) transition-colors"
+        >
+          Test titreşim
+        </button>
+        <p className="text-xs text-(--color-text-tertiary) mt-2 px-1">
+          Android Chrome ve destekleyen tarayıcılarda çalışır. iOS için alternatif yöntem kullanılır.
+        </p>
+      </Section>
     </div>
   )
 }
 
-export default function SettingsPage() {
+function SettingsPageContent() {
   const { data: session, isPending } = useSession()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -3684,24 +4049,6 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!isPending && !session) router.push('/login')
   }, [isPending, session, router])
-
-  if (isPending) {
-    return (
-      <div className="max-w-2xl mx-auto">
-        <header className="sticky top-0 z-10 bg-(--color-background)/90 backdrop-blur-md border-b border-(--color-border) px-4 py-3.5">
-          <div className="flex items-center gap-2">
-            <Settings className="w-5 h-5 text-(--color-coral)" />
-            <h1 className="text-base font-bold text-(--color-text-primary)" style={{ fontFamily: 'var(--font-outfit)' }}>
-              Ayarlar
-            </h1>
-          </div>
-        </header>
-        <div className="flex items-center justify-center h-48">
-          <Loader2 className="w-5 h-5 animate-spin text-(--color-coral)" />
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -3734,19 +4081,35 @@ export default function SettingsPage() {
         </nav>
 
         <main className="flex-1 p-4 sm:p-6">
-          {activeTab === 'profile' && <ProfileTab session={session} />}
-          {activeTab === 'privacy' && <PrivacyTab />}
-          {activeTab === 'moderation' && <ModerationTab />}
-          {activeTab === 'filters' && <FiltersTab />}
-          {activeTab === 'feed' && <FeedTab />}
-          {activeTab === 'notifications' && <NotificationsTab />}
-          {activeTab === 'security' && <SecurityTab session={session} />}
-          {activeTab === 'sessions' && <SessionsTab />}
-          {activeTab === 'appearance' && <ThemeTab />}
-          {activeTab === 'account' && <AccountTab />}
-          {activeTab === 'help' && <HelpTab />}
+          {isPending ? (
+            <div className="flex items-center justify-center h-48">
+              <Loader2 className="w-5 h-5 animate-spin text-(--color-coral)" />
+            </div>
+          ) : (
+            <>
+              {activeTab === 'profile' && <ProfileTab session={session} />}
+              {activeTab === 'privacy' && <PrivacyTab />}
+              {activeTab === 'moderation' && <ModerationTab />}
+              {activeTab === 'filters' && <FiltersTab />}
+              {activeTab === 'feed' && <FeedTab />}
+              {activeTab === 'notifications' && <NotificationsTab />}
+              {activeTab === 'security' && <SecurityTab session={session} />}
+              {activeTab === 'sessions' && <SessionsTab />}
+              {activeTab === 'appearance' && <ThemeTab />}
+              {activeTab === 'account' && <AccountTab />}
+              {activeTab === 'help' && <HelpTab />}
+            </>
+          )}
         </main>
       </div>
     </div>
+  )
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense>
+      <SettingsPageContent />
+    </Suspense>
   )
 }

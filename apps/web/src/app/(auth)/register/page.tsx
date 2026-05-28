@@ -11,7 +11,7 @@ import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, Ticket, Globe, Lock, Database } from 'lucide-react'
+import { Loader2, Ticket, Globe } from 'lucide-react'
 
 const schema = z.object({
   name: z.string().min(2, 'En az 2 karakter').max(50),
@@ -23,6 +23,7 @@ const schema = z.object({
   email: z.string().email('Geçerli bir e-posta gir'),
   password: z.string().min(8, 'En az 8 karakter'),
   inviteCode: z.string().optional(),
+  termsAccepted: z.boolean().refine((val) => val === true, 'Devam etmek için koşulları kabul etmelisin'),
 })
 
 type FormData = z.infer<typeof schema>
@@ -45,7 +46,7 @@ function RegisterForm() {
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { inviteCode: urlInvite },
+    defaultValues: { inviteCode: urlInvite, termsAccepted: false },
   })
 
   const inviteCode = watch('inviteCode') ?? ''
@@ -166,11 +167,12 @@ function RegisterForm() {
               />
             </div>
             {errors.handle && <p className="text-xs text-red-500">{errors.handle.message}</p>}
-            {!errors.handle && inviteCode !== undefined && watch('handle') && (
-              <p className="text-[11px] text-(--color-text-tertiary) font-mono flex items-center gap-1">
-                <Globe className="w-3 h-3 text-(--color-teal) flex-shrink-0" />
-                @{watch('handle')}@floq.com
-              </p>
+            {!errors.handle && watch('handle') && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-(--color-background-secondary) border border-(--color-border)">
+                <Globe className="w-3 h-3 text-(--color-coral) flex-shrink-0" />
+                <p className="text-[11px] text-(--color-text-secondary) font-mono">@{watch('handle')}@floq.com</p>
+                <span className="text-[10px] text-(--color-text-tertiary) ml-auto">fediverse adresin</span>
+              </div>
             )}
           </div>
         </div>
@@ -199,13 +201,31 @@ function RegisterForm() {
           {errors.password && <p className="text-xs text-red-500">{errors.password.message}</p>}
         </div>
 
+        <div className="space-y-1">
+          <div className="flex items-start gap-2.5">
+            <input
+              id="termsAccepted"
+              type="checkbox"
+              className="mt-0.5 w-4 h-4 rounded accent-(--color-coral) cursor-pointer flex-shrink-0"
+              {...register('termsAccepted')}
+            />
+            <p className="text-sm text-(--color-text-secondary) leading-snug">
+              <Link href="/terms" target="_blank" className="font-medium text-(--color-coral) hover:underline">Kullanım Koşulları</Link>
+              {' '}ve{' '}
+              <Link href="/privacy" target="_blank" className="font-medium text-(--color-coral) hover:underline">Gizlilik Politikası</Link>
+              &apos;nı okudum ve kabul ediyorum.
+            </p>
+          </div>
+          {errors.termsAccepted && <p className="text-xs text-red-500 pl-6">{errors.termsAccepted.message}</p>}
+        </div>
+
         {error && <p className="text-sm text-red-500 bg-red-50 dark:bg-red-950/20 px-3 py-2 rounded-lg">{error}</p>}
 
         <Button
           type="submit"
           disabled={isSubmitting || (requireInvite && inviteValid === false)}
           className="w-full text-white font-semibold h-11 gap-2"
-          style={{ background: 'var(--gradient-avatar)' }}
+          style={{ background: 'var(--color-coral)' }}
         >
           {isSubmitting
             ? <><Loader2 className="w-4 h-4 animate-spin" /> Oluşturuluyor…</>
@@ -213,26 +233,9 @@ function RegisterForm() {
         </Button>
       </form>
 
-      <div className="flex items-center justify-center gap-3 pt-1">
-        <span className="flex items-center gap-1.5 text-[10px] font-semibold text-(--color-text-tertiary)">
-          <Globe className="w-3 h-3 text-(--color-teal)" />
-          ActivityPub
-        </span>
-        <span className="w-px h-3 bg-(--color-border)" />
-        <span className="flex items-center gap-1.5 text-[10px] font-semibold text-(--color-text-tertiary)">
-          <Lock className="w-3 h-3 text-(--color-teal)" />
-          Açık Kaynak
-        </span>
-        <span className="w-px h-3 bg-(--color-border)" />
-        <span className="flex items-center gap-1.5 text-[10px] font-semibold text-(--color-text-tertiary)">
-          <Database className="w-3 h-3 text-(--color-teal)" />
-          Verin Sende
-        </span>
-      </div>
-
-      <p className="text-center text-sm text-(--color-text-tertiary)">
+<p className="text-center text-sm text-(--color-text-tertiary)">
         Hesabın var mı?{' '}
-        <Link href="/login" className="font-semibold hover:opacity-80 transition-opacity" style={{ color: '#E8593C' }}>
+        <Link href="/login" className="font-semibold hover:opacity-80 transition-opacity" style={{ color: 'var(--color-coral)' }}>
           Giriş yap
         </Link>
       </p>

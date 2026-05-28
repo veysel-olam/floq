@@ -67,21 +67,28 @@
 
 /* Dark mode — managed entirely by next-themes (.dark class) */
 .dark {
-  --color-background: #18181A;
-  --color-background-secondary: #212124;
-  --color-background-tertiary: #2C2C30;
-  --color-surface: #212124;
+  --color-background: #17171B;           /* page base */
+  --color-background-secondary: #252529; /* hover, interactive areas */
+  --color-background-tertiary: #2F2F35;
+  --color-surface: #1E1E24;              /* card/panel surfaces — distinct from bg */
 
-  --color-text-primary: #EFEFED;
-  --color-text-secondary: #D4D3CC;
-  --color-text-tertiary: #A0A099;
+  --color-text-primary: #EEEDEB;
+  --color-text-secondary: #BFBEB7;       /* clearer step from primary */
+  --color-text-tertiary: #8A8982;
 
-  --color-border: #404044;
-  --color-border-secondary: #313135;
-  --color-border-tertiary: #272729;
+  --color-border: #44444D;               /* more visible */
+  --color-border-secondary: #2D2D34;
+  --color-border-tertiary: #222228;
+
+  --color-blush: var(--color-blush-dark, #3D2420);
 
   --color-code-bg: #111116;
   --color-code-label: #ffffff;
+}
+
+/* --color-blush resolves to light or dark variant depending on theme */
+:root {
+  --color-blush: var(--color-blush-light, #FAE4DC);
 }
 
 html {
@@ -146,6 +153,19 @@ body {
 @keyframes floq-drift-c {
   0%, 100% { transform: translate(0, 0); }
   50%       { transform: translate(28px, 32px); }
+}
+
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.msg-animate-in {
+  animation: msg-in 0.22s ease-out;
+}
+
+@keyframes waveform-pulse {
+  0%, 100% { transform: scaleY(1); }
+  50%       { transform: scaleY(1.5); }
 }
 
 /* Dot grid — hero background. Adapts to dark mode. */
@@ -261,6 +281,17 @@ input[type="range"].kelvin-slider::-moz-range-thumb {
 .hljs-meta                                                            { color: #e3b341; }
 .hljs-deletion                                                        { color: #ffa198; }
 .hljs-symbol, .hljs-bullet, .hljs-link                                { color: #79c0ff; }
+
+/* ── Reading mode ────────────────────────────────────────────── */
+.reading-mode [data-post-card] {
+  font-size: 1.0625rem;
+  line-height: 1.8;
+}
+.reading-mode [data-post-card] p,
+.reading-mode [data-post-card] .post-text {
+  font-size: inherit;
+  line-height: inherit;
+}
 
 /* ── Reduce motion ───────────────────────────────────────────── */
 html[data-reduce-motion] *,

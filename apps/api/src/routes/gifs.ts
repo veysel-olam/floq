@@ -1,32 +1,40 @@
 import type { FastifyInstance } from 'fastify'
-import { eq } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { mediaAttachments } from '../db/schema.js'
 import { requireActor } from '../lib/session.js'
 import { env } from '../lib/env.js'
 
-const TENOR_BASE = 'https://tenor.googleapis.com/v2'
+// Klipy API — free Tenor replacement (same response structure)
+// Docs: https://klipy.com/docs  |  Sign up: https://klipy.com
+const klipyBase = () => `https://api.klipy.com/api/v1/${env.KLIPY_API_KEY}`
 
-interface TenorResult {
-  id: string
+interface KlipyFile {
+  url: string
+  width: number
+  height: number
+  size?: number
+}
+
+interface KlipyResult {
+  id: number
   title: string
-  media_formats: {
-    gif?: { url: string; dims: number[]; size: number }
-    tinygif?: { url: string; dims: number[]; size: number }
-    nanogif?: { url: string; dims: number[] }
+  file: {
+    hd?: { gif?: KlipyFile; webp?: KlipyFile }
+    md?: { gif?: KlipyFile; webp?: KlipyFile }
+    sd?: { gif?: KlipyFile; webp?: KlipyFile }
   }
 }
 
-function mapResult(r: TenorResult) {
-  const gif = r.media_formats.gif
-  const preview = r.media_formats.tinygif ?? r.media_formats.nanogif
+function mapResult(r: KlipyResult) {
+  const full = r.file.md?.gif ?? r.file.hd?.gif ?? r.file.sd?.gif
+  const preview = r.file.hd?.gif ?? full
   return {
-    id: r.id,
+    id: String(r.id),
     title: r.title,
-    url: gif?.url ?? '',
-    previewUrl: preview?.url ?? gif?.url ?? '',
-    width: gif?.dims[0] ?? 0,
-    height: gif?.dims[1] ?? 0,
+    url: full?.url ?? '',
+    previewUrl: preview?.url ?? full?.url ?? '',
+    width: preview?.width ?? full?.width ?? 0,
+    height: preview?.height ?? full?.height ?? 0,
   }
 }
 
@@ -35,44 +43,44 @@ export async function gifsRoutes(app: FastifyInstance) {
   app.get<{ Querystring: { q?: string; limit?: string } }>('/api/gifs/search', {
     config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
   }, async (req, reply) => {
-    if (!env.TENOR_API_KEY) return reply.send({ gifs: [], enabled: false })
+    if (!env.KLIPY_API_KEY) return reply.send({ gifs: [], enabled: false })
 
     const q = (req.query.q ?? '').trim()
     if (!q) return reply.send({ gifs: [], enabled: true })
 
     const limit = Math.min(Number(req.query.limit ?? 20), 50)
-    const url = `${TENOR_BASE}/search?q=${encodeURIComponent(q)}&key=${env.TENOR_API_KEY}&limit=${limit}&media_filter=gif,tinygif,nanogif&contentfilter=medium`
+    const url = `${klipyBase()}/gifs/search?q=${encodeURIComponent(q)}&per_page=${limit}&rating=pg-13`
 
     try {
       const res = await fetch(url)
       if (!res.ok) return reply.send({ gifs: [], enabled: true })
-      const data = (await res.json()) as { results: TenorResult[] }
-      return reply.send({ gifs: data.results.map(mapResult), enabled: true })
+      const data = (await res.json()) as { data: { data: KlipyResult[] } }
+      return reply.send({ gifs: (data.data?.data ?? []).map(mapResult), enabled: true })
     } catch {
       return reply.send({ gifs: [], enabled: true })
     }
   })
 
-  // GET /api/gifs/featured — öne çıkan GIFler (başlangıç durumu)
+  // GET /api/gifs/featured — trending GIFler (başlangıç durumu)
   app.get<{ Querystring: { limit?: string } }>('/api/gifs/featured', {
     config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
   }, async (req, reply) => {
-    if (!env.TENOR_API_KEY) return reply.send({ gifs: [], enabled: false })
+    if (!env.KLIPY_API_KEY) return reply.send({ gifs: [], enabled: false })
 
     const limit = Math.min(Number(req.query.limit ?? 16), 50)
-    const url = `${TENOR_BASE}/featured?key=${env.TENOR_API_KEY}&limit=${limit}&media_filter=gif,tinygif,nanogif&contentfilter=medium`
+    const url = `${klipyBase()}/gifs/trending?per_page=${limit}&rating=pg-13`
 
     try {
       const res = await fetch(url)
       if (!res.ok) return reply.send({ gifs: [], enabled: true })
-      const data = (await res.json()) as { results: TenorResult[] }
-      return reply.send({ gifs: data.results.map(mapResult), enabled: true })
+      const data = (await res.json()) as { data: { data: KlipyResult[] } }
+      return reply.send({ gifs: (data.data?.data ?? []).map(mapResult), enabled: true })
     } catch {
       return reply.send({ gifs: [], enabled: true })
     }
   })
 
-  // POST /api/gifs/attach — Tenor GIF'i media_attachments tablosuna kaydet
+  // POST /api/gifs/attach — GIF'i media_attachments tablosuna kaydet
   app.post<{ Body: { url: string; previewUrl?: string; width?: number; height?: number; title?: string } }>(
     '/api/gifs/attach',
     async (req, reply) => {

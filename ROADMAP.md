@@ -361,4 +361,38 @@ v2.0 — Ekosistem (Mastodon API compat, admin panel, relay, mobil)
 
 ---
 
+## Sonraki Adım: İki Faz
+
+### Faz A — Gemi Önce
+*Şu anki odak*
+
+> Bir proje ancak içinde insan sesi olduğunda eser haline gelir.
+
+Kod hazır. Asıl iş altyapı:
+
+- [ ] Production sunucu (Hetzner / DigitalOcean, ~€5-10/ay)
+- [ ] Domain + SSL (Let's Encrypt)
+- [ ] PostgreSQL + Redis production ortamı
+- [ ] Cloudflare R2 (dosya depolama)
+- [ ] CI/CD aktif et (GitHub Actions zaten yazılı)
+- [ ] Email (Resend ücretsiz tier — kayıt doğrulaması için)
+- [ ] Environment variables production'a taşı
+- [ ] Topluluk kuralları + gizlilik politikası sayfası
+- [ ] Beta davet sistemi aç, ilk 50-100 kişiyi elle davet et
+
+**Bu fazda sıfır yeni özellik. Olanı çalıştır, kırılanı düzelt, insanları dinle.**
+
+---
+
+### Faz B — Derinleş
+*Gerçek kullanıcı geri bildirimi geldikten sonra*
+
+Gerçek kullanıcılar varken teknik kararlar çok daha sağlıklı alınır.
+v2.0 özelliklerinden hangisi isteniyor, did:web köprüsüne gerek var mı,
+hangi niş büyüyor — bunları kullanıcılar söyler, biz tahmin etmeyiz.
+
+Bu faz için liste yok. Faz A'dan öğrenilecekler listeyi yazar.
+
+---
+
 *Son güncelleme: Mayıs 2026*

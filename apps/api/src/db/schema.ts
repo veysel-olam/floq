@@ -6,14 +6,34 @@ import {
   varchar,
   boolean,
   integer,
+  smallint,
   timestamp,
   jsonb,
+  doublePrecision,
   index,
   uniqueIndex,
   primaryKey,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
+
+// ─── Shared types ────────────────────────────────────────────────────────────
+
+export interface PostTemplateField {
+  key: string
+  label: string
+  type: 'text' | 'textarea' | 'select'
+  options?: string[]
+  required?: boolean
+  placeholder?: string
+}
+
+export interface PostTemplate {
+  id: string
+  name: string
+  icon: string
+  fields: PostTemplateField[]
+}
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
@@ -56,6 +76,12 @@ export const notificationTypeEnum = pgEnum('notification_type', [
 ])
 
 export const actorRoleEnum = pgEnum('actor_role', ['user', 'moderator', 'admin'])
+
+export const communityVisibilityEnum = pgEnum('community_visibility', [
+  'public',     // herkes katılabilir, herkes görebilir
+  'restricted', // herkes görebilir, katılmak onay ister
+  'private',    // sadece üyeler görebilir, katılmak onay ister
+])
 
 // ─── Better Auth Tables ───────────────────────────────────────────────────────
 // Auth concerns (email/password/session) Better Auth'a delege edildi.
@@ -278,12 +304,16 @@ export const actors = pgTable(
       value: string
       verifiedAt: string | null
     }>>(),
+    location: varchar('location', { length: 200 }),
     website: varchar('website', { length: 2048 }),
+    isFrozen: boolean('is_frozen').default(false).notNull(),
+    frozenAt: timestamp('frozen_at'),
     blueskyHandle: varchar('bluesky_handle', { length: 255 }),
     customHandle: varchar('custom_handle', { length: 253 }),
     customHandleVerifiedAt: timestamp('custom_handle_verified_at'),
     lastFetchedAt: timestamp('last_fetched_at'),
     pinnedPostId: uuid('pinned_post_id').references((): AnyPgColumn => posts.id, { onDelete: 'set null' }),
+    onboardingCompletedAt: timestamp('onboarding_completed_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -533,10 +563,16 @@ export const posts = pgTable(
     // Flows — topic channel
     flowId: uuid('flow_id').references((): AnyPgColumn => flows.id, { onDelete: 'set null' }),
 
+    // Community (AP Group) — bu gönderinin ait olduğu topluluk
+    groupId: uuid('group_id').references(() => actors.id, { onDelete: 'set null' }),
+
     tags: text('tags').array().default([]).notNull(),
 
     // Direct messages — recipient actor (1-1 DMs)
     recipientId: uuid('recipient_id').references(() => actors.id, { onDelete: 'set null' }),
+
+    // Per-user soft-delete for DMs (actor IDs who hid this message for themselves)
+    deletedForIds: text('deleted_for_ids').array().default([]).notNull(),
 
     // Group conversations
     conversationId: uuid('conversation_id').references(() => conversations.id, { onDelete: 'set null' }),
@@ -556,6 +592,17 @@ export const posts = pgTable(
 
     // SHA-256 of canonical content for integrity verification
     contentHash: varchar('content_hash', { length: 64 }),
+
+    // Location tag
+    locationName: varchar('location_name', { length: 200 }),
+    locationLat: doublePrecision('location_lat'),
+    locationLng: doublePrecision('location_lng'),
+
+    // Post template structured data
+    templateData: jsonb('template_data').$type<Record<string, string>>(),
+
+    // Community flair tag
+    flairId: uuid('flair_id').references((): AnyPgColumn => communityFlairs.id, { onDelete: 'set null' }),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
     editedAt: timestamp('edited_at'),
@@ -595,6 +642,7 @@ export const mediaAttachments = pgTable(
     height: integer('height'),
     blurhash: varchar('blurhash', { length: 100 }),
     fileSize: integer('file_size'),
+    duration: integer('duration'), // seconds, video only
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (t) => [
@@ -1122,6 +1170,15 @@ export const actorPreferences = pgTable('actor_preferences', {
   hideShortVideos: boolean('hide_short_videos').default(false).notNull(),
   usageTimeLimit:  integer('usage_time_limit').default(0).notNull(), // minutes, 0 = off
 
+  // Notification preferences (in-app + push)
+  notifyLike:          boolean('notify_like').default(true).notNull(),
+  notifyBoost:         boolean('notify_boost').default(true).notNull(),
+  notifyReply:         boolean('notify_reply').default(true).notNull(),
+  notifyMention:       boolean('notify_mention').default(true).notNull(),
+  notifyFollow:        boolean('notify_follow').default(true).notNull(),
+  notifyFollowRequest: boolean('notify_follow_request').default(true).notNull(),
+  notifyPollEnded:     boolean('notify_poll_ended').default(true).notNull(),
+
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 })
 
@@ -1399,13 +1456,195 @@ export const apGroups = pgTable('ap_groups', {
   actorId: uuid('actor_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
   ownerId: uuid('owner_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
   rules: text('rules'),
-  isOpen: boolean('is_open').notNull().default(true), // open = anyone can join by following
+  isOpen: boolean('is_open').notNull().default(true), // legacy; visibility bunu replace eder
+  visibility: communityVisibilityEnum('visibility').notNull().default('public'),
+  bannerUrl: varchar('banner_url', { length: 2048 }),
+  colorIndex: smallint('color_index').notNull().default(0),
+  topics: text('topics'),
+  memberCount: integer('member_count').notNull().default(0),
+  postCount: integer('post_count').notNull().default(0),
   createdAt: timestamp('created_at').notNull().defaultNow(),
+  pinnedPostId: uuid('pinned_post_id').references((): AnyPgColumn => posts.id, { onDelete: 'set null' }),
+  inviteToken: varchar('invite_token', { length: 64 }),
+  postTemplates: jsonb('post_templates').$type<PostTemplate[]>(),
+  communityType: varchar('community_type', { length: 32 }).$type<CommunityType>().notNull().default('general'),
 })
 
-export const apGroupsRelations = relations(apGroups, ({ one }) => ({
+export const apGroupsRelations = relations(apGroups, ({ one, many }) => ({
   actor: one(actors, { fields: [apGroups.actorId], references: [actors.id], relationName: 'groupActor' }),
   owner: one(actors, { fields: [apGroups.ownerId], references: [actors.id], relationName: 'groupOwner' }),
+  moderators: many(communityModerators),
+}))
+
+// ── Community moderators ──────────────────────────────────────────────────────
+export const communityModerators = pgTable(
+  'community_moderators',
+  {
+    communityId: uuid('community_id').notNull().references(() => apGroups.id, { onDelete: 'cascade' }),
+    actorId: uuid('actor_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+    grantedAt: timestamp('granted_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.communityId, t.actorId] }),
+  ],
+)
+
+export const communityModeratorsRelations = relations(communityModerators, ({ one }) => ({
+  community: one(apGroups, { fields: [communityModerators.communityId], references: [apGroups.id] }),
+  actor: one(actors, { fields: [communityModerators.actorId], references: [actors.id] }),
+}))
+
+// ── Community Wiki ────────────────────────────────────────────────────────────
+export const communityWiki = pgTable(
+  'community_wiki',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    communityId: uuid('community_id').notNull().references(() => apGroups.id, { onDelete: 'cascade' }),
+    content: text('content').notNull().default(''),
+    editedBy: uuid('edited_by').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+    version: integer('version').notNull().default(1),
+    editedAt: timestamp('edited_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('community_wiki_community_idx').on(t.communityId),
+    index('community_wiki_version_idx').on(t.communityId, t.version),
+  ],
+)
+
+export const communityWikiRelations = relations(communityWiki, ({ one }) => ({
+  community: one(apGroups, { fields: [communityWiki.communityId], references: [apGroups.id] }),
+  editor: one(actors, { fields: [communityWiki.editedBy], references: [actors.id] }),
+}))
+
+// ── Community Modlog ─────────────────────────────────────────────────────────
+
+export type CommunityType =
+  | 'general'
+  | 'project'
+  | 'event'
+  | 'support'
+  | 'learning'
+  | 'gaming'
+  | 'creative'
+
+export type ModlogAction =
+  | 'ban'
+  | 'unban'
+  | 'remove_post'
+  | 'pin_post'
+  | 'unpin_post'
+  | 'approve_member'
+  | 'reject_member'
+  | 'edit_wiki'
+  | 'update_settings'
+  | 'invite_generated'
+  | 'invite_revoked'
+  | 'add_mod'
+  | 'remove_mod'
+
+export const communityModlog = pgTable('community_modlog', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  communityId: uuid('community_id').notNull().references(() => apGroups.id, { onDelete: 'cascade' }),
+  actorId: uuid('actor_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+  targetUserId: uuid('target_user_id').references(() => actors.id, { onDelete: 'set null' }),
+  targetPostId: uuid('target_post_id').references(() => posts.id, { onDelete: 'set null' }),
+  action: text('action').$type<ModlogAction>().notNull(),
+  reason: text('reason'),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  index('community_modlog_community_idx').on(t.communityId),
+  index('community_modlog_created_idx').on(t.communityId, t.createdAt),
+])
+
+export const communityModlogRelations = relations(communityModlog, ({ one }) => ({
+  community: one(apGroups, { fields: [communityModlog.communityId], references: [apGroups.id] }),
+  actor: one(actors, { fields: [communityModlog.actorId], references: [actors.id], relationName: 'modlogActor' }),
+  targetUser: one(actors, { fields: [communityModlog.targetUserId], references: [actors.id], relationName: 'modlogTarget' }),
+}))
+
+// ── Community Trust Records ───────────────────────────────────────────────────
+
+export type TrustLevel = 'new' | 'member' | 'regular' | 'trusted' | 'veteran'
+
+export const communityTrustRecord = pgTable('community_trust_record', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  communityId: uuid('community_id').notNull().references(() => apGroups.id, { onDelete: 'cascade' }),
+  actorId: uuid('actor_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+  postCount: integer('post_count').notNull().default(0),
+  likesReceived: integer('likes_received').notNull().default(0),
+  reportsReceived: integer('reports_received').notNull().default(0),
+  trustLevel: varchar('trust_level', { length: 16 }).$type<TrustLevel>().notNull().default('new'),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('community_trust_record_unique').on(t.communityId, t.actorId),
+  index('community_trust_record_community_idx').on(t.communityId),
+])
+
+export const communityTrustRecordRelations = relations(communityTrustRecord, ({ one }) => ({
+  community: one(apGroups, { fields: [communityTrustRecord.communityId], references: [apGroups.id] }),
+  actor: one(actors, { fields: [communityTrustRecord.actorId], references: [actors.id] }),
+}))
+
+// ── Community Flairs ──────────────────────────────────────────────────────────
+
+export const communityFlairs = pgTable('community_flairs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  communityId: uuid('community_id').notNull().references(() => apGroups.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 60 }).notNull(),
+  emoji: varchar('emoji', { length: 10 }),
+  color: varchar('color', { length: 20 }).notNull().default('coral'),
+  sortOrder: smallint('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  index('community_flairs_community_idx').on(t.communityId),
+])
+
+export const communityFlairsRelations = relations(communityFlairs, ({ one }) => ({
+  community: one(apGroups, { fields: [communityFlairs.communityId], references: [apGroups.id] }),
+}))
+
+// ── Community Badges ──────────────────────────────────────────────────────────
+
+export const communityBadges = pgTable('community_badges', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  communityId: uuid('community_id').notNull().references(() => apGroups.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 80 }).notNull(),
+  icon: varchar('icon', { length: 10 }).notNull().default('🏅'),
+  description: text('description'),
+  color: varchar('color', { length: 20 }).notNull().default('coral'),
+  createdBy: uuid('created_by').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  index('community_badges_community_idx').on(t.communityId),
+])
+
+export const communityBadgesRelations = relations(communityBadges, ({ one, many }) => ({
+  community: one(apGroups, { fields: [communityBadges.communityId], references: [apGroups.id] }),
+  creator: one(actors, { fields: [communityBadges.createdBy], references: [actors.id] }),
+  awards: many(userCommunityBadges),
+}))
+
+// ── User Community Badge Awards ───────────────────────────────────────────────
+
+export const userCommunityBadges = pgTable('user_community_badges', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  badgeId: uuid('badge_id').notNull().references(() => communityBadges.id, { onDelete: 'cascade' }),
+  actorId: uuid('actor_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+  communityId: uuid('community_id').notNull().references(() => apGroups.id, { onDelete: 'cascade' }),
+  awardedBy: uuid('awarded_by').references(() => actors.id, { onDelete: 'set null' }),
+  note: text('note'),
+  awardedAt: timestamp('awarded_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('user_community_badges_unique').on(t.badgeId, t.actorId),
+  index('user_community_badges_actor_idx').on(t.actorId, t.communityId),
+])
+
+export const userCommunityBadgesRelations = relations(userCommunityBadges, ({ one }) => ({
+  badge: one(communityBadges, { fields: [userCommunityBadges.badgeId], references: [communityBadges.id] }),
+  actor: one(actors, { fields: [userCommunityBadges.actorId], references: [actors.id] }),
+  community: one(apGroups, { fields: [userCommunityBadges.communityId], references: [apGroups.id] }),
+  awarder: one(actors, { fields: [userCommunityBadges.awardedBy], references: [actors.id], relationName: 'badgeAwarder' }),
 }))
 
 // ── Shared Block Lists (FediBlock / Oliphant) ─────────────────────────────────
@@ -1478,6 +1717,40 @@ export const websubSubscriptions = pgTable('websub_subscriptions', {
 }, (t) => [uniqueIndex('websub_topic_callback_idx').on(t.topic, t.callback)])
 
 // ── ActivityPub Relays ────────────────────────────────────────────────────────
+// ─── DM Read Receipts ────────────────────────────────────────────────────────
+
+export const dmReads = pgTable(
+  'dm_reads',
+  {
+    userId: uuid('user_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+    partnerId: uuid('partner_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+    lastReadId: uuid('last_read_id').references((): AnyPgColumn => posts.id, { onDelete: 'set null' }),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.partnerId] }),
+    index('dm_reads_user_idx').on(t.userId),
+  ],
+)
+
+// ─── DM Settings (archive, mute, request) ────────────────────────────────────
+
+export const dmSettings = pgTable(
+  'dm_settings',
+  {
+    userId: uuid('user_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+    partnerId: uuid('partner_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+    archived: boolean('archived').default(false).notNull(),
+    muted: boolean('muted').default(false).notNull(),
+    requestAccepted: boolean('request_accepted'),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.partnerId] }),
+    index('dm_settings_user_idx').on(t.userId),
+  ],
+)
+
 export const relays = pgTable('relays', {
   id: uuid('id').primaryKey().defaultRandom(),
   inboxUrl: varchar('inbox_url', { length: 512 }).notNull().unique(),
@@ -1485,3 +1758,63 @@ export const relays = pgTable('relays', {
   status: varchar('status', { length: 20 }).notNull().default('pending'), // 'pending' | 'accepted' | 'rejected'
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
+
+export type PartnershipStatus = 'pending' | 'active' | 'rejected'
+
+export const communityPartnerships = pgTable('community_partnerships', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  communityAId: uuid('community_a_id').notNull().references(() => apGroups.id, { onDelete: 'cascade' }),
+  communityBId: uuid('community_b_id').notNull().references(() => apGroups.id, { onDelete: 'cascade' }),
+  status: varchar('status', { length: 20 }).$type<PartnershipStatus>().notNull().default('pending'),
+  initiatedBy: uuid('initiated_by').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => [
+  index('community_partnerships_a_idx').on(t.communityAId),
+  index('community_partnerships_b_idx').on(t.communityBId),
+])
+
+export const communityPartnershipsRelations = relations(communityPartnerships, ({ one }) => ({
+  communityA: one(apGroups, { fields: [communityPartnerships.communityAId], references: [apGroups.id], relationName: 'partnershipA' }),
+  communityB: one(apGroups, { fields: [communityPartnerships.communityBId], references: [apGroups.id], relationName: 'partnershipB' }),
+  initiator: one(actors, { fields: [communityPartnerships.initiatedBy], references: [actors.id] }),
+}))
+
+// Confederation votes: inter-community proposals & polls
+export const confederationVotes = pgTable('confederation_votes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  initiatorCommunityId: uuid('initiator_community_id').notNull().references(() => apGroups.id, { onDelete: 'cascade' }),
+  createdBy: uuid('created_by').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+  title: varchar('title', { length: 200 }).notNull(),
+  description: text('description'),
+  options: jsonb('options').$type<string[]>().notNull().default([]),
+  targetCommunityIds: jsonb('target_community_ids').$type<string[]>().notNull().default([]),
+  closesAt: timestamp('closes_at').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  index('confederation_votes_initiator_idx').on(t.initiatorCommunityId),
+])
+
+export const confederationVoteRelations = relations(confederationVotes, ({ one, many }) => ({
+  initiator: one(apGroups, { fields: [confederationVotes.initiatorCommunityId], references: [apGroups.id] }),
+  creator: one(actors, { fields: [confederationVotes.createdBy], references: [actors.id] }),
+  ballots: many(confederationVoteBallots),
+}))
+
+export const confederationVoteBallots = pgTable('confederation_vote_ballots', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  voteId: uuid('vote_id').notNull().references(() => confederationVotes.id, { onDelete: 'cascade' }),
+  actorId: uuid('actor_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+  communityId: uuid('community_id').notNull().references(() => apGroups.id, { onDelete: 'cascade' }),
+  optionIndex: smallint('option_index').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('confederation_vote_ballots_unique').on(t.voteId, t.actorId),
+  index('confederation_vote_ballots_vote_idx').on(t.voteId),
+])
+
+export const confederationVoteBallotsRelations = relations(confederationVoteBallots, ({ one }) => ({
+  vote: one(confederationVotes, { fields: [confederationVoteBallots.voteId], references: [confederationVotes.id] }),
+  actor: one(actors, { fields: [confederationVoteBallots.actorId], references: [actors.id] }),
+  community: one(apGroups, { fields: [confederationVoteBallots.communityId], references: [apGroups.id] }),
+}))

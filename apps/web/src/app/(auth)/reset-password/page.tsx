@@ -78,7 +78,7 @@ function ResetPasswordForm() {
           <h1 className="text-xl font-bold text-(--color-text-primary) mb-1" style={{ fontFamily: 'var(--font-outfit)' }}>Geçersiz bağlantı</h1>
           <p className="text-sm text-(--color-text-tertiary)">Bu şifre sıfırlama bağlantısı geçersiz veya süresi dolmuş.</p>
         </div>
-        <Link href="/forgot-password" className="text-sm font-semibold" style={{ color: '#E8593C' }}>
+        <Link href="/forgot-password" className="text-sm font-semibold" style={{ color: 'var(--color-coral)' }}>
           Yeni bağlantı iste
         </Link>
       </div>
@@ -90,7 +90,7 @@ function ResetPasswordForm() {
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
           style={{ background: 'rgba(232, 89, 60, 0.1)', border: '1px solid rgba(232, 89, 60, 0.2)' }}>
-          <ShieldCheck className="w-5 h-5" style={{ color: '#E8593C' }} />
+          <ShieldCheck className="w-5 h-5" style={{ color: 'var(--color-coral)' }} />
         </div>
         <div>
           <h1 className="text-xl font-bold text-(--color-text-primary)" style={{ fontFamily: 'var(--font-outfit)' }}>
@@ -139,7 +139,7 @@ function ResetPasswordForm() {
           type="submit"
           disabled={loading || !password || !confirm}
           className="w-full text-white font-semibold h-11 gap-2"
-          style={{ background: 'var(--gradient-avatar)' }}
+          style={{ background: 'var(--color-coral)' }}
         >
           {loading
             ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -152,7 +152,7 @@ function ResetPasswordForm() {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#E8593C' }} /></div>}>
+    <Suspense fallback={<div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--color-coral)' }} /></div>}>
       <ResetPasswordForm />
     </Suspense>
   )

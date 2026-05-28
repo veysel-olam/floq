@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { MessageSquare, Loader2, Search, PenSquare, Lock, Users, Plus, X, Check } from 'lucide-react'
+import { MessageSquare, Loader2, Search, PenSquare, Lock, Users, Plus, X, Check, BellOff, Archive, ChevronDown, ChevronRight } from 'lucide-react'
 import { DMListSkeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { useSession } from '@/lib/auth-client'
@@ -204,6 +204,8 @@ export default function DmPage() {
   const [searching, setSearching] = useState(false)
   const [createGroupOpen, setCreateGroupOpen] = useState(false)
   const [dmTab, setDmTab] = useState<'inbox' | 'requests'>('inbox')
+  const [requestingHandle, setRequestingHandle] = useState<string | null>(null)
+  const [archivedOpen, setArchivedOpen] = useState(false)
 
   const load = useCallback(async (cursor?: string) => {
     try {
@@ -254,8 +256,25 @@ export default function DmPage() {
     )
   }
 
+  async function handleAcceptRequest(handle: string) {
+    setRequestingHandle(handle)
+    try {
+      await api.dm.acceptRequest(handle)
+      setConversations((prev) => prev.map((c) => c.partner.handle === handle ? { ...c, isRequest: false, requestAccepted: true } : c))
+    } finally { setRequestingHandle(null) }
+  }
+
+  async function handleDeclineRequest(handle: string) {
+    setRequestingHandle(handle)
+    try {
+      await api.dm.declineRequest(handle)
+      setConversations((prev) => prev.filter((c) => c.partner.handle !== handle))
+    } finally { setRequestingHandle(null) }
+  }
+
   const requestConvs = conversations.filter((c) => c.isRequest)
-  const inboxConvs = conversations.filter((c) => !c.isRequest)
+  const archivedConvs = conversations.filter((c) => !c.isRequest && c.archived)
+  const inboxConvs = conversations.filter((c) => !c.isRequest && !c.archived)
   const allEmpty = conversations.length === 0 && groups.length === 0
 
   return (
@@ -342,29 +361,48 @@ export default function DmPage() {
           <div className="px-4 py-3 bg-(--color-background-secondary)/40">
             <p className="text-xs text-(--color-text-tertiary)">Takip etmediğin kişilerden gelen mesajlar. Yanıtlarsan kabul etmiş sayılırsın.</p>
           </div>
-          {requestConvs.map(({ partner, lastMessage }) => (
-            <Link
-              key={partner.id}
-              href={`/dm/${partner.handle}`}
-              className="flex items-center gap-3 px-4 py-3.5 border-b border-(--color-border-secondary) hover:bg-(--color-background-secondary)/70 transition-colors group"
-            >
-              <Avatar className="w-11 h-11 flex-shrink-0">
-                {partner.avatarUrl && <AvatarImage src={partner.avatarUrl} alt="" />}
-                <AvatarFallback className="text-xs text-white" style={{ background: 'var(--gradient-avatar)' }}>
-                  {(partner.displayName ?? partner.handle).slice(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-sm font-semibold text-(--color-text-primary) truncate group-hover:text-(--color-coral) transition-colors" style={{ fontFamily: 'var(--font-outfit)' }}>
-                    {partner.displayName ?? partner.handle}
-                  </span>
-                  <span className="text-[11px] text-(--color-text-tertiary) flex-shrink-0 ml-2">{formatRelativeTime(lastMessage.createdAt)}</span>
+          {requestConvs.map(({ partner, lastMessage }) => {
+            const isActing = requestingHandle === partner.handle
+            return (
+              <div key={partner.id} className="flex items-center gap-3 px-4 py-3.5 border-b border-(--color-border-secondary)">
+                <Link href={`/dm/${partner.handle}`} className="flex items-center gap-3 flex-1 min-w-0 group">
+                  <Avatar className="w-11 h-11 flex-shrink-0">
+                    {partner.avatarUrl && <AvatarImage src={partner.avatarUrl} alt="" />}
+                    <AvatarFallback className="text-xs text-white" style={{ background: 'var(--gradient-avatar)' }}>
+                      {(partner.displayName ?? partner.handle).slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-sm font-semibold text-(--color-text-primary) truncate group-hover:text-(--color-coral) transition-colors" style={{ fontFamily: 'var(--font-outfit)' }}>
+                        {partner.displayName ?? partner.handle}
+                      </span>
+                      <span className="text-[11px] text-(--color-text-tertiary) flex-shrink-0 ml-2">{formatRelativeTime(lastMessage.createdAt)}</span>
+                    </div>
+                    <p className="text-xs text-(--color-text-tertiary) truncate">{lastMessage.content || '📎 Medya'}</p>
+                  </div>
+                </Link>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <button
+                    disabled={isActing}
+                    onClick={() => void handleAcceptRequest(partner.handle)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 text-[12px] font-medium transition-colors disabled:opacity-40"
+                  >
+                    {isActing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                    Kabul
+                  </button>
+                  <button
+                    disabled={isActing}
+                    onClick={() => void handleDeclineRequest(partner.handle)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500/20 text-[12px] font-medium transition-colors disabled:opacity-40"
+                  >
+                    <X className="w-3 h-3" />
+                    Reddet
+                  </button>
                 </div>
-                <p className="text-xs text-(--color-text-tertiary) truncate">{lastMessage.content || '📎 Medya'}</p>
               </div>
-            </Link>
-          ))}
+            )
+          })}
         </div>
       ) : (
         <>
@@ -414,49 +452,22 @@ export default function DmPage() {
                   <span className="text-xs font-semibold text-(--color-text-tertiary) uppercase tracking-wide">Direkt mesajlar</span>
                 </div>
               )}
-              {inboxConvs.map(({ partner, lastMessage }) => {
-                const isEncrypted = !!lastMessage.encryptedContent
-                return (
-                  <Link
-                    key={partner.id}
-                    href={`/dm/${partner.handle}`}
-                    className="flex items-center gap-3 px-4 py-3.5 border-b border-(--color-border-secondary) hover:bg-(--color-background-secondary)/70 transition-colors group"
+              {inboxConvs.map((conv) => <ConvRow key={conv.partner.id} conv={conv} />)}
+
+              {/* Archived section */}
+              {archivedConvs.length > 0 && (
+                <>
+                  <button
+                    onClick={() => setArchivedOpen((v) => !v)}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-(--color-text-tertiary) hover:bg-(--color-background-secondary)/50 transition-colors border-b border-(--color-border-secondary)"
                   >
-                    <Avatar className="w-11 h-11 flex-shrink-0">
-                      {partner.avatarUrl && <AvatarImage src={partner.avatarUrl} alt={partner.displayName ?? partner.handle} />}
-                      <AvatarFallback className="text-sm font-medium text-white" style={{ background: 'var(--gradient-avatar)' }}>
-                        {(partner.displayName ?? partner.handle).slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-0.5">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-sm font-semibold text-(--color-text-primary) truncate group-hover:text-(--color-coral) transition-colors" style={{ fontFamily: 'var(--font-outfit)' }}>
-                            {partner.displayName ?? partner.handle}
-                          </span>
-                          {isEncrypted && (
-                            <span title="Uçtan uca şifreli">
-                              <Lock className="w-3 h-3 text-(--color-teal) flex-shrink-0" />
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[11px] text-(--color-text-tertiary) flex-shrink-0 ml-2 tabular-nums">
-                          {formatRelativeTime(lastMessage.createdAt)}
-                        </span>
-                      </div>
-                      <p className="text-xs text-(--color-text-tertiary) truncate">
-                        {lastMessage.authorId !== partner.id && <span className="text-(--color-text-secondary) font-medium">Sen: </span>}
-                        {isEncrypted ? (
-                          <span className="flex items-center gap-1 inline-flex">
-                            <Lock className="w-2.5 h-2.5" />
-                            Şifreli mesaj
-                          </span>
-                        ) : lastMessage.content}
-                      </p>
-                    </div>
-                  </Link>
-                )
-              })}
+                    {archivedOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                    <Archive className="w-3.5 h-3.5" />
+                    <span className="font-semibold uppercase tracking-wide">Arşiv ({archivedConvs.length})</span>
+                  </button>
+                  {archivedOpen && archivedConvs.map((conv) => <ConvRow key={conv.partner.id} conv={conv} />)}
+                </>
+              )}
               {nextCursor && (
                 <div className="py-6 flex justify-center">
                   <Button
@@ -475,6 +486,47 @@ export default function DmPage() {
         </>
       )}
     </div>
+  )
+}
+
+function ConvRow({ conv }: { conv: DmConversation }) {
+  const { partner, lastMessage, muted, archived } = conv
+  const isEncrypted = !!lastMessage.encryptedContent
+  return (
+    <Link
+      href={`/dm/${partner.handle}`}
+      className={cn(
+        'flex items-center gap-3 px-4 py-3.5 border-b border-(--color-border-secondary) hover:bg-(--color-background-secondary)/70 transition-colors group',
+        archived ? 'opacity-60' : '',
+      )}
+    >
+      <Avatar className="w-11 h-11 flex-shrink-0">
+        {partner.avatarUrl && <AvatarImage src={partner.avatarUrl} alt={partner.displayName ?? partner.handle} />}
+        <AvatarFallback className="text-sm font-medium text-white" style={{ background: 'var(--gradient-avatar)' }}>
+          {(partner.displayName ?? partner.handle).slice(0, 2).toUpperCase()}
+        </AvatarFallback>
+      </Avatar>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between mb-0.5">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-sm font-semibold text-(--color-text-primary) truncate group-hover:text-(--color-coral) transition-colors" style={{ fontFamily: 'var(--font-outfit)' }}>
+              {partner.displayName ?? partner.handle}
+            </span>
+            {isEncrypted && <span title="Uçtan uca şifreli"><Lock className="w-3 h-3 text-(--color-teal) flex-shrink-0" /></span>}
+            {muted && <span title="Sessiz"><BellOff className="w-3 h-3 text-(--color-text-tertiary) flex-shrink-0" /></span>}
+          </div>
+          <span className="text-[11px] text-(--color-text-tertiary) flex-shrink-0 ml-2 tabular-nums">
+            {formatRelativeTime(lastMessage.createdAt)}
+          </span>
+        </div>
+        <p className="text-xs text-(--color-text-tertiary) truncate">
+          {lastMessage.authorId !== partner.id && <span className="text-(--color-text-secondary) font-medium">Sen: </span>}
+          {isEncrypted ? (
+            <span className="inline-flex items-center gap-1"><Lock className="w-2.5 h-2.5" />Şifreli mesaj</span>
+          ) : lastMessage.content || '📎 Medya'}
+        </p>
+      </div>
+    </Link>
   )
 }
 

@@ -8,9 +8,10 @@ import { cn } from '@/lib/utils'
 interface GifPickerProps {
   onSelect: (gif: GifResult) => void
   onClose: () => void
+  direction?: 'up' | 'down'
 }
 
-export function GifPicker({ onSelect, onClose }: GifPickerProps) {
+export function GifPicker({ onSelect, onClose, direction = 'down' }: GifPickerProps) {
   const [query, setQuery] = useState('')
   const [gifs, setGifs] = useState<GifResult[]>([])
   const [loading, setLoading] = useState(true)
@@ -53,7 +54,10 @@ export function GifPicker({ onSelect, onClose }: GifPickerProps) {
   return (
     <div
       ref={containerRef}
-      className="absolute bottom-full left-0 mb-2 w-80 rounded-2xl border border-(--color-border) bg-(--color-background) shadow-xl z-30 flex flex-col overflow-hidden"
+      className={cn(
+        'absolute w-80 rounded-2xl border border-(--color-border) bg-(--color-background) shadow-xl z-30 flex flex-col overflow-hidden',
+        direction === 'up' ? 'bottom-full left-0 mb-2' : 'top-full left-0 mt-2',
+      )}
       style={{ maxHeight: '360px' }}
     >
       {/* Header */}
@@ -81,7 +85,7 @@ export function GifPicker({ onSelect, onClose }: GifPickerProps) {
         {!enabled ? (
           <div className="py-8 text-center">
             <p className="text-xs text-(--color-text-tertiary)">GIF arama aktif değil.</p>
-            <p className="text-[10px] text-(--color-text-tertiary) mt-1">TENOR_API_KEY env değişkenini ayarla.</p>
+            <p className="text-[10px] text-(--color-text-tertiary) mt-1">KLIPY_API_KEY env değişkenini ayarla.</p>
           </div>
         ) : loading ? (
           <div className="py-8 flex justify-center">
@@ -106,7 +110,6 @@ export function GifPicker({ onSelect, onClose }: GifPickerProps) {
                         'hover:ring-2 hover:ring-(--color-coral) transition-all',
                       )}
                       style={{ paddingBottom: `${Math.min(aspectPct, 120)}%` }}
-                      title={gif.title}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
@@ -127,7 +130,7 @@ export function GifPicker({ onSelect, onClose }: GifPickerProps) {
       {/* Tenor attribution */}
       {enabled && (
         <div className="px-2 py-1 border-t border-(--color-border) flex justify-end">
-          <span className="text-[10px] text-(--color-text-tertiary)">Powered by Tenor</span>
+          <span className="text-[10px] text-(--color-text-tertiary)">Powered by Klipy</span>
         </div>
       )}
     </div>

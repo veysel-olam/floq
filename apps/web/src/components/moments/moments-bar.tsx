@@ -276,8 +276,8 @@ function ComposeModal({
                 'relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed transition-colors cursor-pointer',
                 'min-h-[180px]',
                 dragOver
-                  ? 'border-(--color-coral) bg-(--color-blush)'
-                  : 'border-(--color-border) hover:border-(--color-coral) hover:bg-(--color-blush)',
+                  ? 'border-(--color-coral) bg-(--color-blush) dark:bg-(--color-coral)/12'
+                  : 'border-(--color-border) hover:border-(--color-coral) hover:bg-(--color-blush) dark:hover:bg-(--color-coral)/12',
               )}
               onClick={() => fileInputRef.current?.click()}
               onDrop={handleDrop}
@@ -430,7 +430,7 @@ export function MomentsBar() {
           onClick={() => setComposing(true)}
           className="flex-shrink-0 flex flex-col items-center gap-1"
         >
-          <div className="w-12 h-12 rounded-full border-2 border-dashed border-(--color-border) flex items-center justify-center hover:border-(--color-coral) hover:bg-(--color-blush) transition-colors">
+          <div className="w-12 h-12 rounded-full border-2 border-dashed border-(--color-border) flex items-center justify-center hover:border-(--color-coral) hover:bg-(--color-blush) dark:hover:bg-(--color-coral)/12 transition-colors">
             <Plus className="w-5 h-5 text-(--color-text-tertiary)" />
           </div>
           <span className="text-[10px] text-(--color-text-tertiary)">Ekle</span>

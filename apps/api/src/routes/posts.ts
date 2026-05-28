@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { eq, and, sql, inArray, lt, desc, isNull, isNotNull } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../db/client.js'
-import { posts, actors, likes, boosts, bookmarks, bookmarkCollections, closeFriends, mediaAttachments, polls, pollOptions, reactions, postEdits, customEmojis, actorPreferences, follows } from '../db/schema.js'
+import { posts, actors, likes, boosts, bookmarks, bookmarkCollections, closeFriends, mediaAttachments, polls, pollOptions, reactions, postEdits, customEmojis, actorPreferences, follows, apGroups, communityTrustRecord, type TrustLevel } from '../db/schema.js'
 import { requireActor, getSession } from '../lib/session.js'
 import { env } from '../lib/env.js'
 import { notifyLike, notifyBoost, notifyReply } from '../lib/notify.js'
@@ -29,6 +29,12 @@ const createPostSchema = z.object({
   }).optional(),
   scheduledAt: z.string().datetime().optional(),
   isDraft: z.boolean().optional(),
+  locationName: z.string().max(200).optional(),
+  locationLat: z.number().optional(),
+  locationLng: z.number().optional(),
+  groupHandle: z.string().optional(), // topluluk handle'ı (e.g. "yazilim")
+  templateData: z.record(z.string(), z.string().max(2000)).optional(),
+  flairId: z.string().uuid().optional(),
 }).refine((d) => d.content.trim().length > 0 || (d.mediaIds?.length ?? 0) > 0 || d.quotedPostId || d.poll, {
   message: 'content or media or quotedPostId or poll required',
 })
@@ -44,7 +50,7 @@ export async function postsRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'Invalid body', issues: body.error.issues })
     }
 
-    const { content, visibility, contentWarning, sensitive, replyToId, mediaIds, quotedPostId, poll, scheduledAt, isDraft } = body.data
+    const { content, visibility, contentWarning, sensitive, replyToId, mediaIds, quotedPostId, poll, scheduledAt, isDraft, locationName, locationLat, locationLng, groupHandle, templateData, flairId } = body.data
     const tags = [...new Set((content.match(/#([a-zA-ZğüşıöçĞÜŞİÖÇ0-9_]+)/g) ?? []).map((t) => t.slice(1).toLowerCase()))]
     const { actor } = ctx
 
@@ -77,6 +83,30 @@ export async function postsRoutes(app: FastifyInstance) {
 
     const scheduledDate = scheduledAt && new Date(scheduledAt).getTime() > Date.now() ? new Date(scheduledAt) : undefined
 
+    // Resolve group actor
+    let resolvedGroupId: string | null = null
+    if (groupHandle) {
+      const groupActor = await db.query.actors.findFirst({
+        where: and(eq(actors.handle, groupHandle), eq(actors.actorType, 'Group')),
+      })
+      if (!groupActor) return reply.code(404).send({ error: 'Topluluk bulunamadı' })
+
+      // Must be a member
+      const membership = await db.query.follows.findFirst({
+        where: and(
+          eq(follows.followerId, actor.id),
+          eq(follows.followingId, groupActor.id),
+          eq(follows.status, 'accepted'),
+        ),
+      })
+      const group = await db.query.apGroups.findFirst({ where: eq(apGroups.actorId, groupActor.id) })
+      if (!membership && group?.ownerId !== actor.id) {
+        return reply.code(403).send({ error: 'Bu topluluğun üyesi değilsiniz' })
+      }
+
+      resolvedGroupId = groupActor.id
+    }
+
     const postId = randomUUID()
     const apId = `${env.APP_URL}/users/${actor.handle}/posts/${postId}`
 
@@ -99,6 +129,12 @@ export async function postsRoutes(app: FastifyInstance) {
         apUrl: apId,
         scheduledAt: scheduledDate ?? null,
         isDraft: isDraft ?? false,
+        locationName: locationName ?? null,
+        locationLat: locationLat ?? null,
+        locationLng: locationLng ?? null,
+        groupId: resolvedGroupId,
+        templateData: templateData ?? null,
+        flairId: flairId ?? null,
       })
       .returning()
 
@@ -118,6 +154,30 @@ export async function postsRoutes(app: FastifyInstance) {
       .update(actors)
       .set({ postsCount: sql`${actors.postsCount} + 1` })
       .where(eq(actors.id, actor.id))
+
+    // community postCount + trust record güncelle
+    if (resolvedGroupId) {
+      await db.update(apGroups)
+        .set({ postCount: sql`${apGroups.postCount} + 1` })
+        .where(eq(apGroups.actorId, resolvedGroupId))
+
+      const group = await db.query.apGroups.findFirst({ where: eq(apGroups.actorId, resolvedGroupId), columns: { id: true } })
+      if (group) {
+        const [record] = await db
+          .insert(communityTrustRecord)
+          .values({ communityId: group.id, actorId: actor.id, postCount: 1 })
+          .onConflictDoUpdate({
+            target: [communityTrustRecord.communityId, communityTrustRecord.actorId],
+            set: { postCount: sql`${communityTrustRecord.postCount} + 1`, updatedAt: sql`NOW()` },
+          })
+          .returning({ postCount: communityTrustRecord.postCount })
+        const newCount = record?.postCount ?? 1
+        const trustLevel: TrustLevel = newCount >= 100 ? 'veteran' : newCount >= 50 ? 'trusted' : newCount >= 20 ? 'regular' : newCount >= 5 ? 'member' : 'new'
+        await db.update(communityTrustRecord)
+          .set({ trustLevel })
+          .where(and(eq(communityTrustRecord.communityId, group.id), eq(communityTrustRecord.actorId, actor.id)))
+      }
+    }
 
     // Scheduled post: queue for later publish, skip immediate actions
     if (scheduledDate) {

@@ -1,0 +1,17 @@
+{
+	email {$ACME_EMAIL}
+}
+
+{$APP_DOMAIN} {
+	reverse_proxy web:3000
+}
+
+api.{$APP_DOMAIN} {
+	reverse_proxy api:3001
+
+	header {
+		Access-Control-Allow-Origin *
+		Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+		Access-Control-Allow-Headers "Authorization, Content-Type"
+	}
+}

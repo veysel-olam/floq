@@ -13,15 +13,23 @@
  */
 
 const DB_NAME = 'floq-e2e'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const STORE_NAME = 'keys'
 const PRIVATE_KEY_ID = 'dm-private-key'
-const X25519_PARAMS = { name: 'ECDH', namedCurve: 'X25519' } as const
+// P-256 has universal browser support; X25519 requires Chrome 113+/Firefox 130+/Safari 17.4+
+const X25519_PARAMS = { name: 'ECDH', namedCurve: 'P-256' } as const
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION)
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE_NAME)
+    req.onupgradeneeded = (e) => {
+      const db = req.result
+      // Delete existing store on version upgrade (clears old X25519 keys)
+      if (e.oldVersion > 0 && db.objectStoreNames.contains(STORE_NAME)) {
+        db.deleteObjectStore(STORE_NAME)
+      }
+      db.createObjectStore(STORE_NAME)
+    }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
   })

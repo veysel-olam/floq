@@ -8,6 +8,8 @@ WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @floq/api build
+# pnpm deploy creates a self-contained folder with flat node_modules (no workspace symlinks)
+RUN pnpm --filter @floq/api deploy --prod /deploy
 
 FROM base AS runner
 WORKDIR /app
@@ -15,10 +17,10 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 floq
 
+COPY --from=builder /deploy/node_modules ./node_modules
+COPY --from=builder /deploy/package.json ./package.json
 COPY --from=builder /app/apps/api/dist ./dist
 COPY --from=builder /app/apps/api/drizzle ./drizzle
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/apps/api/package.json ./package.json
 
 USER floq
 EXPOSE 3001

@@ -7,6 +7,7 @@ import { useSession } from '@/lib/auth-client'
 import { api, type Notification } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { useInfiniteScroll } from '@/hooks/use-infinite-scroll'
+import { useRealtime } from '@/hooks/use-realtime'
 import { cn } from '@/lib/utils'
 import { Loader2, Heart, Repeat2, MessageCircle, UserPlus, AtSign, Check, X, Trash2, BarChart2, Bell, Zap, ShieldOff } from 'lucide-react'
 import { Separator } from '@/components/ui/separator'
@@ -33,7 +34,7 @@ const typeConfig: Record<
   boost:         { icon: <Repeat2 className="w-3 h-3" />,                bg: 'bg-[#2A9D8F] text-white',                label: 'yeniden paylaştı' },
   reply:         { icon: <MessageCircle className="w-3 h-3" />,          bg: 'bg-blue-500 text-white',                 label: 'yanıtladı' },
   mention:       { icon: <AtSign className="w-3 h-3" />,                 bg: 'bg-violet-500 text-white',               label: 'senden bahsetti' },
-  follow:        { icon: <UserPlus className="w-3 h-3" />,               bg: 'bg-(--color-teal) text-white',           label: 'takip etmeye başladı' },
+  follow:        { icon: <UserPlus className="w-3 h-3" />,               bg: 'bg-(--color-teal) text-white',           label: 'seni takip etmeye başladı' },
   follow_request:   { icon: <UserPlus className="w-3 h-3" />,   bg: 'bg-(--color-stone) text-white',  label: 'takip isteği gönderdi' },
   poll_ended:       { icon: <BarChart2 className="w-3 h-3" />,  bg: 'bg-amber-500 text-white',        label: 'anketi sona erdi' },
   flow_post:        { icon: <Zap className="w-3 h-3" />,        bg: 'bg-violet-500 text-white',       label: 'yeni gönderi paylaştı' },
@@ -283,6 +284,12 @@ export default function NotificationsPage() {
   }, [nextCursor, loadingMore, load])
 
   const loadMoreRef = useInfiniteScroll(loadMore, !!nextCursor && !loadingMore)
+
+  const onNewNotification = useCallback((data: unknown) => {
+    const n = data as Notification
+    setNotifications((prev) => prev.some((x) => x.id === n.id) ? prev : [n, ...prev])
+  }, [])
+  useRealtime({ notification: onNewNotification })
 
   async function markAllRead() {
     setMarkingRead(true)

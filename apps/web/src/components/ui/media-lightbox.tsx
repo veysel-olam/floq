@@ -7,6 +7,8 @@ import { cn } from '@/lib/utils'
 interface MediaItem {
   url: string
   altText?: string | null
+  mimeType?: string | null
+  previewUrl?: string | null
 }
 
 interface MediaLightboxProps {
@@ -69,19 +71,32 @@ export function MediaLightbox({ items, initialIndex: _initialIndex, onClose, cur
         </button>
       )}
 
-      {/* Image */}
+      {/* Media */}
       <div
         className="max-w-[90vw] max-h-[90vh] relative"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={item.url}
-          alt={item.altText ?? ''}
-          className="max-w-[90vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
-          draggable={false}
-        />
-        {item.altText && (
+        {item.mimeType?.startsWith('video/') ? (
+          <video
+            src={item.url}
+            poster={item.previewUrl ?? undefined}
+            controls
+            autoPlay
+            playsInline
+            className="max-w-[90vw] max-h-[90vh] rounded-xl shadow-2xl"
+          />
+        ) : (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={item.url}
+              alt={item.altText ?? ''}
+              className="max-w-[90vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
+              draggable={false}
+            />
+          </>
+        )}
+        {item.altText && !item.mimeType?.startsWith('video/') && (
           <div className="absolute bottom-3 left-3 right-3 bg-black/60 text-white text-xs px-3 py-1.5 rounded-lg backdrop-blur-sm line-clamp-2">
             {item.altText}
           </div>

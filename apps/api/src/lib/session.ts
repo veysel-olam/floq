@@ -18,7 +18,7 @@ export async function getSession(req: FastifyRequest) {
   return auth.api.getSession({ headers: requestHeaders(req) })
 }
 
-export async function requireActor(req: FastifyRequest, reply: FastifyReply) {
+export async function requireActor(req: FastifyRequest, reply: FastifyReply, opts?: { allowFrozen?: boolean }) {
   const session = await getSession(req)
   if (!session) {
     reply.code(401).send({ error: 'Unauthorized' })
@@ -31,6 +31,11 @@ export async function requireActor(req: FastifyRequest, reply: FastifyReply) {
 
   if (!actor) {
     reply.code(401).send({ error: 'Actor not found' })
+    return null
+  }
+
+  if (actor.isFrozen && !opts?.allowFrozen) {
+    reply.code(403).send({ error: 'account_frozen' })
     return null
   }
 

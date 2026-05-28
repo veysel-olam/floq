@@ -1,5 +1,5 @@
 import { db } from '../db/client.js'
-import { notifications, posts, actors, follows } from '../db/schema.js'
+import { notifications, posts, actors, follows, actorPreferences } from '../db/schema.js'
 import type { InferSelectModel } from 'drizzle-orm'
 import { eq, and } from 'drizzle-orm'
 import { publish } from './pubsub.js'
@@ -16,6 +16,27 @@ const PUSH_TITLES: Partial<Record<InferSelectModel<typeof notifications>['type']
 
 type NotificationType = InferSelectModel<typeof notifications>['type']
 
+async function isTypeEnabled(recipientId: string, type: NotificationType): Promise<boolean> {
+  const prefs = await db.query.actorPreferences.findFirst({
+    where: eq(actorPreferences.actorId, recipientId),
+    columns: {
+      notifyLike: true, notifyBoost: true, notifyReply: true,
+      notifyMention: true, notifyFollow: true, notifyFollowRequest: true, notifyPollEnded: true,
+    },
+  })
+  if (!prefs) return true
+  const map: Partial<Record<NotificationType, boolean>> = {
+    like:           prefs.notifyLike,
+    boost:          prefs.notifyBoost,
+    reply:          prefs.notifyReply,
+    mention:        prefs.notifyMention,
+    follow:         prefs.notifyFollow,
+    follow_request: prefs.notifyFollowRequest,
+    poll_ended:     prefs.notifyPollEnded,
+  }
+  return map[type] ?? true
+}
+
 export async function createNotification(params: {
   recipientId: string
   actorId: string
@@ -24,6 +45,8 @@ export async function createNotification(params: {
 }) {
   // Kendine bildirim gönderme
   if (params.recipientId === params.actorId) return
+  // Kullanıcı bu tür bildirimi kapattıysa oluşturma
+  if (!(await isTypeEnabled(params.recipientId, params.type))) return
 
   await db
     .insert(notifications)

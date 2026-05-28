@@ -67,7 +67,7 @@ _(Temizlendi — tüm maddeler tamamlandı)_
 - **Fediverse köprüsü** — Bluesky/AT Protocol'den içerik görüntüleme (sadece okuma)
 
 ### Uzun vadeli / büyük iş
-- **Topluluklar** (`/c/sinema`, `/c/galatasaray` vb.) — Reddit benzeri ama ActivityPub federe; moderasyon, üyelik, özel gönderi tipleri. **Tasarım notu:** altyapıyı baştan "genişletilebilir özel içerik tipi destekler" şeklinde kur — sinefiller için film kartı, spor için skor kartı, gamerlar için oyun kartı topluluk başına aktif/pasif yapılabilsin. Topluluklar olmadan bu niş formatların nereye ait olduğu belirsiz kalır.
+- **Topluluklar** — Detaylı analiz ve fikir havuzu için bkz. [COMMUNITIES.md](./COMMUNITIES.md). Ana fikirler: Topluluk Güven Sicili (federe, kazanılmış rozetler), Post Şablonları, topluluk tipleri.
 - **Doğrulama sistemi** — e-posta domain ile (örn. @şirket.com hesapları)
 - **Newsletter modu** — hesap "yayıncı" moduna geçince takipçilere e-posta gönderimi
 - **Toplu moderasyon** — admin panelinde çoklu seçip işlem

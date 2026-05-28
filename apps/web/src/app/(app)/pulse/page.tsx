@@ -100,7 +100,7 @@ export default function PulsePage() {
                   className={cn(
                     'flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-colors',
                     tab === id
-                      ? 'bg-(--color-blush) text-(--color-coral)'
+                      ? 'bg-(--color-blush) dark:bg-(--color-coral)/12 text-(--color-coral) dark:bg-(--color-coral)/12'
                       : 'text-(--color-text-tertiary) hover:text-(--color-text-primary)',
                   )}
                 >
@@ -141,7 +141,7 @@ export default function PulsePage() {
                 className={cn(
                   'flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-colors',
                   tab === id
-                    ? 'bg-(--color-blush) text-(--color-coral)'
+                    ? 'bg-(--color-blush) dark:bg-(--color-coral)/12 text-(--color-coral) dark:bg-(--color-coral)/12'
                     : 'text-(--color-text-tertiary) hover:text-(--color-text-primary)',
                 )}
               >

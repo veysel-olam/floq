@@ -1,6 +1,6 @@
 import { eq, and, inArray } from 'drizzle-orm'
 import { db } from '../db/client.js'
-import { posts, actors, likes, boosts, bookmarks, mediaAttachments, polls, pollOptions, pollVotes, reactions } from '../db/schema.js'
+import { posts, actors, likes, boosts, bookmarks, mediaAttachments, polls, pollOptions, pollVotes, reactions, communityFlairs } from '../db/schema.js'
 
 export async function enrichPosts(postList: typeof posts.$inferSelect[], actorId?: string) {
   if (postList.length === 0) return []
@@ -13,12 +13,13 @@ export async function enrichPosts(postList: typeof posts.$inferSelect[], actorId
   })
   const authorMap = new Map(authorList.map((a) => [a.id, a]))
 
-  // Resolve parent author for reply posts
+  // Resolve parent post for reply posts (includes content for DM quote preview)
   const replyToIds = [...new Set(postList.map((p) => p.replyToId).filter(Boolean) as string[])]
-  const replyAuthorMap = new Map<string, { handle: string; displayName: string | null }>()
+  type ReplyToEntry = { id: string; content: string; author: { handle: string; displayName: string | null } | null }
+  const replyToMap = new Map<string, ReplyToEntry>()
   if (replyToIds.length > 0) {
     const parentPosts = await db
-      .select({ id: posts.id, authorId: posts.authorId })
+      .select({ id: posts.id, content: posts.content, authorId: posts.authorId })
       .from(posts)
       .where(inArray(posts.id, replyToIds))
     const parentAuthorIds = [...new Set(parentPosts.map((p) => p.authorId))]
@@ -29,7 +30,11 @@ export async function enrichPosts(postList: typeof posts.$inferSelect[], actorId
     const parentAuthorById = new Map(parentAuthors.map((a) => [a.id, a]))
     for (const p of parentPosts) {
       const author = parentAuthorById.get(p.authorId)
-      if (author) replyAuthorMap.set(p.id, { handle: author.handle, displayName: author.displayName })
+      replyToMap.set(p.id, {
+        id: p.id,
+        content: p.content,
+        author: author ? { handle: author.handle, displayName: author.displayName } : null,
+      })
     }
   }
 
@@ -175,14 +180,27 @@ export async function enrichPosts(postList: typeof posts.$inferSelect[], actorId
     bookmarkedIds = new Set(bookmarkRows.map((b) => b.postId))
   }
 
+  // Flair lookup
+  const flairIds = [...new Set(postList.map((p) => p.flairId).filter(Boolean) as string[])]
+  const flairMap = new Map<string, { id: string; name: string; emoji: string | null; color: string }>()
+  if (flairIds.length > 0) {
+    const flairRows = await db.query.communityFlairs.findMany({
+      where: inArray(communityFlairs.id, flairIds),
+      columns: { id: true, name: true, emoji: true, color: true },
+    })
+    for (const f of flairRows) flairMap.set(f.id, f)
+  }
+
   return postList.map((post) => ({
     ...post,
     author: authorMap.get(post.authorId) ?? null,
     media: mediaMap.get(post.id) ?? [],
-    replyToAuthor: post.replyToId ? (replyAuthorMap.get(post.replyToId) ?? null) : null,
+    replyToAuthor: post.replyToId ? (replyToMap.get(post.replyToId)?.author ?? null) : null,
+    replyTo: post.replyToId ? (replyToMap.get(post.replyToId) ?? null) : null,
     quotedPost: post.quotedPostId ? (quotedPostMap.get(post.quotedPostId) ?? null) : null,
     poll: pollMap.get(post.id) ?? null,
     reactions: reactionSummaryMap.get(post.id) ?? {},
+    flair: post.flairId ? (flairMap.get(post.flairId) ?? null) : null,
     viewer: {
       liked: likedIds.has(post.id),
       boosted: boostedIds.has(post.id),

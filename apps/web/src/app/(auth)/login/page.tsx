@@ -64,7 +64,7 @@ export default function LoginPage() {
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
             style={{ background: 'rgba(232, 89, 60, 0.1)', border: '1px solid rgba(232, 89, 60, 0.2)' }}>
-            <ShieldCheck className="w-5 h-5" style={{ color: '#E8593C' }} />
+            <ShieldCheck className="w-5 h-5" style={{ color: 'var(--color-coral)' }} />
           </div>
           <div>
             <h1 className="text-xl font-bold text-(--color-text-primary)" style={{ fontFamily: 'var(--font-outfit)' }}>
@@ -96,7 +96,7 @@ export default function LoginPage() {
           onClick={verifyTotp}
           disabled={verifying || totpCode.length !== 6}
           className="w-full text-white font-semibold h-11 gap-2"
-          style={{ background: 'var(--gradient-avatar)' }}
+          style={{ background: 'var(--color-coral)' }}
         >
           {verifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Doğrula <ArrowRight className="w-4 h-4" /></>}
         </Button>
@@ -129,7 +129,7 @@ export default function LoginPage() {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label htmlFor="password" className="text-sm font-medium text-(--color-text-secondary)">Şifre</Label>
-            <Link href="/forgot-password" className="text-xs hover:opacity-80 transition-opacity" style={{ color: '#E8593C' }}>
+            <Link href="/forgot-password" className="text-xs hover:opacity-80 transition-opacity" style={{ color: 'var(--color-coral)' }}>
               Şifremi unuttum
             </Link>
           </div>
@@ -153,7 +153,7 @@ export default function LoginPage() {
           type="submit"
           disabled={isSubmitting}
           className="w-full text-white font-semibold h-11 gap-2 mt-2"
-          style={{ background: 'var(--gradient-avatar)' }}
+          style={{ background: 'var(--color-coral)' }}
         >
           {isSubmitting
             ? <><Loader2 className="w-4 h-4 animate-spin" /> Giriş yapılıyor…</>
@@ -163,7 +163,7 @@ export default function LoginPage() {
 
       <p className="text-center text-sm text-(--color-text-tertiary)">
         Hesabın yok mu?{' '}
-        <Link href="/register" className="font-semibold hover:opacity-80 transition-opacity" style={{ color: '#E8593C' }}>
+        <Link href="/register" className="font-semibold hover:opacity-80 transition-opacity" style={{ color: 'var(--color-coral)' }}>
           Ücretsiz kaydol
         </Link>
       </p>

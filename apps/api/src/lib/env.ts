@@ -33,8 +33,9 @@ const schema = z.object({
   // Monitoring (optional)
   SENTRY_DSN: z.string().url().optional(),
 
-  // Tenor GIF search (optional — if unset, GIF search is disabled)
-  TENOR_API_KEY: z.string().optional(),
+  // Klipy GIF search (optional — if unset, GIF search is disabled)
+  // Tenor API is shutting down June 2026 — use Klipy instead: https://klipy.com
+  KLIPY_API_KEY: z.string().optional(),
 
   // Web Push / PWA notifications (optional — generate with: npx web-push generate-vapid-keys)
   VAPID_PUBLIC_KEY: z.string().optional(),

@@ -11,7 +11,8 @@ import { TimelineSkeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
 export default function HashtagPage({ params }: { params: Promise<{ tag: string }> }) {
-  const { tag } = use(params)
+  const { tag: rawTag } = use(params)
+  const tag = decodeURIComponent(rawTag)
   const { data: session } = useSession()
   const handle = (session?.user as { handle?: string } | undefined)?.handle
 

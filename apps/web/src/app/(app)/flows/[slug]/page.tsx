@@ -330,7 +330,7 @@ export default function FlowPage() {
                 className={cn(
                   'p-1.5 rounded-lg transition-colors',
                   flow.isSubscribed
-                    ? 'text-(--color-coral) bg-(--color-blush)'
+                    ? 'text-(--color-coral) bg-(--color-blush) dark:bg-(--color-coral)/12'
                     : 'text-(--color-text-tertiary) hover:text-(--color-text-primary) hover:bg-(--color-background-secondary)',
                 )}
               >
@@ -465,7 +465,7 @@ export default function FlowPage() {
                     <span className={cn(
                       'text-xs px-1.5 py-0.5 rounded-full flex-shrink-0',
                       m.role === 'owner'
-                        ? 'bg-(--color-blush) text-(--color-coral)'
+                        ? 'bg-(--color-blush) dark:bg-(--color-coral)/12 text-(--color-coral) dark:bg-(--color-coral)/12'
                         : 'bg-(--color-background-secondary) text-(--color-text-tertiary)',
                     )}>
                       {m.role === 'owner' ? 'Sahip' : 'Üye'}

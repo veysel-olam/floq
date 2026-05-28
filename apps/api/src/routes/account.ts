@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify'
-import { eq, and, gte, ne, desc, sql } from 'drizzle-orm'
+import { eq, and, gte, ne, desc, sql, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { randomUUID } from 'node:crypto'
 import sharp from 'sharp'
@@ -30,6 +30,7 @@ export async function accountRoutes(app: FastifyInstance) {
       .object({
         displayName: z.string().min(1).max(100).optional(),
         bio: z.string().max(500).optional(),
+        location: z.string().max(200).nullable().optional(),
         website: z.string().url().max(2048).nullable().optional(),
         isLocked: z.boolean().optional(),
         profileFields: z.array(z.object({
@@ -45,6 +46,7 @@ export async function accountRoutes(app: FastifyInstance) {
     const actorUpdate: Partial<typeof actors.$inferInsert> = { updatedAt: new Date() }
     if (body.data.displayName !== undefined) actorUpdate.displayName = body.data.displayName
     if (body.data.bio !== undefined) actorUpdate.bio = body.data.bio
+    if (body.data.location !== undefined) actorUpdate.location = body.data.location
     if (body.data.website !== undefined) actorUpdate.website = body.data.website
     if (body.data.isLocked !== undefined) actorUpdate.isLocked = body.data.isLocked
     if (body.data.profileFields !== undefined) actorUpdate.profileFields = body.data.profileFields.map((f) => ({ ...f, verifiedAt: f.verifiedAt ?? null }))
@@ -180,6 +182,45 @@ export async function accountRoutes(app: FastifyInstance) {
       .values({ actorId: ctx.actor.id, ...data })
       .onConflictDoUpdate({ target: actorPreferences.actorId, set: data })
 
+    return reply.code(204).send()
+  })
+
+  // GET /api/account/notification-prefs
+  app.get('/api/account/notification-prefs', async (req, reply) => {
+    const ctx = await requireActor(req, reply)
+    if (!ctx) return
+    const prefs = await db.query.actorPreferences.findFirst({
+      where: eq(actorPreferences.actorId, ctx.actor.id),
+      columns: {
+        notifyLike: true, notifyBoost: true, notifyReply: true,
+        notifyMention: true, notifyFollow: true, notifyFollowRequest: true, notifyPollEnded: true,
+      },
+    })
+    return reply.send(prefs ?? {
+      notifyLike: true, notifyBoost: true, notifyReply: true,
+      notifyMention: true, notifyFollow: true, notifyFollowRequest: true, notifyPollEnded: true,
+    })
+  })
+
+  // PATCH /api/account/notification-prefs
+  app.patch('/api/account/notification-prefs', async (req, reply) => {
+    const ctx = await requireActor(req, reply)
+    if (!ctx) return
+    const body = z.object({
+      notifyLike:          z.boolean().optional(),
+      notifyBoost:         z.boolean().optional(),
+      notifyReply:         z.boolean().optional(),
+      notifyMention:       z.boolean().optional(),
+      notifyFollow:        z.boolean().optional(),
+      notifyFollowRequest: z.boolean().optional(),
+      notifyPollEnded:     z.boolean().optional(),
+    }).safeParse(req.body)
+    if (!body.success) return reply.code(400).send({ error: 'Invalid body' })
+    const data = { ...body.data, updatedAt: new Date() }
+    await db
+      .insert(actorPreferences)
+      .values({ actorId: ctx.actor.id, ...data })
+      .onConflictDoUpdate({ target: actorPreferences.actorId, set: data })
     return reply.code(204).send()
   })
 
@@ -326,6 +367,33 @@ export async function accountRoutes(app: FastifyInstance) {
     await db
       .delete(sessionTable)
       .where(and(eq(sessionTable.userId, sess.user.id), ne(sessionTable.id, sess.session.id)))
+
+    return reply.code(204).send()
+  })
+
+  // POST /api/account/freeze — hesabı geçici olarak dondur
+  app.post('/api/account/freeze', async (req, reply) => {
+    const ctx = await requireActor(req, reply)
+    if (!ctx) return
+
+    await db.update(actors)
+      .set({ isFrozen: true, frozenAt: new Date() })
+      .where(eq(actors.id, ctx.actor.id))
+
+    // Tüm sessionları sil → çıkış yaptır
+    await db.delete(sessionTable).where(eq(sessionTable.userId, ctx.session.user.id))
+
+    return reply.code(204).send()
+  })
+
+  // POST /api/account/unfreeze — hesabı yeniden etkinleştir
+  app.post('/api/account/unfreeze', async (req, reply) => {
+    const ctx = await requireActor(req, reply, { allowFrozen: true })
+    if (!ctx) return
+
+    await db.update(actors)
+      .set({ isFrozen: false, frozenAt: null })
+      .where(eq(actors.id, ctx.actor.id))
 
     return reply.code(204).send()
   })
@@ -677,6 +745,132 @@ export async function accountRoutes(app: FastifyInstance) {
       followingCount: ctx.actor.followingCount,
       profileViewCount: ctx.actor.profileViewCount,
     })
+  })
+
+  // GET /api/account/me — current actor with onboarding state
+  app.get('/api/account/me', async (req, reply) => {
+    const ctx = await requireActor(req, reply)
+    if (!ctx) return
+    return reply.send({
+      onboardingCompletedAt: ctx.actor.onboardingCompletedAt?.toISOString() ?? null,
+    })
+  })
+
+  // POST /api/account/complete-onboarding — mark onboarding as done
+  app.post('/api/account/complete-onboarding', async (req, reply) => {
+    const ctx = await requireActor(req, reply)
+    if (!ctx) return
+    if (!ctx.actor.onboardingCompletedAt) {
+      await db.update(actors)
+        .set({ onboardingCompletedAt: new Date() })
+        .where(eq(actors.id, ctx.actor.id))
+    }
+    return reply.code(204).send()
+  })
+
+  // GET /api/onboarding/fediverse-preview — resolve remote handle and return following list
+  app.get('/api/onboarding/fediverse-preview', async (req, reply) => {
+    const ctx = await requireActor(req, reply)
+    if (!ctx) return
+
+    const { handle } = req.query as { handle?: string }
+    if (!handle) return reply.status(400).send({ error: 'handle gerekli' })
+
+    const clean = handle.replace(/^@/, '')
+    const atIdx = clean.lastIndexOf('@')
+    if (atIdx <= 0) return reply.status(400).send({ error: 'Geçersiz format. Örnek: kullanici@mastodon.social' })
+
+    const username = clean.slice(0, atIdx)
+    const instance = clean.slice(atIdx + 1)
+    if (!username || !instance.includes('.')) return reply.status(400).send({ error: 'Geçersiz format' })
+
+    try {
+      // 1. WebFinger
+      const wfRes = await fetch(
+        `https://${instance}/.well-known/webfinger?resource=acct:${username}@${instance}`,
+        { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(6000) },
+      )
+      if (!wfRes.ok) return reply.status(404).send({ error: 'Hesap bulunamadı' })
+
+      const wf = await wfRes.json() as { links?: Array<{ rel: string; type?: string; href?: string }> }
+      const apUrl = wf.links?.find(l => l.rel === 'self' && (l.type?.includes('activity+json') ?? false))?.href
+      if (!apUrl) return reply.status(404).send({ error: 'Bu sunucu ActivityPub desteklemiyor' })
+
+      // 2. Actor → following URL
+      const actorRes = await fetch(apUrl, {
+        headers: { Accept: 'application/activity+json' },
+        signal: AbortSignal.timeout(6000),
+      })
+      if (!actorRes.ok) return reply.status(404).send({ error: 'Hesap bilgileri alınamadı' })
+
+      const actorData = await actorRes.json() as { following?: string; name?: string }
+      if (!actorData.following) return reply.send({ total: 0, actors: [] })
+
+      // 3. Following collection (first page)
+      const colRes = await fetch(actorData.following, {
+        headers: { Accept: 'application/activity+json' },
+        signal: AbortSignal.timeout(8000),
+      })
+      if (!colRes.ok) return reply.send({ total: 0, actors: [] })
+
+      const col = await colRes.json() as {
+        totalItems?: number
+        orderedItems?: string[]
+        first?: string | { orderedItems?: string[] }
+      }
+
+      let items: string[] = col.orderedItems ?? []
+      const total = col.totalItems ?? items.length
+
+      if (items.length === 0 && col.first) {
+        if (typeof col.first === 'string') {
+          const pageRes = await fetch(col.first, {
+            headers: { Accept: 'application/activity+json' },
+            signal: AbortSignal.timeout(5000),
+          }).catch(() => null)
+          if (pageRes?.ok) {
+            const page = await pageRes.json() as { orderedItems?: string[] }
+            items = page.orderedItems ?? []
+          }
+        } else {
+          items = (col.first as { orderedItems?: string[] }).orderedItems ?? []
+        }
+      }
+
+      // Derive handles from AP IDs (no per-actor fetch needed)
+      const derived = items.slice(0, 40).flatMap(apId => {
+        try {
+          const url = new URL(apId)
+          const uname = url.pathname.split('/').filter(Boolean).at(-1)
+          if (!uname) return []
+          return [{ apId, handle: `${uname}@${url.hostname}` }]
+        } catch { return [] }
+      })
+
+      // Batch DB lookup for richer display info
+      const apIds = derived.map(d => d.apId)
+      const known = apIds.length > 0
+        ? await db.query.actors.findMany({
+            where: inArray(actors.apId, apIds),
+            columns: { apId: true, handle: true, displayName: true, avatarUrl: true },
+          })
+        : []
+      const knownMap = new Map(known.map(a => [a.apId, a]))
+
+      const result = derived.slice(0, 24).map(({ apId, handle }) => {
+        const k = knownMap.get(apId)
+        return {
+          handle: k?.handle ?? handle,
+          displayName: k?.displayName ?? null,
+          avatarUrl: k?.avatarUrl ?? null,
+        }
+      })
+
+      return reply.send({ total, actors: result })
+    } catch (err) {
+      console.error('[fediverse-preview]', err)
+      return reply.status(500).send({ error: 'Bağlantı kurulamadı' })
+    }
   })
 
   // DELETE /api/account — delete account (cascades via FK)

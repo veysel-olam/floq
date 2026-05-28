@@ -287,7 +287,7 @@ export default function BookmarksPage() {
         />
       ) : viewMode === 'grid' ? (
         <>
-          <div className="grid grid-cols-2 gap-px bg-(--color-border) mt-px">
+          <div className="grid grid-cols-2 gap-3 p-3">
             {posts.map((post) => (
               <BookmarkGridCard
                 key={post.id}
@@ -350,7 +350,7 @@ function BookmarkGridCard({
   return (
     <a
       href={`/posts/${post.id}`}
-      className="relative bg-(--color-background) group flex flex-col min-h-[120px] p-3 hover:bg-(--color-background-secondary) transition-colors"
+      className="relative bg-(--color-background) group flex flex-col min-h-[120px] p-3 rounded-xl border border-(--color-border-secondary) hover:bg-(--color-background-secondary) hover:border-(--color-border) transition-colors overflow-hidden"
     >
       {firstImage ? (
         // eslint-disable-next-line @next/next/no-img-element

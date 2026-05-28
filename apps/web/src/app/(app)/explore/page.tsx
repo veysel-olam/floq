@@ -15,7 +15,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { TimelineSkeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
-type Tab = 'trending' | 'users' | 'posts'
+type Tab = 'trending' | 'users' | 'posts' | 'hashtags'
 
 interface SearchFilters {
   from: string
@@ -85,6 +85,23 @@ function ExploreContent() {
   // Discovery data
   const [trendingTags, setTrendingTags] = useState<{ tag: string; count: number }[]>([])
   const [suggestedUsers, setSuggestedUsers] = useState<Actor[]>([])
+
+  // Hashtag results: client-side filter of trendingTags by current query
+  const hashtagResults = query.trim()
+    ? trendingTags.filter(({ tag }) =>
+        tag.toLowerCase().includes(query.replace(/^#/, '').trim().toLowerCase()),
+      )
+    : []
+
+  // Live suggestions (shown instantly while typing, before debounce)
+  const liveSuggestions = query.trim().length > 0
+    ? recentSearches.filter((s) => s.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 3)
+    : []
+  const liveHashtagSuggestions = query.trim().length > 0
+    ? trendingTags.filter(({ tag }) =>
+        tag.toLowerCase().includes(query.replace(/^#/, '').trim().toLowerCase()),
+      ).slice(0, 4)
+    : []
 
   useEffect(() => {
     api.search.trendingTags().then((d) => setTrendingTags(d.tags.slice(0, 10))).catch(() => {})
@@ -181,6 +198,7 @@ function ExploreContent() {
     { id: 'trending', label: 'Gündem', icon: <Globe className="w-3.5 h-3.5" /> },
     { id: 'users', label: `Kişiler${actorResults.length ? ` (${actorResults.length})` : ''}`, icon: <Users className="w-3.5 h-3.5" /> },
     { id: 'posts', label: `Gönderiler${postResults.length ? ` (${postResults.length})` : ''}`, icon: <FileText className="w-3.5 h-3.5" /> },
+    { id: 'hashtags', label: `Etiketler${hashtagResults.length ? ` (${hashtagResults.length})` : ''}`, icon: <Hash className="w-3.5 h-3.5" /> },
   ]
 
   return (
@@ -202,7 +220,7 @@ function ExploreContent() {
             {searching && (
               <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-(--color-text-tertiary) animate-spin" />
             )}
-            {/* Recent searches dropdown */}
+            {/* Suggestion dropdown: recent searches (no query) or live suggestions (while typing) */}
             {searchFocused && !query && recentSearches.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-1.5 bg-(--color-background) border border-(--color-border) rounded-2xl shadow-xl shadow-black/10 z-20 overflow-hidden py-1">
                 <div className="flex items-center justify-between px-3 py-1.5">
@@ -237,6 +255,47 @@ function ExploreContent() {
                     </button>
                   </button>
                 ))}
+              </div>
+            )}
+            {/* Live suggestions while typing */}
+            {searchFocused && query.trim().length > 0 && (liveSuggestions.length > 0 || liveHashtagSuggestions.length > 0) && (
+              <div className="absolute top-full left-0 right-0 mt-1.5 bg-(--color-background) border border-(--color-border) rounded-2xl shadow-xl shadow-black/10 z-20 overflow-hidden py-1">
+                {liveSuggestions.length > 0 && (
+                  <>
+                    <div className="px-3 py-1.5">
+                      <span className="text-[11px] font-semibold text-(--color-text-tertiary) uppercase tracking-widest">Son Aramalar</span>
+                    </div>
+                    {liveSuggestions.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setQuery(s)}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-(--color-text-primary) hover:bg-(--color-background-secondary) transition-colors text-left"
+                      >
+                        <Search className="w-3.5 h-3.5 text-(--color-text-tertiary) flex-shrink-0" />
+                        <span className="truncate"><Highlight text={s} query={query} /></span>
+                      </button>
+                    ))}
+                  </>
+                )}
+                {liveHashtagSuggestions.length > 0 && (
+                  <>
+                    <div className="px-3 py-1.5 mt-0.5">
+                      <span className="text-[11px] font-semibold text-(--color-text-tertiary) uppercase tracking-widest">Etiketler</span>
+                    </div>
+                    {liveHashtagSuggestions.map(({ tag, count }) => (
+                      <Link
+                        key={tag}
+                        href={`/hashtag/${encodeURIComponent(tag)}`}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-(--color-text-primary) hover:bg-(--color-background-secondary) transition-colors"
+                        onClick={() => setTimeout(() => setSearchFocused(false), 0)}
+                      >
+                        <Hash className="w-3.5 h-3.5 text-(--color-coral) flex-shrink-0" />
+                        <span className="truncate font-medium"><Highlight text={tag} query={query.replace(/^#/, '')} /></span>
+                        <span className="ml-auto text-[11px] text-(--color-text-tertiary)">{count}</span>
+                      </Link>
+                    ))}
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -396,7 +455,7 @@ function ExploreContent() {
                 className={cn(
                   'flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-colors',
                   tab === t.id
-                    ? 'bg-(--color-blush) text-(--color-coral)'
+                    ? 'bg-(--color-blush) dark:bg-(--color-coral)/12 text-(--color-coral) dark:bg-(--color-coral)/12'
                     : 'text-(--color-text-tertiary) hover:text-(--color-text-primary)',
                 )}
               >
@@ -428,7 +487,7 @@ function ExploreContent() {
                       'flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors group',
                       i === 0
                         ? 'border-(--color-coral)/30 bg-(--color-coral)/8 text-(--color-coral) hover:bg-(--color-coral)/12'
-                        : 'border-(--color-border) bg-(--color-background-secondary) text-(--color-text-secondary) hover:border-(--color-coral)/40 hover:text-(--color-coral) hover:bg-(--color-blush)',
+                        : 'border-(--color-border) bg-(--color-background-secondary) text-(--color-text-secondary) hover:border-(--color-coral)/40 hover:text-(--color-coral) hover:bg-(--color-blush) dark:hover:bg-(--color-coral)/12',
                     )}
                   >
                     <Hash className="w-3 h-3 opacity-60" />
@@ -505,7 +564,7 @@ function ExploreContent() {
             <EmptyState icon={Users} title="Sonuç bulunamadı" size="sm" />
           ) : (
             actorResults.map((actor) => (
-              <ActorRow key={actor.id} actor={actor} />
+              <ActorRow key={actor.id} actor={actor} query={query} />
             ))
           )}
         </>
@@ -523,11 +582,68 @@ function ExploreContent() {
           )}
         </>
       )}
+
+      {/* Hashtag results */}
+      {isSearchMode && tab === 'hashtags' && (
+        <>
+          {hashtagResults.length === 0 ? (
+            <EmptyState icon={Hash} title="Etiket bulunamadı" size="sm" />
+          ) : (
+            <div className="px-4 py-3 space-y-1">
+              {hashtagResults.map(({ tag, count }, i) => (
+                <Link
+                  key={tag}
+                  href={`/hashtag/${encodeURIComponent(tag)}`}
+                  className="flex items-center justify-between px-4 py-3.5 rounded-2xl border border-(--color-border-secondary) hover:border-(--color-coral)/30 hover:bg-(--color-blush) dark:hover:bg-(--color-coral)/6 transition-colors group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0',
+                      i === 0
+                        ? 'bg-(--color-coral)/12 text-(--color-coral)'
+                        : 'bg-(--color-background-secondary) text-(--color-text-tertiary) group-hover:bg-(--color-coral)/10 group-hover:text-(--color-coral)',
+                    )}>
+                      <Hash className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-(--color-text-primary) group-hover:text-(--color-coral) transition-colors">
+                        #<Highlight text={tag} query={query.replace(/^#/, '')} />
+                      </p>
+                      <p className="text-[11px] text-(--color-text-tertiary)">{count} gönderi</p>
+                    </div>
+                  </div>
+                  {i === 0 && (
+                    <span className="flex items-center gap-1 text-[10px] font-semibold text-(--color-coral) bg-(--color-coral)/10 px-2 py-0.5 rounded-full">
+                      <TrendingUp className="w-2.5 h-2.5" /> Gündem
+                    </span>
+                  )}
+                </Link>
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }
 
-function ActorRow({ actor }: { actor: Actor }) {
+function Highlight({ text, query }: { text: string; query: string }) {
+  const q = query.trim()
+  if (!q) return <>{text}</>
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'))
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === q.toLowerCase()
+          ? <mark key={i} className="bg-(--color-coral)/20 text-(--color-coral) rounded-[3px] not-italic font-semibold">{part}</mark>
+          : part,
+      )}
+    </>
+  )
+}
+
+function ActorRow({ actor, query = '' }: { actor: Actor; query?: string }) {
   const initials = (actor.displayName ?? actor.handle).slice(0, 2).toUpperCase()
   const [following, setFollowing] = useState(actor.viewer?.following ?? false)
   const [pending, setPending] = useState(actor.viewer?.followStatus === 'pending')
@@ -578,9 +694,9 @@ function ActorRow({ actor }: { actor: Actor }) {
         <div className="flex items-start justify-between gap-2">
           <Link href={`/${actor.handle}`} className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-(--color-text-primary) truncate group-hover:text-(--color-coral) transition-colors" style={{ fontFamily: 'var(--font-outfit)' }}>
-              {actor.displayName ?? actor.handle}
+              <Highlight text={actor.displayName ?? actor.handle} query={query} />
             </p>
-            <p className="text-xs text-(--color-text-tertiary) truncate">@{actor.handle}</p>
+            <p className="text-xs text-(--color-text-tertiary) truncate">@<Highlight text={actor.handle} query={query} /></p>
           </Link>
           <Button
             size="sm"

@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils'
 import {
   ArrowUp, Loader2, Rss, SlidersHorizontal, ChevronDown,
   Check, Globe, Home, List, RefreshCw, Zap, Users, Filter,
-  GitBranch, Sparkles, Plus, UserPlus,
+  GitBranch, Plus, UserPlus,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import Link from 'next/link'
@@ -24,6 +24,7 @@ import Link from 'next/link'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type FeedSource =
+  | { type: 'for_you' }
   | { type: 'following' }
   | { type: 'federated' }
   | { type: 'list'; id: string; title: string }
@@ -102,16 +103,18 @@ function SuggestedUsers() {
 }
 
 function EmptyFeed({ source }: { source: FeedSource }) {
-  if (source.type === 'following') {
+  if (source.type === 'for_you' || source.type === 'following') {
+    const isFollowing = source.type === 'following'
     return (
-      <div className="py-16 px-6 flex flex-col items-center gap-5 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-(--color-background-secondary) flex items-center justify-center">
-          <Users className="w-8 h-8 text-(--color-text-tertiary)" />
-        </div>
-        <div>
-          <p className="font-semibold text-(--color-text-primary) mb-1.5">Henüz kimseyi takip etmiyorsun</p>
-          <p className="text-sm text-(--color-text-tertiary) leading-relaxed max-w-xs">
-            Takip ettiğin hesapların gönderileri burada görünür.
+      <div className="px-4 pt-6 pb-10">
+        <div className="text-center mb-5">
+          <p className="font-semibold text-(--color-text-primary) mb-1">
+            {isFollowing ? 'Henüz kimseyi takip etmiyorsun' : 'Henüz içerik yok'}
+          </p>
+          <p className="text-sm text-(--color-text-tertiary)">
+            {isFollowing
+              ? 'Takip ettiğin hesapların gönderileri burada görünür.'
+              : 'Platform büyüdükçe sana özel içerikler burada görünecek.'}
           </p>
         </div>
         <SuggestedUsers />
@@ -121,38 +124,26 @@ function EmptyFeed({ source }: { source: FeedSource }) {
 
   if (source.type === 'federated') {
     return (
-      <div className="py-20 px-8 flex flex-col items-center gap-5 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-(--color-background-secondary) flex items-center justify-center">
-          <GitBranch className="w-8 h-8 text-(--color-text-tertiary)" />
-        </div>
-        <div>
-          <p className="font-semibold text-(--color-text-primary) mb-1.5">Federe akış boş</p>
-          <p className="text-sm text-(--color-text-tertiary) leading-relaxed max-w-xs">
-            Bağlı instance'lardan henüz içerik yok. Yeni hesaplar takip ettikçe federe ağ genişler.
-          </p>
-        </div>
+      <div className="py-16 text-center px-6">
+        <p className="font-semibold text-(--color-text-primary) mb-1">Federe akış boş</p>
+        <p className="text-sm text-(--color-text-tertiary) leading-relaxed max-w-xs mx-auto">
+          Bağlı instance&apos;lardan henüz içerik yok. Yeni hesaplar takip ettikçe federe ağ genişler.
+        </p>
       </div>
     )
   }
 
   const isListSource = source.type === 'list'
   return (
-    <div className="py-20 px-8 flex flex-col items-center gap-5 text-center">
-      <div className="w-16 h-16 rounded-2xl bg-(--color-background-secondary) flex items-center justify-center">
+    <div className="py-16 text-center px-6">
+      <p className="font-semibold text-(--color-text-primary) mb-1">
+        {isListSource ? 'Liste boş' : 'Feed boş'}
+      </p>
+      <p className="text-sm text-(--color-text-tertiary) leading-relaxed max-w-xs mx-auto">
         {isListSource
-          ? <List className="w-8 h-8 text-(--color-text-tertiary)" />
-          : <Sparkles className="w-8 h-8 text-(--color-text-tertiary)" />}
-      </div>
-      <div>
-        <p className="font-semibold text-(--color-text-primary) mb-1.5">
-          {isListSource ? 'Liste boş' : 'Feed boş'}
-        </p>
-        <p className="text-sm text-(--color-text-tertiary) leading-relaxed max-w-xs">
-          {isListSource
-            ? 'Bu listedeki hesaplar henüz gönderi paylaşmamış.'
-            : 'Bu feed kuralıyla eşleşen gönderi bulunamadı.'}
-        </p>
-      </div>
+          ? 'Bu listedeki hesaplar henüz gönderi paylaşmamış.'
+          : 'Bu feed kuralıyla eşleşen gönderi bulunamadı.'}
+      </p>
     </div>
   )
 }
@@ -206,6 +197,9 @@ export default function HomePage() {
         posts = d.posts; nc = d.nextCursor
       } else if (source.type === 'rule') {
         const d = await api.timeline.home(cursor, source.id, sort)
+        posts = d.posts; nc = d.nextCursor
+      } else if (source.type === 'for_you') {
+        const d = await api.timeline.home(cursor, undefined, 'mixed')
         posts = d.posts; nc = d.nextCursor
       } else {
         const d = await api.timeline.home(cursor, undefined, sort)
@@ -309,6 +303,7 @@ export default function HomePage() {
   }
 
   // ── Derived ─────────────────────────────────────────────────
+  const isForYou     = source.type === 'for_you'
   const isFollowing  = source.type === 'following'
   const isFederated  = source.type === 'federated'
   const isList       = source.type === 'list'
@@ -318,7 +313,8 @@ export default function HomePage() {
   const showFeedMenu = feedMenuPos !== null
 
   const tabLabel =
-    source.type === 'following' ? 'Ana Akış'
+    source.type === 'for_you' ? 'Senin İçin'
+    : source.type === 'following' ? 'Ana Akış'
     : source.type === 'federated' ? 'Federe Ağ'
     : source.type === 'rule' ? source.name
     : source.title
@@ -330,6 +326,19 @@ export default function HomePage() {
 
         {/* ── Source tabs ── */}
         <div className="flex items-stretch flex-1 min-w-0 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+
+          {/* For You */}
+          <button
+            onClick={() => { setSource({ type: 'for_you' }); setListMenuPos(null) }}
+            className={cn(
+              'flex items-center px-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0',
+              isForYou
+                ? 'text-(--color-coral) border-(--color-coral)'
+                : 'text-(--color-text-tertiary) border-transparent hover:text-(--color-text-secondary)',
+            )}
+          >
+            Senin İçin
+          </button>
 
           {/* Following */}
           <button
@@ -416,7 +425,7 @@ export default function HomePage() {
               className={cn(
                 'flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors',
                 sort !== 'chronological' || showSortMenu
-                  ? 'text-(--color-coral) bg-(--color-blush)/50'
+                  ? 'text-(--color-coral) bg-(--color-blush)/50 dark:bg-(--color-coral)/12'
                   : 'text-(--color-text-tertiary) hover:bg-(--color-background-secondary) hover:text-(--color-text-secondary)',
               )}
             >
@@ -471,8 +480,13 @@ export default function HomePage() {
       {headerEl}
 
       {/* ── Context bar ── */}
-      {(activeFilters > 0 || isFederated) && (
+      {(activeFilters > 0 || isFederated || isForYou) && (
         <div className="flex items-center gap-2 px-4 py-2 border-b border-(--color-border-secondary) bg-(--color-background-secondary)/40 text-xs text-(--color-text-tertiary)">
+          {isForYou && (
+            <span className="px-2 py-0.5 rounded-full bg-(--color-coral)/8 text-(--color-coral) border border-(--color-coral)/15">
+              Akıllı sıralama
+            </span>
+          )}
           {isFederated && (
             <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-teal-500/8 text-teal-600 dark:text-teal-400 border border-teal-500/15">
               <GitBranch className="w-3 h-3" />

@@ -34,7 +34,7 @@ function VerifyEmailContent() {
         })
         if (res.ok || res.redirected) {
           setStatus('success')
-          setTimeout(() => router.push('/home'), 2000)
+          setTimeout(() => router.push('/onboarding'), 2000)
         } else {
           const data = await res.json().catch(() => ({})) as { error?: string }
           setErrorMsg(data.error ?? 'Doğrulama başarısız.')
@@ -73,7 +73,7 @@ function VerifyEmailContent() {
   if (status === 'verifying') {
     return (
       <div className="space-y-4 text-center py-4">
-        <Loader2 className="w-10 h-10 animate-spin mx-auto" style={{ color: '#E8593C' }} />
+        <Loader2 className="w-10 h-10 animate-spin mx-auto" style={{ color: 'var(--color-coral)' }} />
         <p className="text-sm text-(--color-text-tertiary)">E-posta adresi doğrulanıyor…</p>
       </div>
     )
@@ -117,7 +117,7 @@ function VerifyEmailContent() {
       <div className="space-y-6 text-center">
         <div className="flex justify-center">
           <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(232, 89, 60, 0.1)' }}>
-            <Mail className="w-7 h-7" style={{ color: '#E8593C' }} />
+            <Mail className="w-7 h-7" style={{ color: 'var(--color-coral)' }} />
           </div>
         </div>
         <div>
@@ -155,7 +155,7 @@ function VerifyEmailContent() {
         <h1 className="text-xl font-bold text-(--color-text-primary) mb-1" style={{ fontFamily: 'var(--font-outfit)' }}>Doğrulama başarısız</h1>
         <p className="text-sm text-(--color-text-tertiary)">{errorMsg}</p>
       </div>
-      <Link href="/login" className="text-sm font-semibold" style={{ color: '#E8593C' }}>
+      <Link href="/login" className="text-sm font-semibold" style={{ color: 'var(--color-coral)' }}>
         Giriş sayfasına dön
       </Link>
     </div>
@@ -164,7 +164,7 @@ function VerifyEmailContent() {
 
 export default function VerifyEmailPage() {
   return (
-    <Suspense fallback={<div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#E8593C' }} /></div>}>
+    <Suspense fallback={<div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--color-coral)' }} /></div>}>
       <VerifyEmailContent />
     </Suspense>
   )

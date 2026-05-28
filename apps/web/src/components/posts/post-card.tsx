@@ -3,7 +3,7 @@
 import { useState, useReducer, useEffect, useRef, memo, Fragment } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Heart, Repeat2, MessageCircle, Bookmark, MoreHorizontal, Pencil, Trash2, Check, X, Eye, Users, Lock, CornerDownRight, Feather, BarChart2, Pin, PinOff, Loader2, Languages, UserCheck, Flag, Globe, Link2, Code2, FolderPlus, Plus, Play, Pause, Volume2, Volume1, VolumeX, Maximize, Minimize, PictureInPicture2, MapPin, AlertTriangle, Star } from 'lucide-react'
+import { Heart, Repeat2, MessageCircle, Bookmark, MoreHorizontal, Pencil, Trash2, Check, X, Eye, Users, Lock, CornerDownRight, Feather, BarChart2, Pin, PinOff, Loader2, Languages, UserCheck, Flag, Globe, Link2, Code2, FolderPlus, Plus, Play, Pause, Volume2, Volume1, VolumeX, Maximize, Minimize, PictureInPicture2, MapPin, AlertTriangle, Star, LayoutTemplate } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -12,10 +12,21 @@ import type { FilterResult } from '@/lib/keyword-filters'
 import { ReportModal } from '@/components/report-modal'
 import { CodeBlock } from '@/components/ui/code-block'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useUserPrefs } from '@/lib/user-prefs-context'
+import { triggerHaptic } from '@/hooks/use-haptics'
 import { MediaLightbox } from '@/components/ui/media-lightbox'
 import { toast } from 'sonner'
+
+export const FLAIR_COLORS: Record<string, string> = {
+  coral:  'bg-red-50 text-red-600 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900',
+  teal:   'bg-teal-50 text-teal-600 border-teal-200 dark:bg-teal-950/30 dark:text-teal-400 dark:border-teal-900',
+  blue:   'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-900',
+  purple: 'bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-900',
+  green:  'bg-green-50 text-green-600 border-green-200 dark:bg-green-950/30 dark:text-green-400 dark:border-green-900',
+  orange: 'bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-900',
+  red:    'bg-red-100 text-red-700 border-red-300 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800',
+  zinc:   'bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700',
+}
 
 interface PostCardProps {
   post: Post
@@ -28,6 +39,7 @@ interface PostCardProps {
   onPinChange?: (postId: string, pinned: boolean) => void
   hideActions?: boolean
   detail?: boolean
+  communityPin?: { isPinned: boolean; onToggle: () => Promise<void> }
 }
 
 const RICH_TOKEN = /(#[a-zA-ZğüşıöçĞÜŞİÖÇ0-9_]+|@[a-zA-Z0-9._-]+)/g
@@ -167,7 +179,7 @@ function renderInlineText(text: string, keyPrefix: string) {
       if (rp.startsWith('#')) {
         const tag = rp.slice(1).toLowerCase()
         return (
-          <Link key={`${keyPrefix}-r-${ii}-${ri}`} href={`/hashtag/${tag}`} className="text-(--color-coral) hover:underline" onClick={(e) => e.stopPropagation()}>
+          <Link key={`${keyPrefix}-r-${ii}-${ri}`} href={`/hashtag/${encodeURIComponent(tag)}`} className="text-(--color-coral) hover:underline" onClick={(e) => e.stopPropagation()}>
             {rp}
           </Link>
         )
@@ -323,300 +335,48 @@ function MusicCard({ preview }: { preview: NonNullable<Post['linkPreview']> }) {
   )
 }
 
-const VIDEO_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2]
+type EditHistoryEntry = { id: string; content: string; contentWarning: string | null; editedAt: string }
 
-function InlineVideoPlayer({
-  url,
-  thumbnailUrl,
-  width,
-  height,
-  square = false,
-}: {
-  url: string
-  thumbnailUrl?: string | null
-  width?: number | null
-  height?: number | null
-  square?: boolean
-}) {
-  const wrapRef = useRef<HTMLDivElement>(null)
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const [playing, setPlaying] = useState(false)
-  const [muted, setMuted] = useState(false)
-  const [volume, setVolume] = useState(1)
-  const [showVolume, setShowVolume] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [buffered, setBuffered] = useState(0)
-  const [duration, setDuration] = useState(0)
-  const [currentTime, setCurrentTime] = useState(0)
-  const [fullscreen, setFullscreen] = useState(false)
-  const [speed, setSpeed] = useState(1)
-  const [speedOpen, setSpeedOpen] = useState(false)
-  const [pip, setPip] = useState(false)
-  const [waiting, setWaiting] = useState(false)
+type DiffPart = { text: string; type: 'same' | 'added' | 'removed' }
 
-  const pipSupported = typeof document !== 'undefined' && 'pictureInPictureEnabled' in document
-
-  useEffect(() => {
-    const el = videoRef.current
-    if (!el) return
-    const onFS = () => setFullscreen(!!document.fullscreenElement)
-    document.addEventListener('fullscreenchange', onFS)
-    return () => document.removeEventListener('fullscreenchange', onFS)
-  }, [])
-
-  useEffect(() => {
-    const el = videoRef.current
-    if (!el) return
-    const onPip = () => setPip(true)
-    const onPipLeave = () => setPip(false)
-    el.addEventListener('enterpictureinpicture', onPip)
-    el.addEventListener('leavepictureinpicture', onPipLeave)
-    return () => {
-      el.removeEventListener('enterpictureinpicture', onPip)
-      el.removeEventListener('leavepictureinpicture', onPipLeave)
-    }
-  }, [])
-
-  useEffect(() => {
-    const wrap = wrapRef.current
-    if (!wrap) return
-    function onKey(e: KeyboardEvent) {
-      const el = videoRef.current
-      if (!el) return
-      if (!fullscreen && !wrap!.matches(':hover')) return
-      if (e.key === ' ') { e.preventDefault(); playing ? el.pause() : void el.play() }
-      else if (e.key === 'ArrowLeft') { e.preventDefault(); el.currentTime = Math.max(0, el.currentTime - 5) }
-      else if (e.key === 'ArrowRight') { e.preventDefault(); el.currentTime = Math.min(el.duration, el.currentTime + 5) }
-      else if (e.key === 'm' || e.key === 'M') { el.muted = !el.muted; setMuted(el.muted) }
-      else if (e.key === 'f' || e.key === 'F') { doToggleFS() }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [playing, fullscreen])
-
-  function togglePlay() {
-    const el = videoRef.current
-    if (!el) return
-    playing ? el.pause() : void el.play()
-  }
-
-  let clickTimer: ReturnType<typeof setTimeout> | null = null
-  function handleVideoClick(e: React.MouseEvent) {
-    e.stopPropagation()
-    if (clickTimer) {
-      clearTimeout(clickTimer)
-      clickTimer = null
-      doToggleFS()
+function wordDiff(oldText: string, newText: string): DiffPart[] {
+  const oldWords = oldText.split(/(\s+)/)
+  const newWords = newText.split(/(\s+)/)
+  const m = oldWords.length, n = newWords.length
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0))
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = oldWords[i - 1] === newWords[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1])
+  const result: DiffPart[] = []
+  let i = m, j = n
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldWords[i - 1] === newWords[j - 1]) {
+      result.unshift({ text: oldWords[i - 1], type: 'same' }); i--; j--
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      result.unshift({ text: newWords[j - 1], type: 'added' }); j--
     } else {
-      clickTimer = setTimeout(() => { clickTimer = null; togglePlay() }, 200)
+      result.unshift({ text: oldWords[i - 1], type: 'removed' }); i--
     }
   }
-
-  function doToggleFS() {
-    const wrap = wrapRef.current
-    if (!wrap) return
-    if (!document.fullscreenElement) { void wrap.requestFullscreen() }
-    else { void document.exitFullscreen() }
-  }
-
-  function togglePip() {
-    const el = videoRef.current
-    if (!el) return
-    if (document.pictureInPictureElement) { void document.exitPictureInPicture() }
-    else { void el.requestPictureInPicture() }
-  }
-
-  function applySpeed(s: number) {
-    setSpeed(s)
-    setSpeedOpen(false)
-    if (videoRef.current) videoRef.current.playbackRate = s
-  }
-
-  function changeVolume(v: number) {
-    setVolume(v)
-    if (videoRef.current) {
-      videoRef.current.volume = v
-      videoRef.current.muted = v === 0
-      setMuted(v === 0)
-    }
-  }
-
-  function formatDuration(s: number) {
-    const m = Math.floor(s / 60)
-    const sec = Math.floor(s % 60)
-    return `${m}:${sec.toString().padStart(2, '0')}`
-  }
-
-  const aspectStyle = width && height ? { aspectRatio: `${width}/${height}` } : undefined
-
-  return (
-    <div
-      ref={wrapRef}
-      className={cn(
-        'relative group bg-black rounded-xl overflow-hidden',
-        fullscreen ? 'h-screen w-screen' : square ? 'w-full aspect-square' : 'w-full',
-      )}
-      style={!fullscreen && !square ? aspectStyle : undefined}
-    >
-      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-      <video
-        ref={videoRef}
-        src={url}
-        poster={thumbnailUrl ?? undefined}
-        preload="metadata"
-        playsInline
-        className={cn(
-          'w-full cursor-pointer',
-          fullscreen ? 'h-full object-contain' : square ? 'absolute inset-0 h-full object-cover' : 'max-h-[480px] object-contain',
-        )}
-        onClick={handleVideoClick}
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        onEnded={() => setPlaying(false)}
-        onWaiting={() => setWaiting(true)}
-        onPlaying={() => setWaiting(false)}
-        onTimeUpdate={() => {
-          const el = videoRef.current
-          if (!el || !el.duration) return
-          setCurrentTime(el.currentTime)
-          setProgress(el.currentTime / el.duration)
-          if (el.buffered.length > 0) setBuffered(el.buffered.end(el.buffered.length - 1) / el.duration)
-        }}
-        onLoadedMetadata={() => {
-          const el = videoRef.current
-          if (el) setDuration(el.duration)
-        }}
-        onVolumeChange={() => {
-          const el = videoRef.current
-          if (el) { setMuted(el.muted); setVolume(el.muted ? 0 : el.volume) }
-        }}
-      />
-
-      {/* Loading spinner */}
-      {waiting && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <Loader2 className="w-8 h-8 text-white/80 animate-spin" />
-        </div>
-      )}
-
-      {/* Center play/pause indicator */}
-      {!playing && !waiting && (
-        <button
-          onClick={handleVideoClick}
-          className="absolute inset-0 flex items-center justify-center"
-        >
-          <div className="w-14 h-14 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center">
-            <Play className="w-6 h-6 text-white fill-white ml-1" />
-          </div>
-        </button>
-      )}
-
-      {/* Controls overlay — shows on hover */}
-      <div className={cn(
-        'absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 transition-opacity duration-200',
-        'opacity-0 group-hover:opacity-100',
-        fullscreen && 'opacity-100',
-      )}>
-        {/* Progress bar */}
-        <div className="relative h-1 rounded-full bg-white/20 mb-3 cursor-pointer"
-          onClick={(e) => {
-            const el = videoRef.current
-            if (!el) return
-            const rect = e.currentTarget.getBoundingClientRect()
-            el.currentTime = ((e.clientX - rect.left) / rect.width) * el.duration
-          }}
-        >
-          <div className="absolute inset-y-0 left-0 bg-white/30 rounded-full" style={{ width: `${buffered * 100}%` }} />
-          <div className="absolute inset-y-0 left-0 bg-white rounded-full" style={{ width: `${progress * 100}%` }} />
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Play/pause */}
-          <button
-            onClick={(e) => { e.stopPropagation(); togglePlay() }}
-            className="text-white/90 hover:text-white"
-          >
-            {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-current" />}
-          </button>
-
-          {/* Time */}
-          <span className="text-[11px] text-white/70 tabular-nums">
-            {formatDuration(currentTime)} / {formatDuration(duration)}
-          </span>
-
-          <div className="flex-1" />
-
-          {/* Speed selector */}
-          <div className="relative">
-            <button
-              onClick={(e) => { e.stopPropagation(); setSpeedOpen((v) => !v) }}
-              className="text-[11px] text-white/75 hover:text-white font-mono"
-            >
-              {speed}×
-            </button>
-            {speedOpen && (
-              <div className="absolute bottom-full right-0 mb-1 bg-black/80 rounded-lg overflow-hidden py-1 z-10">
-                {VIDEO_SPEEDS.map((s) => (
-                  <button
-                    key={s}
-                    onClick={(e) => { e.stopPropagation(); applySpeed(s) }}
-                    className={cn('block w-full px-3 py-1 text-[11px] text-left hover:bg-white/10', speed === s ? 'text-white font-bold' : 'text-white/70')}
-                  >
-                    {s}×
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Volume */}
-          <div
-            className="relative flex items-center gap-1.5"
-            onMouseEnter={() => setShowVolume(true)}
-            onMouseLeave={() => setShowVolume(false)}
-          >
-            {showVolume && (
-              <input
-                type="range" min={0} max={1} step={0.05} value={volume}
-                onChange={(e) => changeVolume(parseFloat(e.target.value))}
-                onClick={(e) => e.stopPropagation()}
-                className="w-16 h-1 accent-white cursor-pointer"
-              />
-            )}
-            <button
-              onClick={(e) => { e.stopPropagation(); const el = videoRef.current; if (el) { el.muted = !el.muted; setMuted(el.muted) } }}
-              className="text-white/75 hover:text-white"
-            >
-              {muted || volume === 0 ? <VolumeX className="w-3.5 h-3.5" /> : volume < 0.5 ? <Volume1 className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
-            </button>
-          </div>
-
-          {/* PiP */}
-          {pipSupported && (
-            <button
-              onClick={(e) => { e.stopPropagation(); togglePip() }}
-              className={cn('text-white/75 hover:text-white', pip && 'text-white')}
-              title="Picture in Picture"
-            >
-              <PictureInPicture2 className="w-3.5 h-3.5" />
-            </button>
-          )}
-
-          {/* Fullscreen */}
-          <button
-            onClick={(e) => { e.stopPropagation(); doToggleFS() }}
-            className="text-white/75 hover:text-white"
-            title={fullscreen ? 'Küçült (F)' : 'Tam ekran (F)'}
-          >
-            {fullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
+  return result
 }
 
-type EditHistoryEntry = { id: string; content: string; contentWarning: string | null; editedAt: string }
+function DiffView({ oldText, newText }: { oldText: string; newText: string }) {
+  const parts = wordDiff(oldText, newText)
+  return (
+    <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+      {parts.map((p, i) => (
+        p.type === 'same' ? (
+          <span key={i} className="text-(--color-text-secondary)">{p.text}</span>
+        ) : p.type === 'added' ? (
+          <span key={i} className="text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 rounded px-0.5">{p.text}</span>
+        ) : (
+          <span key={i} className="text-red-500 bg-red-500/10 rounded px-0.5 line-through opacity-70">{p.text}</span>
+        )
+      ))}
+    </p>
+  )
+}
 
 type PostCardState = {
   warnDismissed: boolean
@@ -700,6 +460,7 @@ type PostCardAction =
   | { type: 'EDIT_HISTORY_LOADED'; edits: EditHistoryEntry[] }
   | { type: 'CW_TOGGLE' }
   | { type: 'POLL_VOTED'; poll: Poll }
+  | { type: 'POLL_RETRACTED'; poll: Poll }
   | { type: 'VOTING'; value: boolean }
   | { type: 'EMOJI_PICKER_TOGGLE' }
   | { type: 'EMOJI_PICKER_CLOSE' }
@@ -709,6 +470,347 @@ type PostCardAction =
   | { type: 'TRANSLATE_DONE'; text: string; from: string }
   | { type: 'TRANSLATE_CLOSE' }
   | { type: 'TRANSLATING'; value: boolean }
+
+// ─── InlineVideoPlayer ────────────────────────────────────────────────────────
+
+const VIDEO_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2]
+
+function formatVideoDuration(s: number) {
+  if (!isFinite(s) || s < 0) return '0:00'
+  const m = Math.floor(s / 60)
+  return `${m}:${Math.floor(s % 60).toString().padStart(2, '0')}`
+}
+
+function InlineVideoPlayer({ url, previewUrl, altText, square }: {
+  url: string
+  previewUrl: string | null
+  altText: string | null
+  square: boolean
+}) {
+  const [playing, setPlaying] = useState(false)
+  const [muted, setMuted] = useState(true)
+  const [volume, setVolume] = useState(1)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [buffered, setBuffered] = useState(0)
+  const [showControls, setShowControls] = useState(false)
+  const [fullscreen, setFullscreen] = useState(false)
+  const [waiting, setWaiting] = useState(false)
+  const [speed, setSpeed] = useState(1)
+  const [speedOpen, setSpeedOpen] = useState(false)
+  const [showVolume, setShowVolume] = useState(false)
+  const [pip, setPip] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const dblTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    const el = videoRef.current
+    if (!el) return
+    const onTime = () => {
+      setCurrentTime(el.currentTime)
+      if (el.buffered.length > 0 && el.duration > 0)
+        setBuffered((el.buffered.end(el.buffered.length - 1) / el.duration) * 100)
+    }
+    const onLoad = () => setDuration(isFinite(el.duration) ? el.duration : 0)
+    const onEnded = () => { setPlaying(false); setCurrentTime(0) }
+    const onFS = () => setFullscreen(!!document.fullscreenElement)
+    const onWait = () => setWaiting(true)
+    const onPlay = () => setWaiting(false)
+    const onPipEnter = () => setPip(true)
+    const onPipLeave = () => setPip(false)
+    el.addEventListener('timeupdate', onTime)
+    el.addEventListener('loadedmetadata', onLoad)
+    el.addEventListener('durationchange', onLoad)
+    el.addEventListener('ended', onEnded)
+    el.addEventListener('waiting', onWait)
+    el.addEventListener('playing', onPlay)
+    el.addEventListener('canplay', onPlay)
+    el.addEventListener('enterpictureinpicture', onPipEnter)
+    el.addEventListener('leavepictureinpicture', onPipLeave)
+    document.addEventListener('fullscreenchange', onFS)
+    return () => {
+      el.removeEventListener('timeupdate', onTime)
+      el.removeEventListener('loadedmetadata', onLoad)
+      el.removeEventListener('durationchange', onLoad)
+      el.removeEventListener('ended', onEnded)
+      el.removeEventListener('waiting', onWait)
+      el.removeEventListener('playing', onPlay)
+      el.removeEventListener('canplay', onPlay)
+      el.removeEventListener('enterpictureinpicture', onPipEnter)
+      el.removeEventListener('leavepictureinpicture', onPipLeave)
+      document.removeEventListener('fullscreenchange', onFS)
+    }
+  }, [])
+
+  // Keyboard shortcuts when hovering
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const el = videoRef.current
+      const wrap = wrapRef.current
+      if (!el || !wrap) return
+      if (!wrap.matches(':hover') && !fullscreen) return
+      if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'TEXTAREA') return
+      switch (e.code) {
+        case 'Space': e.preventDefault(); doTogglePlay(); break
+        case 'ArrowRight': e.preventDefault(); el.currentTime = Math.min(el.duration, el.currentTime + 5); revealControls(); break
+        case 'ArrowLeft': e.preventDefault(); el.currentTime = Math.max(0, el.currentTime - 5); revealControls(); break
+        case 'KeyM': e.preventDefault(); doToggleMute(); break
+        case 'KeyF': e.preventDefault(); doToggleFS(); break
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullscreen])
+
+  function revealControls() {
+    setShowControls(true)
+    if (hideTimer.current) clearTimeout(hideTimer.current)
+    hideTimer.current = setTimeout(() => setShowControls(false), 3000)
+  }
+
+  function doTogglePlay() {
+    const el = videoRef.current
+    if (!el) return
+    if (el.paused) { void el.play(); setPlaying(true) } else { el.pause(); setPlaying(false) }
+  }
+
+  function doToggleMute() {
+    const el = videoRef.current
+    if (!el) return
+    el.muted = !el.muted
+    setMuted(el.muted)
+  }
+
+  function doToggleFS() {
+    if (fullscreen) void document.exitFullscreen()
+    else void wrapRef.current?.requestFullscreen()
+  }
+
+  function handleWrapClick(e: React.MouseEvent) {
+    e.stopPropagation()
+    revealControls()
+    // double-click → fullscreen (single click → play/pause with 200ms guard)
+    if (dblTimer.current) {
+      clearTimeout(dblTimer.current)
+      dblTimer.current = null
+      doToggleFS()
+      return
+    }
+    dblTimer.current = setTimeout(() => {
+      dblTimer.current = null
+      doTogglePlay()
+    }, 200)
+  }
+
+  function seek(e: React.MouseEvent<HTMLDivElement>) {
+    e.stopPropagation()
+    const el = videoRef.current
+    if (!el || !duration) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    el.currentTime = Math.max(0, Math.min(duration, ((e.clientX - rect.left) / rect.width) * duration))
+    revealControls()
+  }
+
+  function changeVolume(e: React.MouseEvent<HTMLDivElement>) {
+    e.stopPropagation()
+    const el = videoRef.current
+    if (!el) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const v = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+    el.volume = v
+    el.muted = v === 0
+    setVolume(v)
+    setMuted(v === 0)
+  }
+
+  function applySpeed(s: number) {
+    const el = videoRef.current
+    if (el) el.playbackRate = s
+    setSpeed(s)
+    setSpeedOpen(false)
+  }
+
+  function togglePip(e: React.MouseEvent) {
+    e.stopPropagation()
+    const el = videoRef.current
+    if (!el) return
+    if (document.pictureInPictureElement) void document.exitPictureInPicture()
+    else void el.requestPictureInPicture()
+  }
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0
+  const visible = showControls || !playing
+  const pipSupported = typeof document !== 'undefined' && 'pictureInPictureEnabled' in document
+
+  return (
+    <div
+      ref={wrapRef}
+      className={cn('relative bg-black select-none', !fullscreen && square && 'aspect-square', 'overflow-hidden')}
+      onClick={handleWrapClick}
+      onMouseMove={revealControls}
+      onMouseLeave={() => {
+        if (hideTimer.current) clearTimeout(hideTimer.current)
+        setShowControls(false)
+        setShowVolume(false)
+        setSpeedOpen(false)
+      }}
+    >
+      <video
+        ref={videoRef}
+        src={url}
+        poster={previewUrl ?? undefined}
+        muted={muted}
+        playsInline
+        preload="metadata"
+        className={cn(
+          'w-full',
+          fullscreen
+            ? 'h-full object-contain'
+            : square ? 'absolute inset-0 h-full object-cover' : 'max-h-[480px] object-contain',
+        )}
+      />
+
+      {/* Buffering spinner */}
+      {waiting && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <Loader2 className="w-8 h-8 text-white/70 animate-spin" />
+        </div>
+      )}
+
+      {/* Centre play overlay when paused */}
+      {!playing && !waiting && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/25 pointer-events-none">
+          <div className="w-14 h-14 rounded-full bg-black/55 backdrop-blur-sm flex items-center justify-center">
+            <Play className="w-6 h-6 text-white ml-0.5" />
+          </div>
+        </div>
+      )}
+
+      {/* Control bar */}
+      <div
+        className={cn(
+          'absolute bottom-0 left-0 right-0 transition-opacity duration-200',
+          visible ? 'opacity-100' : 'opacity-0 pointer-events-none',
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="bg-gradient-to-t from-black/80 via-black/50 to-transparent pt-10 pb-3 px-3">
+
+          {/* Seekbar */}
+          <div
+            className="h-1.5 rounded-full bg-white/25 mb-3 cursor-pointer group/seek relative"
+            onClick={seek}
+          >
+            <div className="absolute inset-y-0 left-0 rounded-full bg-white/35 pointer-events-none" style={{ width: `${buffered}%` }} />
+            <div className="absolute inset-y-0 left-0 rounded-full bg-white pointer-events-none" style={{ width: `${progress}%` }}>
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3.5 h-3.5 rounded-full bg-white opacity-0 group-hover/seek:opacity-100 transition-opacity shadow-sm" />
+            </div>
+          </div>
+
+          {/* Button row */}
+          <div className="flex items-center gap-0.5">
+            {/* Play/Pause */}
+            <button
+              onClick={(e) => { e.stopPropagation(); doTogglePlay(); revealControls() }}
+              className="w-8 h-8 flex items-center justify-center text-white/90 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
+            >
+              {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+            </button>
+
+            {/* Time */}
+            <span className="text-[11px] text-white/75 tabular-nums px-1.5 flex-1">
+              {formatVideoDuration(currentTime)} / {formatVideoDuration(duration)}
+            </span>
+
+            {altText && (
+              <span className="text-[10px] font-semibold px-1 py-0.5 rounded bg-white/20 text-white mr-0.5">ALT</span>
+            )}
+
+            {/* Speed */}
+            <div className="relative">
+              <button
+                onClick={(e) => { e.stopPropagation(); setSpeedOpen((v) => !v); setShowVolume(false) }}
+                className="h-8 px-2 flex items-center text-[11px] font-bold text-white/75 hover:text-white rounded-lg hover:bg-white/10 transition-colors tabular-nums"
+              >
+                {speed === 1 ? '1×' : `${speed}×`}
+              </button>
+              {speedOpen && (
+                <div className="absolute bottom-full right-0 mb-1.5 bg-black/90 backdrop-blur-sm rounded-xl py-1 w-16 overflow-hidden border border-white/10 z-10">
+                  {VIDEO_SPEEDS.map((s) => (
+                    <button
+                      key={s}
+                      onClick={(e) => { e.stopPropagation(); applySpeed(s) }}
+                      className={cn(
+                        'w-full py-1.5 text-center text-[12px] transition-colors hover:bg-white/15',
+                        speed === s ? 'text-white font-bold' : 'text-white/65',
+                      )}
+                    >
+                      {s === 1 ? '1×' : `${s}×`}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Volume */}
+            <div
+              className="relative flex items-center"
+              onMouseEnter={() => setShowVolume(true)}
+              onMouseLeave={() => setShowVolume(false)}
+            >
+              <button
+                onClick={(e) => { e.stopPropagation(); doToggleMute() }}
+                className="w-8 h-8 flex items-center justify-center text-white/75 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
+              >
+                {muted || volume === 0
+                  ? <VolumeX className="w-4 h-4" />
+                  : volume < 0.5
+                    ? <Volume1 className="w-4 h-4" />
+                    : <Volume2 className="w-4 h-4" />}
+              </button>
+              {showVolume && !muted && (
+                <div
+                  className="w-20 h-1.5 rounded-full bg-white/25 cursor-pointer group/vol mr-1"
+                  onClick={changeVolume}
+                >
+                  <div className="h-full rounded-full bg-white relative" style={{ width: `${muted ? 0 : volume * 100}%` }}>
+                    <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3 h-3 rounded-full bg-white opacity-0 group-hover/vol:opacity-100 transition-opacity shadow-sm" />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Picture-in-Picture */}
+            {pipSupported && (
+              <button
+                onClick={togglePip}
+                className={cn(
+                  'w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors',
+                  pip ? 'text-white' : 'text-white/75 hover:text-white',
+                )}
+                title="Picture in Picture"
+              >
+                <PictureInPicture2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            {/* Fullscreen */}
+            <button
+              onClick={(e) => { e.stopPropagation(); doToggleFS() }}
+              className="w-8 h-8 flex items-center justify-center text-white/75 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
+              title={fullscreen ? 'Küçült (F)' : 'Tam ekran (F)'}
+            >
+              {fullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function postCardReducer(state: PostCardState, action: PostCardAction): PostCardState {
   switch (action.type) {
@@ -751,6 +853,7 @@ function postCardReducer(state: PostCardState, action: PostCardAction): PostCard
     case 'EDIT_HISTORY_LOADED': return { ...state, editHistory: action.edits, editHistoryLoading: false }
     case 'CW_TOGGLE':           return { ...state, cwExpanded: !state.cwExpanded }
     case 'POLL_VOTED':          return { ...state, poll: action.poll, voting: false }
+    case 'POLL_RETRACTED':      return { ...state, poll: action.poll, voting: false }
     case 'VOTING':              return { ...state, voting: action.value }
     case 'EMOJI_PICKER_TOGGLE':    return { ...state, emojiPickerOpen: !state.emojiPickerOpen, secondaryMenuOpen: !state.emojiPickerOpen ? state.secondaryMenuOpen : false }
     case 'EMOJI_PICKER_CLOSE':     return { ...state, emojiPickerOpen: false }
@@ -764,7 +867,7 @@ function postCardReducer(state: PostCardState, action: PostCardAction): PostCard
   }
 }
 
-function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filterResult, pinned, onPinChange, hideActions, detail }: PostCardProps) {
+function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filterResult, pinned, onPinChange, hideActions, detail, communityPin }: PostCardProps) {
   const router = useRouter()
   const { nsfwMode } = useUserPrefs()
   const isNsfwBlurred = post.sensitive && nsfwMode === 'blur'
@@ -847,7 +950,7 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
           onClick={() => dispatch({ type: 'WARN_DISMISS' })}
           className="w-full text-left text-sm text-(--color-text-tertiary) hover:text-(--color-text-secondary) transition-colors flex items-center gap-2"
         >
-          <span className="text-base">⚠️</span>
+          <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-500" />
           <span>İçerik filtresiyle eşleşti — görmek için tıkla</span>
         </button>
       </article>
@@ -876,6 +979,7 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
           await api.posts.unreact(post.id, prevEmoji).catch(() => {})
         }
         dispatch({ type: 'LIKE_TOGGLE', liked: true, count: likesCount + 1 })
+        void triggerHaptic('light')
         await api.posts.like(post.id)
       }
     } catch (err) {
@@ -894,6 +998,7 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
         await api.posts.unboost(post.id)
       } else {
         dispatch({ type: 'BOOST_TOGGLE', boosted: true, count: boostsCount + 1 })
+        void triggerHaptic('medium')
         await api.posts.boost(post.id)
       }
     } catch (err) {
@@ -916,6 +1021,7 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
         await api.posts.unbookmark(post.id)
       } else {
         dispatch({ type: 'BOOKMARK_SET', value: true })
+        void triggerHaptic('light')
         await api.posts.bookmark(post.id)
       }
     } catch {
@@ -1018,13 +1124,21 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
   }
 
   async function votePoll(optionId: string) {
-    if (!poll || poll.expired || poll.voted || voting) return
+    if (!poll || poll.expired || voting) return
+    const isRetract = poll.voted && poll.votedOptionIds.includes(optionId)
     dispatch({ type: 'VOTING', value: true })
     try {
-      const updated = await api.polls.vote(poll.id, [optionId])
-      dispatch({ type: 'POLL_VOTED', poll: updated })
+      if (isRetract) {
+        const updated = await api.polls.retractVote(poll.id)
+        void triggerHaptic('selection')
+        dispatch({ type: 'POLL_RETRACTED', poll: updated })
+      } else if (!poll.voted) {
+        const updated = await api.polls.vote(poll.id, [optionId])
+        void triggerHaptic('selection')
+        dispatch({ type: 'POLL_VOTED', poll: updated })
+      }
     } catch {
-      toast.error('Oy gönderilemedi.')
+      toast.error(isRetract ? 'Oy geri alınamadı.' : 'Oy gönderilemedi.')
       dispatch({ type: 'VOTING', value: false })
     }
   }
@@ -1182,55 +1296,86 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
               <span>adlı kişiye yanıt</span>
             </Link>
           )}
-          <div className={cn('flex items-center gap-1.5', detail ? 'mb-0' : 'mb-0.5')}>
-            <Link
-              href={`/${handle}`}
-              onClick={(e) => e.stopPropagation()}
-              className={cn('font-semibold hover:underline truncate', detail ? 'text-base text-(--color-text-primary)' : 'font-medium text-sm text-(--color-text-primary)')}
-              style={{ fontFamily: 'var(--font-display)' }}
-            >
-              {displayName}
-            </Link>
-            <span className={cn('text-(--color-text-tertiary) truncate', detail ? 'text-sm' : 'text-xs')}>@{handle}</span>
-            {post.author && !post.author.isLocal && (
-              <span title="Federe kullanıcı" className="flex-shrink-0 text-(--color-teal)">
-                <Globe className="w-3 h-3" />
-              </span>
-            )}
-            {!detail && <span className="text-xs text-(--color-text-tertiary)">·</span>}
-            {!detail && (
-              <Link
-                href={`/posts/${post.id}`}
-                onClick={(e) => e.stopPropagation()}
-                className="text-xs text-(--color-text-tertiary) flex-shrink-0 hover:underline"
-              >
-                {formatRelativeTime(post.createdAt)}
-              </Link>
-            )}
-            {editedAt && (
-              <button
-                onClick={openEditHistory}
-                className="text-xs text-(--color-text-tertiary) flex-shrink-0 hover:text-(--color-coral) hover:underline transition-colors"
-                title={`Düzenlendi: ${new Date(editedAt).toLocaleString('tr-TR')}`}
-              >
-                · düzenlendi
-              </button>
-            )}
-            {post.visibility !== 'public' && (
-              <span className="text-(--color-text-tertiary) flex-shrink-0" title={post.visibility}>
-                {post.visibility === 'unlisted' && <Eye className="w-3 h-3" />}
-                {post.visibility === 'followers' && <Users className="w-3 h-3" />}
-                {post.visibility === 'close_friends' && <span title="Yakın Çevre"><UserCheck className="w-3.5 h-3.5 text-emerald-500" /></span>}
-                {post.visibility === 'direct' && <Lock className="w-3 h-3" />}
-              </span>
-            )}
+          <div className={cn('flex items-start gap-1.5', detail ? 'mb-3' : 'mb-0.5')}>
+            {/* Name + handle — layout differs by mode */}
+            <div className="flex-1 min-w-0">
+              {detail ? (
+                <>
+                  <Link
+                    href={`/${handle}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-[17px] font-bold text-(--color-text-primary) hover:underline block leading-tight truncate"
+                    style={{ fontFamily: 'var(--font-display)' }}
+                  >
+                    {displayName}
+                  </Link>
+                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                    <span className="text-sm text-(--color-text-tertiary)">@{handle}</span>
+                    {post.author && !post.author.isLocal && (
+                      <span title="Federe kullanıcı" className="text-(--color-teal)"><Globe className="w-3 h-3" /></span>
+                    )}
+                    {post.visibility !== 'public' && (
+                      <span className="text-(--color-text-tertiary)" title={post.visibility}>
+                        {post.visibility === 'unlisted' && <Eye className="w-3 h-3" />}
+                        {post.visibility === 'followers' && <Users className="w-3 h-3" />}
+                        {post.visibility === 'close_friends' && <span title="Yakın Çevre"><UserCheck className="w-3.5 h-3.5 text-emerald-500" /></span>}
+                        {post.visibility === 'direct' && <Lock className="w-3 h-3" />}
+                      </span>
+                    )}
+                    {editedAt && (
+                      <button onClick={openEditHistory} title={`Düzenlendi: ${new Date(editedAt).toLocaleString('tr-TR')}`}
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium text-(--color-text-tertiary) bg-(--color-background-secondary) hover:text-(--color-coral) hover:bg-(--color-coral)/8 border border-(--color-border-secondary) hover:border-(--color-coral)/20 transition-all"
+                      >
+                        <Pencil className="w-2.5 h-2.5" />düzenlendi
+                      </button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <Link
+                    href={`/${handle}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="font-medium text-sm text-(--color-text-primary) hover:underline truncate"
+                    style={{ fontFamily: 'var(--font-display)' }}
+                  >
+                    {displayName}
+                  </Link>
+                  <span className="text-xs text-(--color-text-tertiary) truncate">@{handle}</span>
+                  {post.author && !post.author.isLocal && (
+                    <span title="Federe kullanıcı" className="flex-shrink-0 text-(--color-teal)"><Globe className="w-3 h-3" /></span>
+                  )}
+                  <span className="text-xs text-(--color-text-tertiary)">·</span>
+                  <Link href={`/posts/${post.id}`} onClick={(e) => e.stopPropagation()}
+                    className="text-xs text-(--color-text-tertiary) flex-shrink-0 hover:underline"
+                  >
+                    {formatRelativeTime(post.createdAt)}
+                  </Link>
+                  {editedAt && (
+                    <button onClick={openEditHistory} title={`Düzenlendi: ${new Date(editedAt).toLocaleString('tr-TR')}`}
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium text-(--color-text-tertiary) bg-(--color-background-secondary) hover:text-(--color-coral) hover:bg-(--color-coral)/8 border border-(--color-border-secondary) hover:border-(--color-coral)/20 transition-all flex-shrink-0"
+                    >
+                      <Pencil className="w-2.5 h-2.5" />düzenlendi
+                    </button>
+                  )}
+                  {post.visibility !== 'public' && (
+                    <span className="text-(--color-text-tertiary) flex-shrink-0" title={post.visibility}>
+                      {post.visibility === 'unlisted' && <Eye className="w-3 h-3" />}
+                      {post.visibility === 'followers' && <Users className="w-3 h-3" />}
+                      {post.visibility === 'close_friends' && <span title="Yakın Çevre"><UserCheck className="w-3.5 h-3.5 text-emerald-500" /></span>}
+                      {post.visibility === 'direct' && <Lock className="w-3 h-3" />}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
 
-            {/* Own-post menu */}
+            {/* Menus — shared between both modes, always at top-right */}
             {isOwn && (
-              <div className="ml-auto relative" onClick={(e) => e.stopPropagation()}>
+              <div className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => dispatch({ type: 'MENU_TOGGLE' })}
-                  className="p-1 rounded-full text-(--color-text-tertiary) hover:text-(--color-text-primary) hover:bg-(--color-background-secondary) opacity-0 group-hover:opacity-100 transition-all"
+                  className={cn('p-1 rounded-full text-(--color-text-tertiary) hover:text-(--color-text-primary) hover:bg-(--color-background-secondary) transition-all', !detail && 'opacity-0 group-hover:opacity-100')}
                 >
                   <MoreHorizontal className="w-4 h-4" />
                 </button>
@@ -1263,6 +1408,16 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
                       >
                         <Pencil className="w-3.5 h-3.5 text-(--color-text-tertiary)" /> Düzenle
                       </button>
+                      {communityPin && (
+                        <button
+                          onClick={() => { dispatch({ type: 'MENU_CLOSE' }); void communityPin.onToggle() }}
+                          className="w-full flex items-center gap-2 px-3.5 py-2 text-[13px] text-(--color-text-primary) hover:bg-(--color-background-secondary) transition-colors"
+                        >
+                          {communityPin.isPinned
+                            ? <><PinOff className="w-3.5 h-3.5 text-(--color-text-tertiary)" /> Sabitlemeyi Kaldır</>
+                            : <><Pin className="w-3.5 h-3.5 text-(--color-text-tertiary)" /> Topluluğa Sabitle</>}
+                        </button>
+                      )}
                       {onPinChange && (
                         <button
                           onClick={() => { dispatch({ type: 'MENU_CLOSE' }); void togglePin() }}
@@ -1292,10 +1447,10 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
 
             {/* Non-own post menu — report */}
             {!isOwn && currentActorHandle && (
-              <div className="ml-auto relative" onClick={(e) => e.stopPropagation()}>
+              <div className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => dispatch({ type: 'MENU_TOGGLE' })}
-                  className="p-1 rounded-full text-(--color-text-tertiary) hover:text-(--color-text-primary) hover:bg-(--color-background-secondary) opacity-0 group-hover:opacity-100 transition-all"
+                  className={cn('p-1 rounded-full text-(--color-text-tertiary) hover:text-(--color-text-primary) hover:bg-(--color-background-secondary) transition-all', !detail && 'opacity-0 group-hover:opacity-100')}
                 >
                   <MoreHorizontal className="w-4 h-4" />
                 </button>
@@ -1315,6 +1470,19 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
                       >
                         <Code2 className="w-3.5 h-3.5 text-(--color-text-tertiary)" /> Göm
                       </button>
+                      {communityPin && (
+                        <>
+                          <div className="my-1 border-t border-(--color-border-secondary)" />
+                          <button
+                            onClick={() => { dispatch({ type: 'MENU_CLOSE' }); void communityPin.onToggle() }}
+                            className="w-full flex items-center gap-2 px-3.5 py-2 text-[13px] text-(--color-text-primary) hover:bg-(--color-background-secondary) transition-colors"
+                          >
+                            {communityPin.isPinned
+                              ? <><PinOff className="w-3.5 h-3.5 text-(--color-text-tertiary)" /> Sabitlemeyi Kaldır</>
+                              : <><Pin className="w-3.5 h-3.5 text-(--color-text-tertiary)" /> Topluluğa Sabitle</>}
+                          </button>
+                        </>
+                      )}
                       <div className="my-1 border-t border-(--color-border-secondary)" />
                       <button
                         onClick={() => dispatch({ type: 'REPORT_OPEN' })}
@@ -1334,7 +1502,7 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
               onClick={(e) => { e.stopPropagation(); dispatch({ type: 'CW_TOGGLE' }) }}
               className="mb-2 flex items-center gap-1.5 text-xs text-(--color-text-secondary) bg-(--color-background-secondary) border border-(--color-border-secondary) rounded-full px-2.5 py-1 hover:border-(--color-coral)/50 transition-colors"
             >
-              <span>⚠</span>
+              <AlertTriangle className="w-3 h-3 flex-shrink-0" />
               <span className="font-medium">{post.contentWarning}</span>
               <span className="text-(--color-text-tertiary) ml-1">{cwExpanded ? '(gizle)' : '(göster)'}</span>
             </button>
@@ -1359,10 +1527,15 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
                 <div className="flex flex-col gap-2 mb-2">
                   <textarea
                     value={editContent}
-                    onChange={(e) => dispatch({ type: 'EDIT_CONTENT', text: e.target.value })}
+                    onChange={(e) => {
+                      dispatch({ type: 'EDIT_CONTENT', text: e.target.value })
+                      e.target.style.height = 'auto'
+                      e.target.style.height = `${e.target.scrollHeight}px`
+                    }}
+                    ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px` } }}
                     rows={3}
                     maxLength={500}
-                    className="w-full resize-none rounded-lg border border-(--color-coral) bg-(--color-background-primary) px-3 py-2 text-sm text-(--color-text-primary) focus:outline-none transition-colors"
+                    className="w-full resize-none rounded-lg border border-(--color-coral) bg-(--color-background) px-3 py-2 text-sm text-(--color-text-primary) focus:outline-none transition-colors overflow-hidden"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void saveEdit()
                       if (e.key === 'Escape') dispatch({ type: 'EDIT_CLOSE' })
@@ -1379,7 +1552,7 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
                         <option value="public">🌍 Herkese açık</option>
                         <option value="unlisted">🔗 Listesiz</option>
                         <option value="followers">👥 Takipçiler</option>
-                        <option value="close_friends">⭐ Yakın arkadaşlar</option>
+                        <option value="close_friends">Yakın arkadaşlar</option>
                       </select>
                       <span className="text-xs text-(--color-text-tertiary)">{500 - editContent.length}</span>
                     </div>
@@ -1399,11 +1572,6 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
                 </div>
               ) : (
                 <div className={cn('relative', isNsfwBlurred && !nsfwRevealed && 'select-none')}>
-                  {detail && (
-                    <p className="text-xs text-(--color-text-tertiary) mb-3">
-                      {new Date(post.createdAt).toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  )}
                   <div className={cn(detail ? 'text-base' : 'text-sm', 'text-(--color-text-primary) leading-relaxed whitespace-pre-wrap break-words', isNsfwBlurred && !nsfwRevealed && 'blur-sm pointer-events-none')}>
                     {renderRichContent(
                       post.linkPreview
@@ -1447,19 +1615,32 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
 
               {post.media && post.media.length > 0 && (
                 <>
-                  {/* Video — renders inline player, not in lightbox */}
-                  {post.media.length === 1 && post.media[0]!.mimeType.startsWith('video/') ? (
-                    <div className="mt-2 rounded-xl overflow-hidden">
-                      <InlineVideoPlayer
-                        url={post.media[0]!.url}
-                        thumbnailUrl={post.media[0]!.previewUrl}
-                        width={post.media[0]!.width}
-                        height={post.media[0]!.height}
-                      />
-                    </div>
-                  ) : (
                   <div className={cn('relative grid gap-1 mt-2 rounded-xl overflow-hidden', post.media.length === 1 ? 'grid-cols-1' : 'grid-cols-2')}>
-                    {post.media.map((m, idx) => (
+                    {post.media.map((m, idx) => {
+                      const isVideo = m.mimeType?.startsWith('video/')
+                      if (isVideo) {
+                        return (
+                          <div
+                            key={m.id}
+                            className={cn('relative bg-black overflow-hidden', post.media.length > 1 && 'aspect-square')}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {isNsfwBlurred && !nsfwRevealed ? (
+                              <div className="aspect-video flex items-center justify-center bg-black/50">
+                                <Play className="w-8 h-8 text-white/40" />
+                              </div>
+                            ) : (
+                              <InlineVideoPlayer
+                                url={m.url}
+                                previewUrl={m.previewUrl}
+                                altText={m.altText}
+                                square={post.media.length > 1}
+                              />
+                            )}
+                          </div>
+                        )
+                      }
+                      return (
                       <button
                         key={m.id}
                         type="button"
@@ -1490,7 +1671,8 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
                           </>
                         )}
                       </button>
-                    ))}
+                      )
+                    })}
                     {isNsfwBlurred && !nsfwRevealed && (
                       <button
                         onClick={(e) => { e.stopPropagation(); dispatch({ type: 'NSFW_REVEAL' }) }}
@@ -1502,7 +1684,6 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
                       </button>
                     )}
                   </div>
-                  )}
                   {lightbox && (
                     <MediaLightbox
                       items={post.media}
@@ -1514,6 +1695,41 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
                   )}
                 </>
               )}
+
+            {/* Flair pill */}
+            {post.flair && (
+              <div className="mt-2">
+                <span className={cn(
+                  'inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border',
+                  FLAIR_COLORS[post.flair.color] ?? FLAIR_COLORS.coral,
+                )}>
+                  {post.flair.emoji && <span>{post.flair.emoji}</span>}
+                  {post.flair.name}
+                </span>
+              </div>
+            )}
+
+            {/* Template data card */}
+            {!editOpen && post.templateData && Object.keys(post.templateData).filter((k) => k !== '_templateId').length > 0 && (
+              <div className="mt-2.5 rounded-xl border border-(--color-border) bg-(--color-background-secondary) overflow-hidden">
+                <div className="px-3 py-2 border-b border-(--color-border-secondary) flex items-center gap-1.5">
+                  <LayoutTemplate className="w-3 h-3 text-(--color-coral)" />
+                  <span className="text-[11px] font-semibold text-(--color-text-tertiary) uppercase tracking-wide">Şablonlu Gönderi</span>
+                </div>
+                <div className="px-3 py-2.5 space-y-2">
+                  {Object.entries(post.templateData)
+                    .filter(([k]) => k !== '_templateId')
+                    .map(([key, value]) => (
+                      <div key={key}>
+                        <span className="text-[10px] font-semibold text-(--color-text-tertiary) uppercase tracking-wide block mb-0.5">
+                          {key.replace(/_/g, ' ')}
+                        </span>
+                        <span className="text-[13px] text-(--color-text-primary) leading-relaxed whitespace-pre-wrap">{value}</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
 
             {/* Link preview */}
             {!editOpen && post.linkPreview && !post.media?.length && (
@@ -1562,6 +1778,20 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
                   </a>
                 )
             )}
+            {/* Location chip */}
+            {post.locationName && (
+              <div className="mt-2">
+                <Link
+                  href={`/location/${encodeURIComponent(post.locationName)}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center gap-1 text-[11px] text-(--color-text-tertiary) hover:text-(--color-coral) transition-colors"
+                >
+                  <MapPin className="w-3 h-3 flex-shrink-0" />
+                  <span>{post.locationName}</span>
+                </Link>
+              </div>
+            )}
+
             {/* Poll */}
             {!editOpen && poll && (
               <div className="mt-3 rounded-xl border border-(--color-border) overflow-hidden">
@@ -1572,13 +1802,17 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
                     return (
                       <button
                         key={opt.id}
-                        disabled={showResults || voting}
+                        disabled={(poll.expired && !poll.voted) || (showResults && !poll.voted) || voting}
                         onClick={(e) => { e.stopPropagation(); void votePoll(opt.id) }}
                         className={cn(
                           'relative w-full rounded-lg px-3 py-2 text-left text-sm transition-all overflow-hidden',
-                          showResults
+                          poll.expired
                             ? 'cursor-default'
-                            : 'border border-(--color-border) hover:border-(--color-coral)/60 hover:bg-(--color-coral)/5 active:scale-[0.99]',
+                            : showResults && isVoted
+                              ? 'cursor-pointer hover:bg-(--color-coral)/5 active:scale-[0.99]'
+                              : showResults
+                                ? 'cursor-default'
+                                : 'border border-(--color-border) hover:border-(--color-coral)/60 hover:bg-(--color-coral)/5 active:scale-[0.99]',
                           isVoted && showResults && 'border border-(--color-coral)/30',
                         )}
                       >
@@ -1615,6 +1849,12 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
                     : <span>Bitiş: {new Date(poll.expiresAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                   }
                   {poll.multipleChoice && <><span>·</span><span>Çoklu seçim</span></>}
+                  {poll.voted && !poll.expired && (
+                    <>
+                      <span>·</span>
+                      <span className="text-(--color-text-tertiary)/70">Oyladığına tıkla → geri al</span>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -1660,6 +1900,32 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
             </>
           )}
 
+          {/* Detail mode: timestamp + stats row */}
+          {detail && !hideActions && (
+            <>
+              <div className="mt-3 pt-3 border-t border-(--color-border-secondary)">
+                <span className="text-sm text-(--color-text-tertiary)">
+                  {new Date(post.createdAt).toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+              {(likesCount > 0 || boostsCount > 0) && (
+                <div className="py-3 border-t border-(--color-border-secondary) flex gap-4 text-sm">
+                  {boostsCount > 0 && (
+                    <span className="text-(--color-text-secondary)">
+                      <strong className="text-(--color-text-primary)">{boostsCount}</strong> yeniden paylaşım
+                    </span>
+                  )}
+                  {likesCount > 0 && (
+                    <span className="text-(--color-text-secondary)">
+                      <strong className="text-(--color-text-primary)">{likesCount}</strong> beğeni
+                    </span>
+                  )}
+                </div>
+              )}
+              <div className="border-t border-(--color-border-secondary)" />
+            </>
+          )}
+
           {/* Reaction bar + actions */}
           {!hideActions && Object.keys(reactions).length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-2">
@@ -1684,7 +1950,7 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
             </div>
           )}
 
-          {!hideActions && <div className="flex items-center gap-1 mt-2 -ml-2">
+          {!hideActions && <div className={cn('flex items-center gap-1', detail ? 'mt-1 justify-around' : 'mt-2 -ml-2')}>
             <ActionBtn
               icon={<MessageCircle className="w-4 h-4" />}
               count={repliesCount}
@@ -1754,29 +2020,29 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
             {/* Heart — tap to like, hold to react */}
             <div className="relative">
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    aria-label={liked ? 'Beğeniyi kaldır' : 'Beğen'}
-                    data-action="like"
-                    onPointerDown={handleHeartPointerDown}
-                    onPointerUp={handleHeartPointerUp}
-                    onPointerLeave={handleHeartPointerLeave}
-                    onPointerCancel={handleHeartPointerLeave}
-                    onClick={handleHeartClick}
-                    className={cn(
-                      'flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium select-none',
-                      'transition-[transform,background,color] duration-150',
-                      heartHolding && 'scale-125',
-                      liked || myReactions.size > 0 || emojiPickerOpen
-                        ? 'text-(--color-coral) bg-(--color-coral)/8'
-                        : 'text-(--color-text-tertiary) hover:text-(--color-coral) hover:bg-(--color-coral)/8',
-                    )}
-                  >
-                    <Heart className={cn('w-4 h-4 transition-all', liked && 'fill-current', heartHolding && 'scale-110')} />
-                    {likesCount > 0 && <span>{likesCount}</span>}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>Beğen · Uzun basınca tepki ekle</TooltipContent>
+              <TooltipTrigger asChild>
+              <button
+                aria-label={liked ? 'Beğeniyi kaldır' : 'Beğen'}
+                data-action="like"
+                onPointerDown={handleHeartPointerDown}
+                onPointerUp={handleHeartPointerUp}
+                onPointerLeave={handleHeartPointerLeave}
+                onPointerCancel={handleHeartPointerLeave}
+                onClick={handleHeartClick}
+                className={cn(
+                  'flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium select-none',
+                  'transition-[transform,background,color] duration-150',
+                  heartHolding && 'scale-125',
+                  liked || myReactions.size > 0 || emojiPickerOpen
+                    ? 'text-(--color-coral) bg-(--color-coral)/8'
+                    : 'text-(--color-text-tertiary) hover:text-(--color-coral) hover:bg-(--color-coral)/8',
+                )}
+              >
+                <Heart className={cn('w-4 h-4 transition-all', liked && 'fill-current', heartHolding && 'scale-110')} />
+                {likesCount > 0 && <span>{likesCount}</span>}
+              </button>
+              </TooltipTrigger>
+              <TooltipContent>{liked ? 'Beğeniyi kaldır' : 'Beğen · Uzun basınca tepki ekle'}</TooltipContent>
               </Tooltip>
               {emojiPickerOpen && (
                 <>
@@ -1847,7 +2113,7 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
               />
               <div className="flex items-center justify-between px-3 pb-2.5">
                 <span className={cn('text-[11px]', replyContent.length > 480 ? 'text-red-500' : 'text-(--color-text-tertiary)')}>
-                  {replyContent.length > 440 && `${500 - replyContent.length}`}
+                  {replyContent.length > 450 && `${500 - replyContent.length}`}
                 </span>
                 <div className="flex gap-2">
                   <Button variant="ghost" size="sm" onClick={() => dispatch({ type: 'REPLY_CLOSE' })} className="text-xs h-7 px-3">
@@ -1874,7 +2140,7 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
                 rows={2}
                 maxLength={500}
                 autoFocus
-                className="w-full resize-none rounded-lg border border-(--color-border-secondary) bg-(--color-background-primary) px-3 py-2 text-sm text-(--color-text-primary) placeholder:text-(--color-text-tertiary) focus:outline-none focus:border-(--color-coral) transition-colors"
+                className="w-full resize-none rounded-lg border border-(--color-border-secondary) bg-(--color-background) px-3 py-2 text-sm text-(--color-text-primary) placeholder:text-(--color-text-tertiary) focus:outline-none focus:border-(--color-coral) transition-colors"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submitQuote()
                   if (e.key === 'Escape') dispatch({ type: 'QUOTE_CLOSE' })
@@ -1912,143 +2178,197 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
     )}
 
     {/* Edit history modal */}
-    <Dialog open={editHistoryOpen} onOpenChange={(o) => !o && dispatch({ type: 'EDIT_HISTORY_CLOSE' })}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Düzenleme Geçmişi</DialogTitle>
-        </DialogHeader>
-        <div className="max-h-96 overflow-y-auto divide-y divide-(--color-border-secondary)">
-          <div className="px-4 py-3">
-            <p className="text-[11px] font-medium text-(--color-coral) mb-1">Güncel versiyon</p>
-            <p className="text-sm text-(--color-text-primary) whitespace-pre-wrap break-words">{currentContent}</p>
-            <p className="text-[11px] text-(--color-text-tertiary) mt-1.5">
-              {editedAt ? new Date(editedAt).toLocaleString('tr-TR') : '—'}
-            </p>
-          </div>
-          {editHistoryLoading && (
-            <div className="flex justify-center py-6">
-              <Loader2 className="w-5 h-5 animate-spin text-(--color-coral)" />
-            </div>
-          )}
-          {editHistory?.map((edit, i) => (
-            <div key={edit.id} className="px-4 py-3">
-              <p className="text-[11px] font-medium text-(--color-text-tertiary) mb-1">
-                {i === (editHistory.length - 1) ? 'İlk versiyon' : `${i + 1}. önceki versiyon`}
-              </p>
-              {edit.contentWarning && (
-                <p className="text-[11px] text-amber-500 mb-1">CW: {edit.contentWarning}</p>
-              )}
-              <p className="text-sm text-(--color-text-secondary) whitespace-pre-wrap break-words">{edit.content}</p>
-              <p className="text-[11px] text-(--color-text-tertiary) mt-1.5">
-                {new Date(edit.editedAt).toLocaleString('tr-TR')}
-              </p>
-            </div>
-          ))}
-          {editHistory?.length === 0 && !editHistoryLoading && (
-            <div className="px-4 py-6 text-center text-sm text-(--color-text-tertiary)">Geçmiş bulunamadı.</div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-
-    {/* Collection modal */}
-    <Dialog open={collectionModalOpen} onOpenChange={(o) => !o && setCollectionModalOpen(false)}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle style={{ fontFamily: 'var(--font-display)' }}>Koleksiyona Ekle</DialogTitle>
-        </DialogHeader>
-        <div className="max-h-72 overflow-y-auto">
-          {collectionsLoading ? (
-            <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-(--color-text-tertiary)" /></div>
-          ) : collections.length === 0 ? (
-            <div className="px-4 py-6 text-center text-sm text-(--color-text-tertiary)">Henüz koleksiyon yok. Profil sayfandan oluşturabilirsin.</div>
-          ) : (
-            collections.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => void addToCollection(c.id)}
-                disabled={addingToCollection === c.id}
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-(--color-background-secondary) transition-colors text-left"
-              >
-                <div>
-                  <p className="text-sm font-medium text-(--color-text-primary)">{c.name}</p>
-                  {c.postCount !== undefined && <p className="text-xs text-(--color-text-tertiary)">{c.postCount} gönderi</p>}
-                </div>
-                {addingToCollection === c.id ? <Loader2 className="w-4 h-4 animate-spin text-(--color-text-tertiary)" /> : <Plus className="w-4 h-4 text-(--color-text-tertiary)" />}
-              </button>
-            ))
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-
-    <Dialog open={embedOpen} onOpenChange={(o) => !o && setEmbedOpen(false)}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Code2 className="w-4 h-4 text-(--color-coral)" />
-            Gönderiye Gömme Kodu
-          </DialogTitle>
-        </DialogHeader>
-        <div className="p-4 space-y-3">
-          <p className="text-xs text-(--color-text-tertiary)">Bu kodu web sitenize yapıştırarak gönderiyi gömebilirsin.</p>
-          <pre className="text-xs font-mono bg-(--color-background-secondary) border border-(--color-border) rounded-xl p-3 overflow-x-auto text-(--color-text-secondary) leading-relaxed whitespace-pre-wrap break-all">
-            {`<iframe src="${typeof window !== 'undefined' ? window.location.origin : ''}/posts/${post.id}/embed" width="550" height="300" frameborder="0" scrolling="no" allowfullscreen></iframe>`}
-          </pre>
-          <button
-            onClick={() => void navigator.clipboard.writeText(`<iframe src="${window.location.origin}/posts/${post.id}/embed" width="550" height="300" frameborder="0" scrolling="no" allowfullscreen></iframe>`).then(() => toast.success('Kod kopyalandı'))}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-(--color-coral) text-white text-sm font-medium hover:bg-(--color-coral-hover) transition-colors"
+    {editHistoryOpen && (
+      <>
+        <div
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+          onClick={() => dispatch({ type: 'EDIT_HISTORY_CLOSE' })}
+        />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+          <div
+            className="pointer-events-auto w-full max-w-md rounded-2xl border border-(--color-border) bg-(--color-background) shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
           >
-            <Link2 className="w-4 h-4" /> Kodu Kopyala
-          </button>
-        </div>
-      </DialogContent>
-    </Dialog>
-    <Dialog open={quotesModalOpen} onOpenChange={(o) => !o && dispatch({ type: 'QUOTES_MODAL_CLOSE' })}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Alıntılar</DialogTitle>
-        </DialogHeader>
-        <div className="max-h-[70vh] overflow-y-auto divide-y divide-(--color-border-secondary)">
-          {quotesLoading && (
-            <div className="flex justify-center py-8">
-              <Loader2 className="w-5 h-5 animate-spin text-(--color-coral)" />
+            <div className="flex items-center justify-between px-4 py-3 border-b border-(--color-border)">
+              <p className="text-sm font-semibold text-(--color-text-primary)">Düzenleme Geçmişi</p>
+              <button onClick={() => dispatch({ type: 'EDIT_HISTORY_CLOSE' })} className="p-1 rounded-lg text-(--color-text-tertiary) hover:text-(--color-text-primary)">
+                <X className="w-4 h-4" />
+              </button>
             </div>
-          )}
-          {quotesList?.map((q) => (
-            <a
-              key={q.id}
-              href={`/posts/${q.id}`}
-              className="flex gap-3 px-4 py-3 hover:bg-(--color-background-secondary)/60 transition-colors group"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Avatar className="w-8 h-8 flex-shrink-0 mt-0.5">
-                {q.author?.avatarUrl && <AvatarImage src={q.author.avatarUrl} alt="" />}
-                <AvatarFallback className="text-xs">{(q.author?.displayName ?? q.author?.handle ?? '?')[0]?.toUpperCase()}</AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-baseline gap-1.5 flex-wrap">
-                  <span className="text-sm font-semibold text-(--color-text-primary) group-hover:text-(--color-coral) transition-colors truncate">
-                    {q.author?.displayName ?? q.author?.handle}
-                  </span>
-                  <span className="text-xs text-(--color-text-tertiary) truncate">@{q.author?.handle}</span>
-                  <span className="text-xs text-(--color-text-tertiary) ml-auto flex-shrink-0">
-                    {new Date(q.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
-                  </span>
+            <div className="max-h-96 overflow-y-auto divide-y divide-(--color-border-secondary)">
+              {/* Current version */}
+              <div className="px-4 py-3">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <span className="text-[11px] font-semibold text-(--color-coral)">Güncel versiyon</span>
+                  {editedAt && (
+                    <span className="text-[10px] text-(--color-text-tertiary)">{new Date(editedAt).toLocaleString('tr-TR')}</span>
+                  )}
                 </div>
-                <p className="text-sm text-(--color-text-secondary) line-clamp-2 mt-0.5">{q.content || '(medya)'}</p>
+                <p className="text-sm text-(--color-text-primary) whitespace-pre-wrap break-words">{currentContent}</p>
               </div>
-            </a>
-          ))}
-          {quotesList?.length === 0 && !quotesLoading && (
-            <div className="px-4 py-10 text-center">
-              <p className="text-sm text-(--color-text-secondary) font-medium">Henüz alıntı yok</p>
-              <p className="text-xs text-(--color-text-tertiary) mt-0.5">Bu gönderiyi ilk alıntılayan sen ol</p>
+              {editHistoryLoading && (
+                <div className="flex justify-center py-6">
+                  <Loader2 className="w-5 h-5 animate-spin text-(--color-coral)" />
+                </div>
+              )}
+              {editHistory?.map((edit, i) => {
+                const newerText = i === 0 ? currentContent : editHistory[i - 1].content
+                return (
+                  <div key={edit.id} className="px-4 py-3">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <span className="text-[11px] font-medium text-(--color-text-tertiary)">
+                        {i === (editHistory.length - 1) ? 'İlk versiyon' : `${i + 1}. önceki versiyon`}
+                      </span>
+                      <span className="text-[10px] text-(--color-text-tertiary)">{new Date(edit.editedAt).toLocaleString('tr-TR')}</span>
+                    </div>
+                    {edit.contentWarning && (
+                      <p className="text-[11px] text-amber-500 mb-1">CW: {edit.contentWarning}</p>
+                    )}
+                    <DiffView oldText={edit.content} newText={newerText} />
+                    <div className="flex items-center gap-3 mt-2">
+                      <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400"><span className="w-2 h-2 rounded-sm bg-emerald-500/20 inline-block" />eklenen</span>
+                      <span className="flex items-center gap-1 text-[10px] text-red-500"><span className="w-2 h-2 rounded-sm bg-red-500/20 inline-block" />silinen</span>
+                    </div>
+                  </div>
+                )
+              })}
+              {editHistory?.length === 0 && !editHistoryLoading && (
+                <div className="px-4 py-6 text-center text-sm text-(--color-text-tertiary)">Geçmiş bulunamadı.</div>
+              )}
             </div>
-          )}
+          </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </>
+    )}
+
+    {/* Quotes modal */}
+    {collectionModalOpen && (
+      <>
+        <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={() => setCollectionModalOpen(false)} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+          <div className="pointer-events-auto w-full max-w-sm bg-(--color-background) border border-(--color-border) rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-(--color-border-secondary)">
+              <span className="text-base font-bold text-(--color-text-primary)" style={{ fontFamily: 'var(--font-display)' }}>Koleksiyona Ekle</span>
+              <button onClick={() => setCollectionModalOpen(false)} className="p-1 rounded-full hover:bg-(--color-background-secondary) text-(--color-text-tertiary)"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="max-h-72 overflow-y-auto">
+              {collectionsLoading ? (
+                <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-(--color-text-tertiary)" /></div>
+              ) : collections.length === 0 ? (
+                <div className="px-4 py-6 text-center text-sm text-(--color-text-tertiary)">Henüz koleksiyon yok. Profil sayfandan oluşturabilirsin.</div>
+              ) : (
+                collections.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => void addToCollection(c.id)}
+                    disabled={addingToCollection === c.id}
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-(--color-background-secondary) transition-colors text-left"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-(--color-text-primary)">{c.name}</p>
+                      {c.postCount !== undefined && <p className="text-xs text-(--color-text-tertiary)">{c.postCount} gönderi</p>}
+                    </div>
+                    {addingToCollection === c.id ? <Loader2 className="w-4 h-4 animate-spin text-(--color-text-tertiary)" /> : <Plus className="w-4 h-4 text-(--color-text-tertiary)" />}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </>
+    )}
+
+    {embedOpen && (
+      <>
+        <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={() => setEmbedOpen(false)} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+          <div
+            className="pointer-events-auto w-full max-w-md rounded-2xl border border-(--color-border) bg-(--color-background) shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-(--color-border)">
+              <div className="flex items-center gap-2">
+                <Code2 className="w-4 h-4 text-(--color-coral)" />
+                <p className="text-sm font-semibold text-(--color-text-primary)">Gönderiye Gömme Kodu</p>
+              </div>
+              <button onClick={() => setEmbedOpen(false)} className="p-1 rounded-lg text-(--color-text-tertiary) hover:text-(--color-text-primary)">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-xs text-(--color-text-tertiary)">Bu kodu web sitenize yapıştırarak gönderiyi gömebilirsin.</p>
+              <div className="relative">
+                <pre className="text-xs font-mono bg-(--color-background-secondary) border border-(--color-border) rounded-xl p-3 overflow-x-auto text-(--color-text-secondary) leading-relaxed whitespace-pre-wrap break-all">
+                  {`<iframe src="${typeof window !== 'undefined' ? window.location.origin : ''}/posts/${post.id}/embed" width="550" height="300" frameborder="0" scrolling="no" allowfullscreen></iframe>`}
+                </pre>
+              </div>
+              <button
+                onClick={() => void navigator.clipboard.writeText(`<iframe src="${window.location.origin}/posts/${post.id}/embed" width="550" height="300" frameborder="0" scrolling="no" allowfullscreen></iframe>`).then(() => toast.success('Kod kopyalandı'))}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-(--color-coral) text-white text-sm font-medium hover:bg-(--color-coral-hover) transition-colors"
+              >
+                <Link2 className="w-4 h-4" /> Kodu Kopyala
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    )}
+    {quotesModalOpen && (
+      <>
+        <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={() => dispatch({ type: 'QUOTES_MODAL_CLOSE' })} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+          <div
+            className="pointer-events-auto w-full max-w-md rounded-2xl border border-(--color-border) bg-(--color-background) shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-(--color-border)">
+              <p className="text-sm font-semibold text-(--color-text-primary)">Alıntılar</p>
+              <button onClick={() => dispatch({ type: 'QUOTES_MODAL_CLOSE' })} className="p-1 rounded-lg text-(--color-text-tertiary) hover:text-(--color-text-primary)">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="max-h-[70vh] overflow-y-auto divide-y divide-(--color-border-secondary)">
+              {quotesLoading && (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-5 h-5 animate-spin text-(--color-coral)" />
+                </div>
+              )}
+              {quotesList?.map((q) => (
+                <a
+                  key={q.id}
+                  href={`/posts/${q.id}`}
+                  className="flex gap-3 px-4 py-3 hover:bg-(--color-background-secondary)/60 transition-colors group"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Avatar className="w-8 h-8 flex-shrink-0 mt-0.5">
+                    {q.author?.avatarUrl && <AvatarImage src={q.author.avatarUrl} alt="" />}
+                    <AvatarFallback className="text-xs">{(q.author?.displayName ?? q.author?.handle ?? '?')[0]?.toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-1.5 flex-wrap">
+                      <span className="text-sm font-semibold text-(--color-text-primary) group-hover:text-(--color-coral) transition-colors truncate">
+                        {q.author?.displayName ?? q.author?.handle}
+                      </span>
+                      <span className="text-xs text-(--color-text-tertiary) truncate">@{q.author?.handle}</span>
+                      <span className="text-xs text-(--color-text-tertiary) ml-auto flex-shrink-0">
+                        {new Date(q.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
+                      </span>
+                    </div>
+                    <p className="text-sm text-(--color-text-secondary) line-clamp-2 mt-0.5">{q.content || '(medya)'}</p>
+                  </div>
+                </a>
+              ))}
+              {quotesList?.length === 0 && !quotesLoading && (
+                <div className="px-4 py-10 text-center">
+                  <p className="text-sm text-(--color-text-secondary) font-medium">Henüz alıntı yok</p>
+                  <p className="text-xs text-(--color-text-tertiary) mt-0.5">Bu gönderiyi ilk alıntılayan sen ol</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </>
+    )}
     </Fragment>
   )
 }

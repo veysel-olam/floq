@@ -107,6 +107,63 @@ export async function pollsRoutes(app: FastifyInstance) {
     },
   )
 
+  // DELETE /api/polls/:id/vote — retract vote
+  app.delete<{ Params: { id: string } }>(
+    '/api/polls/:id/vote',
+    async (req, reply) => {
+      const ctx = await requireActor(req, reply)
+      if (!ctx) return
+
+      const poll = await db.query.polls.findFirst({
+        where: eq(polls.id, req.params.id),
+        with: { options: true },
+      })
+      if (!poll) return reply.code(404).send({ error: 'Poll not found' })
+
+      if (new Date(poll.expiresAt) < new Date()) {
+        return reply.code(422).send({ error: 'Poll has ended' })
+      }
+
+      const existingVotes = await db.query.pollVotes.findMany({
+        where: and(
+          eq(pollVotes.pollId, poll.id),
+          eq(pollVotes.actorId, ctx.actor.id),
+        ),
+      })
+      if (existingVotes.length === 0) return reply.code(409).send({ error: 'Not voted' })
+
+      const retractedOptionIds = existingVotes.map((v) => v.optionId)
+
+      await db.delete(pollVotes).where(
+        and(
+          eq(pollVotes.pollId, poll.id),
+          eq(pollVotes.actorId, ctx.actor.id),
+        ),
+      )
+
+      // Recalculate vote counts for affected options
+      for (const optionId of retractedOptionIds) {
+        await db
+          .update(pollOptions)
+          .set({ votesCount: db.$count(pollVotes, and(eq(pollVotes.optionId, optionId))) as unknown as number })
+          .where(eq(pollOptions.id, optionId))
+      }
+
+      // Recalculate voters_count
+      const allVoters = await db
+        .selectDistinct({ actorId: pollVotes.actorId })
+        .from(pollVotes)
+        .where(eq(pollVotes.pollId, poll.id))
+      await db
+        .update(polls)
+        .set({ votersCount: allVoters.length })
+        .where(eq(polls.id, poll.id))
+
+      const updated = await getPollWithCounts(poll.id, ctx.actor.id)
+      return reply.send(updated)
+    },
+  )
+
   // GET /api/polls/:id
   app.get<{ Params: { id: string } }>('/api/polls/:id', async (req, reply) => {
     const ctx = await requireActor(req, reply)

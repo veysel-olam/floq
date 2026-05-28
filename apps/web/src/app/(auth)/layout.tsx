@@ -34,7 +34,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </div>
 
         {/* Form card */}
-        <div className="rounded-2xl border border-(--color-border) bg-(--color-surface) shadow-xl shadow-black/[0.06] dark:shadow-black/30 p-8">
+        <div className="rounded-2xl border border-(--color-border) bg-(--color-background) shadow-xl shadow-black/[0.06] dark:shadow-black/30 p-8">
           {children}
         </div>
 
