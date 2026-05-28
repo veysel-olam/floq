@@ -84,6 +84,15 @@ function DialogDescription({ className, ...props }: React.ComponentProps<typeof 
   )
 }
 
+function DialogFooter({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      className={cn('flex items-center justify-end gap-2 px-4 py-3 border-t border-(--color-border)', className)}
+      {...props}
+    />
+  )
+}
+
 export {
   Dialog,
   DialogTrigger,
@@ -93,5 +102,6 @@ export {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
   DialogClose,
 }
