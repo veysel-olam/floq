@@ -493,30 +493,32 @@ export default function HomePage() {
 
       {/* ── Context bar ── */}
       {(activeFilters > 0 || isFederated || isForYou) && (
-        <div className="flex items-center gap-3 px-4 py-2 border-b border-(--color-border-secondary)">
-          {isForYou && (
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-(--color-coral)">
-              <span className="w-1.5 h-1.5 rounded-full bg-(--color-coral) opacity-80" />
-              Akıllı sıralama
-            </span>
-          )}
-          {isFederated && (
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-teal-500 dark:text-teal-400">
-              <GitBranch className="w-3 h-3" />
-              Federe ağ
-            </span>
-          )}
-          {activeFilters > 0 && (
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-(--color-text-tertiary)">
-              <Filter className="w-3 h-3" />
-              {activeFilters} filtre
-            </span>
-          )}
-          {activeFilters > 0 && (
-            <a href="/settings?tab=filters" className="ml-auto text-[11px] font-medium text-(--color-coral) hover:opacity-70 transition-opacity">
-              Düzenle
-            </a>
-          )}
+        <div className="px-3 py-2 border-b border-(--color-border-secondary)">
+          <div className="flex items-center gap-3 px-3 py-1.5 rounded-2xl bg-(--color-background-secondary)/60">
+            {isForYou && (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-(--color-coral)">
+                <span className="w-1.5 h-1.5 rounded-full bg-(--color-coral) opacity-80" />
+                Akıllı sıralama
+              </span>
+            )}
+            {isFederated && (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-teal-500 dark:text-teal-400">
+                <GitBranch className="w-3 h-3" />
+                Federe ağ
+              </span>
+            )}
+            {activeFilters > 0 && (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-(--color-text-tertiary)">
+                <Filter className="w-3 h-3" />
+                {activeFilters} filtre
+              </span>
+            )}
+            {activeFilters > 0 && (
+              <a href="/settings?tab=filters" className="ml-auto text-[11px] font-medium text-(--color-coral) hover:opacity-70 transition-opacity">
+                Düzenle
+              </a>
+            )}
+          </div>
         </div>
       )}
 
