@@ -25,11 +25,13 @@ function useChart() {
 function ChartContainer({
   id,
   className,
+  style,
   children,
   config,
 }: {
   id?: string
   className?: string
+  style?: React.CSSProperties
   children: React.ReactNode
   config: ChartConfig
 }) {
@@ -46,8 +48,8 @@ function ChartContainer({
     <ChartContext.Provider value={{ config }}>
       <div
         data-chart={chartId}
-        className={cn('flex aspect-video justify-center text-xs', className)}
-        style={styleVars as React.CSSProperties}
+        className={cn('flex justify-center text-xs', className)}
+        style={{ ...styleVars, ...style } as React.CSSProperties}
       >
         <RechartsPrimitive.ResponsiveContainer width="100%" height="100%">
           {children as React.ReactElement}
