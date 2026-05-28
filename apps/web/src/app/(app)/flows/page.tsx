@@ -8,10 +8,47 @@ import { api, type FlowInfo } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import { Loader2, Layers, Plus, Search, Users, FileText, Lock, Globe, Link2 } from 'lucide-react'
-import { Separator } from '@/components/ui/separator'
+import {
+  Loader2, Layers, Plus, Search, Users, FileText,
+  Lock, Globe, Link2, ChevronDown,
+} from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
+
+// Deterministic color from slug — picks one of 6 palette stops
+const FLOW_COLORS = [
+  { bg: 'bg-violet-500/15', text: 'text-violet-500', ring: 'ring-violet-500/20' },
+  { bg: 'bg-sky-500/15', text: 'text-sky-500', ring: 'ring-sky-500/20' },
+  { bg: 'bg-emerald-500/15', text: 'text-emerald-500', ring: 'ring-emerald-500/20' },
+  { bg: 'bg-amber-500/15', text: 'text-amber-500', ring: 'ring-amber-500/20' },
+  { bg: 'bg-rose-500/15', text: 'text-rose-500', ring: 'ring-rose-500/20' },
+  { bg: 'bg-(--color-coral)/15 text-(--color-coral)', text: 'text-(--color-coral)', ring: 'ring-(--color-coral)/20' },
+]
+
+function flowColor(slug: string) {
+  const n = slug.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)
+  return FLOW_COLORS[n % FLOW_COLORS.length]
+}
+
+function FlowAvatar({ slug, name, size = 'md' }: { slug: string; name: string; size?: 'sm' | 'md' }) {
+  const { bg, text, ring } = flowColor(slug)
+  const letter = (name[0] ?? slug[0] ?? '?').toUpperCase()
+  return (
+    <div className={cn(
+      'rounded-xl flex items-center justify-center flex-shrink-0 font-bold ring-1',
+      bg, text, ring,
+      size === 'md' ? 'w-10 h-10 text-base' : 'w-8 h-8 text-sm',
+    )}>
+      {letter}
+    </div>
+  )
+}
 
 function FlowCard({ flow, onJoin, onLeave }: {
   flow: FlowInfo & { isMember?: boolean }
@@ -31,39 +68,44 @@ function FlowCard({ flow, onJoin, onLeave }: {
   }
 
   return (
-    <div className="flex items-start gap-3 px-4 py-3 border-b border-(--color-border-secondary) hover:bg-(--color-background-secondary) transition-colors">
-      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-(--color-coral) to-(--color-peach) flex items-center justify-center flex-shrink-0">
-        <Layers className="w-5 h-5 text-white" />
-      </div>
+    <div className="flex items-center gap-3 px-4 py-3 border-b border-(--color-border-secondary) hover:bg-(--color-background-secondary)/50 transition-colors group">
+      <FlowAvatar slug={flow.slug} name={flow.name} />
+
       <div className="flex-1 min-w-0">
-        <Link href={`/flows/${flow.slug}`} className="block group">
+        <Link href={`/flows/${flow.slug}`} className="block">
           <div className="flex items-center gap-1.5">
-            <p className="text-sm font-semibold text-(--color-text-primary) group-hover:text-(--color-coral) transition-colors truncate">
+            <p className="text-[13px] font-semibold text-(--color-text-primary) group-hover:text-(--color-coral) transition-colors truncate" style={{ fontFamily: 'var(--font-outfit)' }}>
               {flow.name}
             </p>
-            {!flow.isPublic && <Lock className="w-3 h-3 text-(--color-text-tertiary)" />}
+            {!flow.isPublic && <Lock className="w-3 h-3 text-(--color-text-tertiary) flex-shrink-0" />}
           </div>
-          <p className="text-xs text-(--color-text-tertiary) mt-0.5 line-clamp-2">
-            {flow.description ?? `/${flow.slug}`}
-          </p>
+          {flow.description && (
+            <p className="text-[11px] text-(--color-text-tertiary) mt-0.5 truncate leading-relaxed">
+              {flow.description}
+            </p>
+          )}
         </Link>
-        <div className="flex items-center gap-3 mt-1.5">
-          <span className="text-xs text-(--color-text-tertiary) flex items-center gap-1">
-            <Users className="w-3 h-3" />{flow.membersCount}
-          </span>
-          <span className="text-xs text-(--color-text-tertiary) flex items-center gap-1">
-            <FileText className="w-3 h-3" />{flow.postsCount}
-          </span>
+        <div className="flex items-center gap-1.5 mt-1.5">
+          <Badge variant="secondary" className="h-5 px-1.5 text-[10px] gap-1 font-medium">
+            <Users className="w-2.5 h-2.5" />{flow.membersCount}
+          </Badge>
+          <Badge variant="secondary" className="h-5 px-1.5 text-[10px] gap-1 font-medium">
+            <FileText className="w-2.5 h-2.5" />{flow.postsCount}
+          </Badge>
+          <span className="text-[10px] text-(--color-text-tertiary) font-mono">/{flow.slug}</span>
         </div>
       </div>
+
       <Button
         size="sm"
         variant={flow.isMember ? 'outline' : 'default'}
         onClick={toggle}
         disabled={loading}
         className={cn(
-          'h-7 text-xs flex-shrink-0',
-          !flow.isMember && 'bg-(--color-coral) hover:bg-(--color-peach) text-white border-0',
+          'flex-shrink-0 h-7 text-xs px-3.5 rounded-full',
+          flow.isMember
+            ? 'border-(--color-border) text-(--color-text-secondary) hover:border-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20'
+            : 'bg-(--color-coral) hover:bg-(--color-coral-hover) text-white border-0',
         )}
       >
         {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : flow.isMember ? 'Ayrıl' : 'Katıl'}
@@ -80,13 +122,13 @@ export default function FlowsPage() {
   const [joined, setJoined] = useState<FlowInfo[]>([])
   const [discover, setDiscover] = useState<FlowInfo[]>([])
   const [loading, setLoading] = useState(true)
-  const [creating, setCreating] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [discoverTab, setDiscoverTab] = useState<DiscoverTab>('popular')
   const [newFlow, setNewFlow] = useState({ name: '', slug: '', description: '', isPublic: true })
 
-  // Join via invite
+  const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteCode, setInviteCode] = useState('')
   const [joiningInvite, setJoiningInvite] = useState(false)
   const [inviteMessage, setInviteMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -126,7 +168,7 @@ export default function FlowsPage() {
       })
       setJoined((prev) => [{ ...flow, isMember: true }, ...prev])
       setNewFlow({ name: '', slug: '', description: '', isPublic: true })
-      setCreating(false)
+      setCreateOpen(false)
     } catch (err) {
       alert((err as { message?: string }).message ?? 'Hata oluştu')
     } finally {
@@ -190,8 +232,9 @@ export default function FlowsPage() {
 
   return (
     <div className="max-w-xl mx-auto">
-      <header className="sticky top-0 z-10 bg-(--color-background)/90 backdrop-blur-md border-b border-(--color-border) px-4 py-3.5">
-        <div className="flex items-center justify-between mb-2">
+      {/* Header */}
+      <header className="sticky top-0 z-10 bg-(--color-background)/90 backdrop-blur-md border-b border-(--color-border) px-4 py-3.5 space-y-2.5">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Layers className="w-5 h-5 text-(--color-coral)" />
             <h1 className="text-base font-bold text-(--color-text-primary)" style={{ fontFamily: 'var(--font-outfit)' }}>
@@ -200,114 +243,74 @@ export default function FlowsPage() {
           </div>
           <Button
             size="sm"
-            onClick={() => setCreating(true)}
-            className="bg-(--color-coral) hover:bg-(--color-peach) text-white gap-1.5"
+            onClick={() => setCreateOpen(true)}
+            className="bg-(--color-coral) hover:bg-(--color-coral-hover) text-white gap-1.5 rounded-full px-4"
           >
             <Plus className="w-3.5 h-3.5" />
             Yeni Akış
           </Button>
         </div>
+
+        {/* Search */}
         <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-(--color-text-tertiary)" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-(--color-text-tertiary)" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Akış ara..."
-            className="pl-8 h-8 text-sm"
+            className="pl-9 rounded-full bg-(--color-background-secondary) border-0 focus-visible:ring-1 focus-visible:ring-(--color-coral)"
           />
         </div>
       </header>
 
-      {/* Join via invite */}
-      <div className="border-b border-(--color-border) px-4 py-3 bg-(--color-background-secondary)">
-        <p className="text-xs font-medium text-(--color-text-secondary) mb-2 flex items-center gap-1.5">
-          <Link2 className="w-3.5 h-3.5" />
-          Davet kodun var mı?
-        </p>
-        <div className="flex gap-2">
-          <Input
-            value={inviteCode}
-            onChange={(e) => setInviteCode(e.target.value)}
-            placeholder="Davet kodunu gir..."
-            className="h-8 text-sm font-mono flex-1"
-            onKeyDown={(e) => { if (e.key === 'Enter') void handleJoinInvite() }}
-          />
-          <Button
-            size="sm"
-            onClick={handleJoinInvite}
-            disabled={joiningInvite || !inviteCode.trim()}
-            className="h-8 bg-(--color-coral) hover:bg-(--color-peach) text-white border-0"
-          >
-            {joiningInvite ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Katıl'}
-          </Button>
-        </div>
-        {inviteMessage && (
-          <p className={cn(
-            'text-xs mt-1.5',
-            inviteMessage.type === 'success' ? 'text-green-600' : 'text-red-500',
-          )}>
-            {inviteMessage.text}
-          </p>
-        )}
-      </div>
-
-      {creating && (
-        <div className="border-b border-(--color-border) bg-(--color-background-secondary) p-4 space-y-2">
-          <p className="text-xs font-medium text-(--color-text-secondary)">Yeni Akış</p>
-          <Input
-            value={newFlow.name}
-            onChange={(e) => {
-              const name = e.target.value
-              const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-              setNewFlow((f) => ({ ...f, name, slug }))
-            }}
-            placeholder="Akış adı"
-            className="h-8 text-sm"
-          />
-          <Input
-            value={newFlow.slug}
-            onChange={(e) => setNewFlow((f) => ({ ...f, slug: e.target.value }))}
-            placeholder="slug (örn: teknoloji-haberleri)"
-            className="h-8 text-sm font-mono"
-          />
-          <Textarea
-            value={newFlow.description}
-            onChange={(e) => setNewFlow((f) => ({ ...f, description: e.target.value }))}
-            placeholder="Açıklama (opsiyonel)"
-            className="resize-none h-16 text-sm"
-          />
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setNewFlow((f) => ({ ...f, isPublic: !f.isPublic }))}
-              className={cn(
-                'flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs transition-colors',
-                newFlow.isPublic
-                  ? 'bg-(--color-blush) dark:bg-(--color-coral)/12 text-(--color-coral) dark:bg-(--color-coral)/12'
-                  : 'bg-(--color-background) text-(--color-text-tertiary) border border-(--color-border)',
-              )}
-            >
-              {newFlow.isPublic ? <Globe className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-              {newFlow.isPublic ? 'Herkese açık' : 'Özel'}
-            </button>
-            <div className="flex-1" />
-            <Button variant="ghost" size="sm" onClick={() => setCreating(false)}>İptal</Button>
+      {/* Invite code — collapsible */}
+      <Collapsible open={inviteOpen} onOpenChange={setInviteOpen}>
+        <CollapsibleTrigger className="w-full flex items-center justify-between px-4 py-2.5 border-b border-(--color-border-secondary) hover:bg-(--color-background-secondary)/40 transition-colors group">
+          <span className="flex items-center gap-2 text-[12px] font-medium text-(--color-text-tertiary) group-hover:text-(--color-text-secondary) transition-colors">
+            <Link2 className="w-3.5 h-3.5" />
+            Davet kodun var mı?
+          </span>
+          <ChevronDown className={cn(
+            'w-3.5 h-3.5 text-(--color-text-tertiary) transition-transform duration-200',
+            inviteOpen && 'rotate-180',
+          )} />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="border-b border-(--color-border-secondary) px-4 py-3 bg-(--color-background-secondary)/30 space-y-2">
+          <div className="flex gap-2">
+            <Input
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value)}
+              placeholder="Davet kodunu gir..."
+              className="h-8 text-sm font-mono flex-1"
+              onKeyDown={(e) => { if (e.key === 'Enter') void handleJoinInvite() }}
+            />
             <Button
               size="sm"
-              onClick={create}
-              disabled={saving || !newFlow.name.trim() || !newFlow.slug.trim()}
-              className="bg-(--color-coral) hover:bg-(--color-peach) text-white"
+              onClick={handleJoinInvite}
+              disabled={joiningInvite || !inviteCode.trim()}
+              className="h-8 bg-(--color-coral) hover:bg-(--color-coral-hover) text-white border-0 rounded-full px-4"
             >
-              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Oluştur'}
+              {joiningInvite ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Katıl'}
             </Button>
           </div>
-        </div>
-      )}
+          {inviteMessage && (
+            <p className={cn(
+              'text-xs',
+              inviteMessage.type === 'success' ? 'text-emerald-500' : 'text-red-500',
+            )}>
+              {inviteMessage.text}
+            </p>
+          )}
+        </CollapsibleContent>
+      </Collapsible>
 
+      {/* Joined flows */}
       {joined.length > 0 && (
         <>
-          <div className="px-4 py-2 border-b border-(--color-border-secondary) flex items-center gap-3">
-            <p className="text-[11px] font-semibold text-(--color-text-tertiary) uppercase tracking-widest whitespace-nowrap">Katıldıklarım</p>
-            <Separator className="flex-1 bg-(--color-border-secondary)" />
+          <div className="px-4 pt-4 pb-2">
+            <p className="text-[11px] font-semibold text-(--color-text-tertiary) uppercase tracking-wider">
+              Katıldıklarım · {joined.length}
+            </p>
           </div>
           {joined.map((flow) => (
             <FlowCard key={flow.id} flow={{ ...flow, isMember: true }} onJoin={handleJoin} onLeave={handleLeave} />
@@ -316,39 +319,25 @@ export default function FlowsPage() {
       )}
 
       {/* Discover tabs */}
-      <div className="flex border-b border-(--color-border) bg-(--color-background)">
-        <button
-          onClick={() => setDiscoverTab('popular')}
-          className={cn(
-            'flex-1 py-2 text-xs font-semibold transition-colors',
-            discoverTab === 'popular'
-              ? 'text-(--color-coral) border-b-2 border-(--color-coral)'
-              : 'text-(--color-text-tertiary) hover:text-(--color-text-primary)',
-          )}
-        >
-          Popüler
-        </button>
-        <button
-          onClick={() => setDiscoverTab('trending')}
-          className={cn(
-            'flex-1 py-2 text-xs font-semibold transition-colors',
-            discoverTab === 'trending'
-              ? 'text-(--color-coral) border-b-2 border-(--color-coral)'
-              : 'text-(--color-text-tertiary) hover:text-(--color-text-primary)',
-          )}
-        >
-          Trend
-        </button>
-      </div>
+      <Tabs
+        value={discoverTab}
+        onValueChange={(v) => setDiscoverTab(v as DiscoverTab)}
+      >
+        <TabsList className="w-full">
+          <TabsTrigger value="popular" className="flex-1 text-[13px]">Popüler</TabsTrigger>
+          <TabsTrigger value="trending" className="flex-1 text-[13px]">Trend</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {discover.length > 0 && (
         <>
-          <div className="px-4 py-2 border-b border-(--color-border-secondary) flex items-center gap-3">
-            <p className="text-[11px] font-semibold text-(--color-text-tertiary) uppercase tracking-widest whitespace-nowrap">
-              {search ? 'Sonuçlar' : 'Keşfet'}
-            </p>
-            <Separator className="flex-1 bg-(--color-border-secondary)" />
-          </div>
+          {search && (
+            <div className="px-4 pt-4 pb-2">
+              <p className="text-[11px] font-semibold text-(--color-text-tertiary) uppercase tracking-wider">
+                Sonuçlar · {discover.length}
+              </p>
+            </div>
+          )}
           {discover.map((flow) => (
             <FlowCard key={flow.id} flow={{ ...flow, isMember: false }} onJoin={handleJoin} onLeave={handleLeave} />
           ))}
@@ -362,6 +351,84 @@ export default function FlowsPage() {
           description={search ? undefined : 'Akışlar, konu bazlı paylaşım kanallarıdır.'}
         />
       )}
+
+      {/* Create flow dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base" style={{ fontFamily: 'var(--font-outfit)' }}>
+              <Layers className="w-4 h-4 text-(--color-coral)" />
+              Yeni Akış
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3 py-1">
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-(--color-text-tertiary) uppercase tracking-wide">İsim</label>
+              <Input
+                value={newFlow.name}
+                onChange={(e) => {
+                  const name = e.target.value
+                  const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+                  setNewFlow((f) => ({ ...f, name, slug }))
+                }}
+                placeholder="Akış adı"
+                className="h-9"
+                autoFocus
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-(--color-text-tertiary) uppercase tracking-wide">Slug</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-(--color-text-tertiary)">/</span>
+                <Input
+                  value={newFlow.slug}
+                  onChange={(e) => setNewFlow((f) => ({ ...f, slug: e.target.value }))}
+                  placeholder="teknoloji-haberleri"
+                  className="h-9 pl-6 font-mono text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-(--color-text-tertiary) uppercase tracking-wide">Açıklama <span className="normal-case font-normal">(opsiyonel)</span></label>
+              <Textarea
+                value={newFlow.description}
+                onChange={(e) => setNewFlow((f) => ({ ...f, description: e.target.value }))}
+                placeholder="Bu akış hakkında kısa bir açıklama..."
+                className="resize-none h-16 text-sm"
+              />
+            </div>
+
+            <button
+              onClick={() => setNewFlow((f) => ({ ...f, isPublic: !f.isPublic }))}
+              className={cn(
+                'flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-colors w-full',
+                newFlow.isPublic
+                  ? 'bg-(--color-coral)/10 text-(--color-coral)'
+                  : 'bg-(--color-background-secondary) text-(--color-text-secondary) border border-(--color-border)',
+              )}
+            >
+              {newFlow.isPublic
+                ? <><Globe className="w-3.5 h-3.5" /> Herkese açık</>
+                : <><Lock className="w-3.5 h-3.5" /> Özel — sadece davetliler</>}
+            </button>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setCreateOpen(false)}>İptal</Button>
+            <Button
+              size="sm"
+              onClick={create}
+              disabled={saving || !newFlow.name.trim() || !newFlow.slug.trim()}
+              className="bg-(--color-coral) hover:bg-(--color-coral-hover) text-white rounded-full px-5"
+            >
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Oluştur'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
