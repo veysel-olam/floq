@@ -322,7 +322,7 @@ export default function HomePage() {
   // ── Loading skeleton ─────────────────────────────────────────
   const headerEl = (
     <header className="sticky top-0 z-20 bg-(--color-background)/95 backdrop-blur-md border-b border-(--color-border)">
-      <div className="flex items-stretch h-12">
+      <div className="flex items-stretch h-11">
 
         {/* ── Source tabs ── */}
         <div className="flex items-stretch flex-1 min-w-0 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
@@ -331,46 +331,40 @@ export default function HomePage() {
           <button
             onClick={() => { setSource({ type: 'for_you' }); setListMenuPos(null) }}
             className={cn(
-              'relative flex items-center px-4 text-xs font-semibold whitespace-nowrap transition-colors flex-shrink-0',
-              isForYou
-                ? 'text-(--color-text-primary)'
-                : 'text-(--color-text-tertiary) hover:text-(--color-text-secondary)',
+              'relative flex items-center px-3.5 transition-colors flex-shrink-0',
+              isForYou ? 'text-(--color-text-primary)' : 'text-(--color-text-tertiary) hover:text-(--color-text-secondary)',
             )}
           >
-            Senin İçin
-            {isForYou && <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-(--color-coral)" />}
+            <span className={cn('text-[13px] font-semibold tracking-tight', isForYou && 'font-bold')}>Senin İçin</span>
+            {isForYou && <span className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full bg-(--color-coral)" />}
           </button>
 
           {/* Following */}
           <button
             onClick={() => { setSource({ type: 'following' }); setListMenuPos(null) }}
             className={cn(
-              'relative flex items-center gap-1.5 px-4 text-xs font-semibold whitespace-nowrap transition-colors flex-shrink-0',
-              isFollowing
-                ? 'text-(--color-text-primary)'
-                : 'text-(--color-text-tertiary) hover:text-(--color-text-secondary)',
+              'relative flex items-center gap-1.5 px-3.5 transition-colors flex-shrink-0',
+              isFollowing ? 'text-(--color-text-primary)' : 'text-(--color-text-tertiary) hover:text-(--color-text-secondary)',
             )}
           >
             <span className={cn(
               'w-1.5 h-1.5 rounded-full flex-shrink-0 transition-colors',
               isConnected ? 'bg-emerald-400' : 'bg-red-400',
             )} />
-            Takip
-            {isFollowing && <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-(--color-coral)" />}
+            <span className={cn('text-[13px] font-semibold tracking-tight', isFollowing && 'font-bold')}>Takip</span>
+            {isFollowing && <span className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full bg-(--color-coral)" />}
           </button>
 
           {/* Federated */}
           <button
             onClick={() => { setSource({ type: 'federated' }); setListMenuPos(null) }}
             className={cn(
-              'relative flex items-center px-4 text-xs font-semibold whitespace-nowrap transition-colors flex-shrink-0',
-              isFederated
-                ? 'text-(--color-text-primary)'
-                : 'text-(--color-text-tertiary) hover:text-(--color-text-secondary)',
+              'relative flex items-center px-3.5 transition-colors flex-shrink-0',
+              isFederated ? 'text-(--color-text-primary)' : 'text-(--color-text-tertiary) hover:text-(--color-text-secondary)',
             )}
           >
-            Federe
-            {isFederated && <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-(--color-coral)" />}
+            <span className={cn('text-[13px] font-semibold tracking-tight', isFederated && 'font-bold')}>Federe</span>
+            {isFederated && <span className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full bg-(--color-coral)" />}
           </button>
 
           {/* Lists */}
@@ -384,20 +378,20 @@ export default function HomePage() {
               setShowSortMenu(false)
             }}
             className={cn(
-              'relative flex items-center gap-1 px-4 h-full text-xs font-semibold whitespace-nowrap transition-colors flex-shrink-0',
-              isList
-                ? 'text-(--color-text-primary)'
-                : 'text-(--color-text-tertiary) hover:text-(--color-text-secondary)',
+              'relative flex items-center gap-1 px-3.5 h-full transition-colors flex-shrink-0',
+              isList ? 'text-(--color-text-primary)' : 'text-(--color-text-tertiary) hover:text-(--color-text-secondary)',
             )}
           >
             {isList ? (
-              <span className="flex items-center gap-1">
-                <span className="max-w-[80px] truncate">{(source as { type: 'list'; title: string }).title}</span>
-                <span className="px-1 py-0.5 rounded-full bg-(--color-coral)/15 text-(--color-coral) text-[10px] font-bold leading-none">Liste</span>
+              <span className="flex items-center gap-1.5">
+                <span className={cn('text-[13px] font-bold tracking-tight max-w-[72px] truncate')}>{(source as { type: 'list'; title: string }).title}</span>
+                <span className="text-[10px] font-bold px-1.5 py-px rounded-full bg-(--color-coral)/15 text-(--color-coral) leading-tight">Liste</span>
               </span>
-            ) : 'Listeler'}
-            <ChevronDown className={cn('w-3 h-3 transition-transform', showListMenu && 'rotate-180')} />
-            {isList && <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-(--color-coral)" />}
+            ) : (
+              <span className="text-[13px] font-semibold tracking-tight">Listeler</span>
+            )}
+            <ChevronDown className={cn('w-3 h-3 opacity-60 transition-transform duration-150', showListMenu && 'rotate-180')} />
+            {isList && <span className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full bg-(--color-coral)" />}
           </button>
 
           {/* Feeds */}
@@ -411,28 +405,28 @@ export default function HomePage() {
               setShowSortMenu(false)
             }}
             className={cn(
-              'relative flex items-center gap-1 px-4 h-full text-xs font-semibold whitespace-nowrap transition-colors flex-shrink-0',
-              isRule
-                ? 'text-(--color-text-primary)'
-                : 'text-(--color-text-tertiary) hover:text-(--color-text-secondary)',
+              'relative flex items-center gap-1 px-3.5 h-full transition-colors flex-shrink-0',
+              isRule ? 'text-(--color-text-primary)' : 'text-(--color-text-tertiary) hover:text-(--color-text-secondary)',
             )}
           >
             {isRule ? (
-              <span className="flex items-center gap-1">
-                <span className="max-w-[80px] truncate">{(source as { type: 'rule'; name: string }).name}</span>
-                <span className="px-1 py-0.5 rounded-full bg-(--color-coral)/15 text-(--color-coral) text-[10px] font-bold leading-none">Feed</span>
+              <span className="flex items-center gap-1.5">
+                <span className="text-[13px] font-bold tracking-tight max-w-[72px] truncate">{(source as { type: 'rule'; name: string }).name}</span>
+                <span className="text-[10px] font-bold px-1.5 py-px rounded-full bg-(--color-coral)/15 text-(--color-coral) leading-tight">Feed</span>
               </span>
-            ) : 'Feedler'}
-            <ChevronDown className={cn('w-3 h-3 transition-transform', showFeedMenu && 'rotate-180')} />
-            {isRule && <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-(--color-coral)" />}
+            ) : (
+              <span className="text-[13px] font-semibold tracking-tight">Feedler</span>
+            )}
+            <ChevronDown className={cn('w-3 h-3 opacity-60 transition-transform duration-150', showFeedMenu && 'rotate-180')} />
+            {isRule && <span className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full bg-(--color-coral)" />}
           </button>
 
         </div>
 
         {/* ── Sort control ── */}
-        <div className="flex items-center px-3 gap-2 flex-shrink-0">
+        <div className="flex items-center pr-3 pl-1 gap-2 flex-shrink-0">
           {liveRate > 0 && (
-            <span className="text-[10px] tabular-nums text-(--color-text-tertiary)">{liveRate}/dk</span>
+            <span className="text-[10px] tabular-nums text-(--color-text-tertiary) font-medium">{liveRate}/dk</span>
           )}
           <div className="relative">
             <button
@@ -440,31 +434,34 @@ export default function HomePage() {
               className={cn(
                 'flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors',
                 sort !== 'chronological' || showSortMenu
-                  ? 'text-(--color-coral) bg-(--color-blush)/50 dark:bg-(--color-coral)/12'
+                  ? 'text-(--color-coral) bg-(--color-coral)/10'
                   : 'text-(--color-text-tertiary) hover:bg-(--color-background-secondary) hover:text-(--color-text-secondary)',
               )}
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
               {sort !== 'chronological' && (
-                <span>{SORT_OPTIONS.find((s) => s.value === sort)?.label}</span>
+                <span className="text-[11px]">{SORT_OPTIONS.find((s) => s.value === sort)?.label}</span>
               )}
             </button>
             {showSortMenu && (
-              <div className="absolute right-0 top-full mt-1.5 w-48 bg-(--color-surface) rounded-xl border border-(--color-border) shadow-lg overflow-hidden z-40">
-                <p className="px-3 pt-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-(--color-text-tertiary)">
+              <div className="absolute right-0 top-full mt-1.5 w-52 bg-(--color-background) rounded-2xl border border-(--color-border) shadow-xl shadow-black/10 overflow-hidden z-40">
+                <p className="px-4 pt-3 pb-2 text-[10px] font-bold uppercase tracking-widest text-(--color-text-tertiary)">
                   Sıralama
                 </p>
                 {SORT_OPTIONS.map((o) => (
                   <button
                     key={o.value}
                     onClick={() => { setSort(o.value); setShowSortMenu(false) }}
-                    className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-(--color-background-secondary) transition-colors"
+                    className={cn(
+                      'w-full flex items-center justify-between px-4 py-2.5 transition-colors text-left',
+                      sort === o.value ? 'bg-(--color-coral)/8' : 'hover:bg-(--color-background-secondary)',
+                    )}
                   >
-                    <div className="text-left">
-                      <p className={cn('text-sm font-medium', sort === o.value ? 'text-(--color-coral)' : 'text-(--color-text-primary)')}>
+                    <div>
+                      <p className={cn('text-[13px] font-semibold', sort === o.value ? 'text-(--color-coral)' : 'text-(--color-text-primary)')}>
                         {o.label}
                       </p>
-                      <p className="text-[11px] text-(--color-text-tertiary)">{o.desc}</p>
+                      <p className="text-[11px] text-(--color-text-tertiary) mt-0.5">{o.desc}</p>
                     </div>
                     {sort === o.value && <Check className="w-3.5 h-3.5 text-(--color-coral) flex-shrink-0" />}
                   </button>
@@ -496,26 +493,27 @@ export default function HomePage() {
 
       {/* ── Context bar ── */}
       {(activeFilters > 0 || isFederated || isForYou) && (
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-(--color-border-secondary) bg-(--color-background-secondary)/40 text-xs text-(--color-text-tertiary)">
+        <div className="flex items-center gap-1.5 px-4 py-1.5 border-b border-(--color-border-secondary) bg-(--color-background-secondary)/30">
           {isForYou && (
-            <span className="px-2 py-0.5 rounded-full bg-(--color-coral)/8 text-(--color-coral) border border-(--color-coral)/15">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-(--color-coral)/10 text-(--color-coral) text-[11px] font-semibold">
+              <span className="w-1 h-1 rounded-full bg-(--color-coral) inline-block" />
               Akıllı sıralama
             </span>
           )}
           {isFederated && (
-            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-teal-500/8 text-teal-600 dark:text-teal-400 border border-teal-500/15">
-              <GitBranch className="w-3 h-3" />
-              Federe
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 text-[11px] font-semibold">
+              <GitBranch className="w-2.5 h-2.5" />
+              Federe ağ
             </span>
           )}
           {activeFilters > 0 && (
-            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-(--color-background) border border-(--color-border)">
-              <Filter className="w-3 h-3" />
-              {activeFilters} filtre
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-(--color-background-secondary) border border-(--color-border) text-(--color-text-secondary) text-[11px] font-medium">
+              <Filter className="w-2.5 h-2.5" />
+              {activeFilters} filtre aktif
             </span>
           )}
           {activeFilters > 0 && (
-            <a href="/settings?tab=filters" className="ml-auto text-(--color-coral) hover:underline font-medium">
+            <a href="/settings?tab=filters" className="ml-auto text-[11px] font-semibold text-(--color-coral) hover:opacity-80 transition-opacity">
               Düzenle
             </a>
           )}
