@@ -727,13 +727,13 @@ export function PostComposer({ handle, displayName, avatarUrl, onPost, replyToId
 
       {/* Composer card */}
       <div
-        className="mx-4 my-3 rounded-2xl border bg-(--color-background)"
+        className="mx-3 my-2.5 rounded-2xl border bg-(--color-background-secondary)/40"
         style={{
           borderColor: expanded
-            ? 'color-mix(in srgb, var(--color-coral) 40%, var(--color-border))'
-            : 'var(--color-border)',
+            ? 'color-mix(in srgb, var(--color-coral) 35%, var(--color-border))'
+            : 'var(--color-border-secondary)',
           boxShadow: expanded
-            ? 'inset 0 2.5px 0 var(--color-coral), 0 0 0 4px color-mix(in srgb, var(--color-coral) 6%, transparent)'
+            ? '0 0 0 3px color-mix(in srgb, var(--color-coral) 8%, transparent)'
             : 'none',
           transition: 'border-color 200ms ease, box-shadow 200ms ease',
         }}
