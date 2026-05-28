@@ -37,6 +37,10 @@
   --color-border-secondary: #E8E7E3;
   --color-border-tertiary: #F0EFEb;
 
+  /* shadcn Input/ring uyumu — border-input ve ring-ring yardımcı sınıfları için */
+  --color-input: #D8D7D2;
+  --color-ring: #E8593C;
+
   --color-code-bg: #1C1C22;
   --color-code-label: #ffffff;
 
@@ -76,11 +80,15 @@
   --color-text-secondary: #BFBEB7;       /* clearer step from primary */
   --color-text-tertiary: #8A8982;
 
-  --color-border: #44444D;               /* more visible */
-  --color-border-secondary: #2D2D34;
-  --color-border-tertiary: #222228;
+  --color-border: rgba(255, 255, 255, 0.10);
+  --color-border-secondary: rgba(255, 255, 255, 0.06);
+  --color-border-tertiary: rgba(255, 255, 255, 0.035);
 
   --color-blush: var(--color-blush-dark, #3D2420);
+
+  /* shadcn Input/ring uyumu — dark mod */
+  --color-input: rgba(255, 255, 255, 0.10);
+  --color-ring: #E8593C;
 
   --color-code-bg: #111116;
   --color-code-label: #ffffff;
