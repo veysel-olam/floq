@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { Loader2, Layers, Plus, Search, Users, FileText, Lock, Globe, Link2 } from 'lucide-react'
+import { Separator } from '@/components/ui/separator'
 import { EmptyState } from '@/components/ui/empty-state'
 
 function FlowCard({ flow, onJoin, onLeave }: {
@@ -306,7 +307,7 @@ export default function FlowsPage() {
         <>
           <div className="px-4 py-2 border-b border-(--color-border-secondary) flex items-center gap-3">
             <p className="text-[11px] font-semibold text-(--color-text-tertiary) uppercase tracking-widest whitespace-nowrap">Katıldıklarım</p>
-            <div className="flex-1 h-px bg-(--color-border-secondary)" />
+            <Separator className="flex-1 bg-(--color-border-secondary)" />
           </div>
           {joined.map((flow) => (
             <FlowCard key={flow.id} flow={{ ...flow, isMember: true }} onJoin={handleJoin} onLeave={handleLeave} />
@@ -346,7 +347,7 @@ export default function FlowsPage() {
             <p className="text-[11px] font-semibold text-(--color-text-tertiary) uppercase tracking-widest whitespace-nowrap">
               {search ? 'Sonuçlar' : 'Keşfet'}
             </p>
-            <div className="flex-1 h-px bg-(--color-border-secondary)" />
+            <Separator className="flex-1 bg-(--color-border-secondary)" />
           </div>
           {discover.map((flow) => (
             <FlowCard key={flow.id} flow={{ ...flow, isMember: false }} onJoin={handleJoin} onLeave={handleLeave} />

@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Home, Compass, Bell, Bookmark, List, Settings, LogOut, Layers, Activity, Radio, MessageSquare, Share2, Clock, FileEdit } from 'lucide-react'
 import { FloqLogo } from '@/components/floq-logo'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useSession, signOut } from '@/lib/auth-client'
 import { api } from '@/lib/api'
 import { useRealtime } from '@/hooks/use-realtime'
@@ -92,37 +93,41 @@ export function Sidebar() {
           const isNotifications = href === '/notifications'
           const showBadge = isNotifications && unreadCount > 0
           return (
-            <Link
-              key={href}
-              href={href}
-              aria-label={label}
-              className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-150',
-                active
-                  ? 'bg-(--color-coral)/10 text-(--color-coral) font-semibold'
-                  : 'text-(--color-text-secondary) font-medium hover:bg-(--color-background-secondary) hover:text-(--color-text-primary)',
-              )}
-            >
-              <span className="relative flex-shrink-0">
-                <Icon
+            <Tooltip key={href}>
+              <TooltipTrigger asChild>
+                <Link
+                  href={href}
+                  aria-label={label}
                   className={cn(
-                    'w-5 h-5 transition-all',
-                    active ? 'text-(--color-coral) stroke-[2.5]' : 'stroke-[1.75]',
+                    'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-150',
+                    active
+                      ? 'bg-(--color-coral)/10 text-(--color-coral) font-semibold'
+                      : 'text-(--color-text-secondary) font-medium hover:bg-(--color-background-secondary) hover:text-(--color-text-primary)',
                   )}
-                />
-                {showBadge && (
-                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 rounded-full bg-(--color-coral) text-white text-[10px] font-bold leading-4 text-center">
-                    {unreadCount > 99 ? '99+' : unreadCount}
+                >
+                  <span className="relative flex-shrink-0">
+                    <Icon
+                      className={cn(
+                        'w-5 h-5 transition-all',
+                        active ? 'text-(--color-coral) stroke-[2.5]' : 'stroke-[1.75]',
+                      )}
+                    />
+                    {showBadge && (
+                      <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 rounded-full bg-(--color-coral) text-white text-[10px] font-bold leading-4 text-center">
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
                   </span>
-                )}
-              </span>
-              <span className="hidden lg:block" style={{ fontFamily: 'var(--font-outfit)' }}>{label}</span>
-              {showBadge && (
-                <span className="hidden lg:flex ml-auto min-w-[20px] h-5 px-1 rounded-full bg-(--color-coral) text-white text-[11px] font-bold items-center justify-center">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </Link>
+                  <span className="hidden lg:block" style={{ fontFamily: 'var(--font-outfit)' }}>{label}</span>
+                  {showBadge && (
+                    <span className="hidden lg:flex ml-auto min-w-[20px] h-5 px-1 rounded-full bg-(--color-coral) text-white text-[11px] font-bold items-center justify-center">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="lg:hidden">{label}</TooltipContent>
+            </Tooltip>
           )
         })}
       </nav>
@@ -154,13 +159,18 @@ export function Sidebar() {
                 </p>
               </div>
             </Link>
-            <button
-              onClick={handleSignOut}
-              aria-label="Çıkış yap"
-              className="hidden lg:flex flex-shrink-0 p-2 rounded-lg text-(--color-text-tertiary) hover:text-red-500 hover:bg-red-500/10 transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={handleSignOut}
+                  aria-label="Çıkış yap"
+                  className="hidden lg:flex flex-shrink-0 p-2 rounded-lg text-(--color-text-tertiary) hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Çıkış yap</TooltipContent>
+            </Tooltip>
           </div>
         </div>
       )}

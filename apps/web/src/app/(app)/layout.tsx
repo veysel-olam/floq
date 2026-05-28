@@ -7,6 +7,7 @@ import { UserPrefsProvider, useUserPrefs } from '@/lib/user-prefs-context'
 import { useUsageTimer } from '@/hooks/use-usage-timer'
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
 import { KeyboardShortcutsHelp } from '@/components/keyboard-shortcuts-help'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { Clock, X } from 'lucide-react'
 
 function UsageReminder() {
@@ -86,7 +87,9 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <UserPrefsProvider>
-      <AppLayoutInner>{children}</AppLayoutInner>
+      <TooltipProvider>
+        <AppLayoutInner>{children}</AppLayoutInner>
+      </TooltipProvider>
     </UserPrefsProvider>
   )
 }

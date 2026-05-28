@@ -5,10 +5,11 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { api, type Actor, type Post, type MediaAttachment, type QuotedPost, type GifResult } from '@/lib/api'
-import { Image, X, Loader2, AlertTriangle, Globe, Lock, Users, Eye, BarChart2, Plus, Trash2, UserCheck, Clock, Code2, FileEdit } from 'lucide-react'
+import { Image, Video, X, Loader2, AlertTriangle, Globe, Lock, Users, Eye, BarChart2, Plus, Trash2, UserCheck, Clock, Code2, FileEdit } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { GifPicker } from './gif-picker'
 import { toast } from 'sonner'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 const MAX_CHARS = 500
 const MAX_IMAGES = 4
@@ -94,6 +95,7 @@ export function PostComposer({ handle, displayName, avatarUrl, onPost, replyToId
   const [altEditId, setAltEditId] = useState<string | null>(null)
   const [altDraft, setAltDraft] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const videoFileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Autocomplete state
@@ -301,6 +303,23 @@ export function PostComposer({ handle, displayName, avatarUrl, onPost, replyToId
       setMedia((prev) => [...prev, ...uploaded])
     } catch (err) {
       setUploadError((err as Error).message ?? 'Görsel yüklenemedi.')
+      setTimeout(() => setUploadError(null), 4000)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function handleVideoFile(files: FileList | null) {
+    if (!files || files.length === 0) return
+    const file = files[0]!
+    if (videoFileInputRef.current) videoFileInputRef.current.value = ''
+    setUploading(true)
+    setUploadError(null)
+    try {
+      const uploaded = await api.media.uploadVideo(file)
+      setMedia([uploaded])
+    } catch (err) {
+      setUploadError((err as Error).message ?? 'Video yüklenemedi.')
       setTimeout(() => setUploadError(null), 4000)
     } finally {
       setUploading(false)
@@ -545,45 +564,59 @@ export function PostComposer({ handle, displayName, avatarUrl, onPost, replyToId
             </div>
           )}
 
-          {/* Image previews */}
+          {/* Media previews */}
           {media.length > 0 && (
             <div className={cn('grid gap-1.5 mt-2', media.length === 1 ? 'grid-cols-1' : 'grid-cols-2')}>
-              {media.map((m) => (
-                <div key={m.id} className="relative rounded-xl overflow-hidden bg-(--color-background-secondary)">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={m.url} alt={m.altText ?? ''} className="w-full aspect-video object-cover" />
-                  <button
-                    onClick={() => removeMedia(m.id)}
-                    aria-label="Görseli kaldır"
-                    className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center text-white hover:bg-black/80"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                  {/* Alt text */}
-                  {altEditId === m.id ? (
-                    <div className="absolute bottom-0 left-0 right-0 bg-black/75 px-2 py-1.5 flex items-center gap-1.5">
-                      <input
-                        autoFocus
-                        value={altDraft}
-                        onChange={(e) => setAltDraft(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveAlt(m.id) } if (e.key === 'Escape') setAltEditId(null) }}
-                        maxLength={1500}
-                        placeholder="Görsel açıklaması (alt text)…"
-                        className="flex-1 text-[11px] bg-transparent text-white placeholder:text-white/50 focus:outline-none min-w-0"
+              {media.map((m) => {
+                const isVideo = m.mimeType.startsWith('video/')
+                return (
+                  <div key={m.id} className="relative rounded-xl overflow-hidden bg-(--color-background-secondary)">
+                    {isVideo ? (
+                      <video
+                        src={m.url}
+                        className="w-full aspect-video object-cover"
+                        controls={false}
+                        muted
+                        preload="metadata"
                       />
-                      <button onClick={() => saveAlt(m.id)} className="text-[10px] font-semibold text-(--color-coral) hover:opacity-80 shrink-0">Kaydet</button>
-                      <button onClick={() => setAltEditId(null)} className="text-white/60 hover:text-white shrink-0"><X className="w-3 h-3" /></button>
-                    </div>
-                  ) : (
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={m.url} alt={m.altText ?? ''} className="w-full aspect-video object-cover" />
+                    )}
                     <button
-                      onClick={() => openAltEdit(m)}
-                      className="absolute bottom-1 left-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/60 text-white hover:bg-black/80"
+                      onClick={() => removeMedia(m.id)}
+                      aria-label="Medyayı kaldır"
+                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center text-white hover:bg-black/80"
                     >
-                      {m.altText ? 'ALT ✓' : 'ALT ekle'}
+                      <X className="w-3 h-3" />
                     </button>
-                  )}
-                </div>
-              ))}
+                    {!isVideo && (
+                      altEditId === m.id ? (
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/75 px-2 py-1.5 flex items-center gap-1.5">
+                          <input
+                            autoFocus
+                            value={altDraft}
+                            onChange={(e) => setAltDraft(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveAlt(m.id) } if (e.key === 'Escape') setAltEditId(null) }}
+                            maxLength={1500}
+                            placeholder="Görsel açıklaması (alt text)…"
+                            className="flex-1 text-[11px] bg-transparent text-white placeholder:text-white/50 focus:outline-none min-w-0"
+                          />
+                          <button onClick={() => saveAlt(m.id)} className="text-[10px] font-semibold text-(--color-coral) hover:opacity-80 shrink-0">Kaydet</button>
+                          <button onClick={() => setAltEditId(null)} className="text-white/60 hover:text-white shrink-0"><X className="w-3 h-3" /></button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => openAltEdit(m)}
+                          className="absolute bottom-1 left-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/60 text-white hover:bg-black/80"
+                        >
+                          {m.altText ? 'ALT ✓' : 'ALT ekle'}
+                        </button>
+                      )
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
 
@@ -692,53 +725,92 @@ export function PostComposer({ handle, displayName, avatarUrl, onPost, replyToId
                 className="hidden"
                 onChange={(e) => void handleFiles(e.target.files)}
               />
+              <input
+                ref={videoFileInputRef}
+                type="file"
+                accept="video/mp4,video/webm,video/ogg,video/quicktime"
+                className="hidden"
+                onChange={(e) => void handleVideoFile(e.target.files)}
+              />
               {/* Primary tools */}
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading || media.length >= MAX_IMAGES || pollOpen}
-                aria-label="Görsel ekle"
-                title="Görsel ekle"
-                className="p-1.5 rounded-lg text-(--color-text-tertiary) hover:text-(--color-coral) hover:bg-(--color-blush) transition-colors disabled:opacity-40"
-              >
-                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Image className="w-4 h-4" />}
-              </button>
-              <button
-                onClick={() => { setGifPickerOpen((v) => !v); if (!gifPickerOpen) setPollOpen(false) }}
-                disabled={media.length >= MAX_IMAGES || pollOpen}
-                className={cn(
-                  'px-1.5 py-1.5 rounded-lg text-[11px] font-bold transition-colors disabled:opacity-40',
-                  gifPickerOpen ? 'text-(--color-coral) bg-(--color-blush)' : 'text-(--color-text-tertiary) hover:text-(--color-coral) hover:bg-(--color-blush)',
-                )}
-                aria-label="GIF ekle" title="GIF ekle"
-              >
-                GIF
-              </button>
-              <button
-                onClick={togglePoll}
-                disabled={media.length > 0 || !!quotedPost}
-                className={cn(
-                  'p-1.5 rounded-lg transition-colors disabled:opacity-40',
-                  pollOpen ? 'text-(--color-coral) bg-(--color-blush)' : 'text-(--color-text-tertiary) hover:text-(--color-coral) hover:bg-(--color-blush)',
-                )}
-                aria-label="Anket ekle" title="Anket"
-              >
-                <BarChart2 className="w-4 h-4" />
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading || media.length >= MAX_IMAGES || pollOpen || media.some((m) => m.mimeType.startsWith('video/'))}
+                    aria-label="Görsel ekle"
+                    className="p-1.5 rounded-lg text-(--color-text-tertiary) hover:text-(--color-coral) hover:bg-(--color-blush) transition-colors disabled:opacity-40"
+                  >
+                    {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Image className="w-4 h-4" />}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Görsel ekle</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => videoFileInputRef.current?.click()}
+                    disabled={uploading || media.length > 0 || pollOpen}
+                    aria-label="Video ekle"
+                    className="p-1.5 rounded-lg text-(--color-text-tertiary) hover:text-(--color-coral) hover:bg-(--color-blush) transition-colors disabled:opacity-40"
+                  >
+                    <Video className="w-4 h-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Video ekle</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => { setGifPickerOpen((v) => !v); if (!gifPickerOpen) setPollOpen(false) }}
+                    disabled={media.length >= MAX_IMAGES || pollOpen || media.some((m) => m.mimeType.startsWith('video/'))}
+                    aria-label="GIF ekle"
+                    className={cn(
+                      'px-1.5 py-1.5 rounded-lg text-[11px] font-bold transition-colors disabled:opacity-40',
+                      gifPickerOpen ? 'text-(--color-coral) bg-(--color-blush)' : 'text-(--color-text-tertiary) hover:text-(--color-coral) hover:bg-(--color-blush)',
+                    )}
+                  >
+                    GIF
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>GIF ekle</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={togglePoll}
+                    disabled={media.length > 0 || !!quotedPost}
+                    aria-label="Anket ekle"
+                    className={cn(
+                      'p-1.5 rounded-lg transition-colors disabled:opacity-40',
+                      pollOpen ? 'text-(--color-coral) bg-(--color-blush)' : 'text-(--color-text-tertiary) hover:text-(--color-coral) hover:bg-(--color-blush)',
+                    )}
+                  >
+                    <BarChart2 className="w-4 h-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Anket ekle</TooltipContent>
+              </Tooltip>
 
               {/* Extras toggle */}
               <div className="relative">
-                <button
-                  onClick={() => setExtrasOpen((v) => !v)}
-                  className={cn(
-                    'p-1.5 rounded-lg transition-colors',
-                    extrasOpen || cwOpen || scheduleOpen || scheduledAt
-                      ? 'text-(--color-coral) bg-(--color-blush)'
-                      : 'text-(--color-text-tertiary) hover:text-(--color-coral) hover:bg-(--color-blush)',
-                  )}
-                  aria-label="Daha fazla" title="Daha fazla"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => setExtrasOpen((v) => !v)}
+                      aria-label="Daha fazla"
+                      className={cn(
+                        'p-1.5 rounded-lg transition-colors',
+                        extrasOpen || cwOpen || scheduleOpen || scheduledAt
+                          ? 'text-(--color-coral) bg-(--color-blush)'
+                          : 'text-(--color-text-tertiary) hover:text-(--color-coral) hover:bg-(--color-blush)',
+                      )}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Daha fazla</TooltipContent>
+                </Tooltip>
                 {extrasOpen && (
                   <>
                     <div className="fixed inset-0 z-10" onClick={() => setExtrasOpen(false)} />
@@ -826,14 +898,19 @@ export function PostComposer({ handle, displayName, avatarUrl, onPost, replyToId
               {content.length > 0 && <CharRing chars={content.length} max={MAX_CHARS} />}
 
               {(content.trim() || media.length > 0) && !scheduledAt && (
-                <button
-                  onClick={() => void saveDraft()}
-                  disabled={posting}
-                  title="Taslak Kaydet"
-                  className="p-1.5 rounded-full text-(--color-text-tertiary) hover:text-(--color-coral) hover:bg-(--color-coral)/8 transition-colors disabled:opacity-50"
-                >
-                  <FileEdit className="w-4 h-4" />
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => void saveDraft()}
+                      disabled={posting}
+                      aria-label="Taslak Kaydet"
+                      className="p-1.5 rounded-full text-(--color-text-tertiary) hover:text-(--color-coral) hover:bg-(--color-coral)/8 transition-colors disabled:opacity-50"
+                    >
+                      <FileEdit className="w-4 h-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Taslak Kaydet</TooltipContent>
+                </Tooltip>
               )}
 
               <Button

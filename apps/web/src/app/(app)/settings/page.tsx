@@ -5,9 +5,13 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { QRCodeSVG } from 'qrcode.react'
 import { useSession, authClient } from '@/lib/auth-client'
 import { api, type Actor, type MutedActor, type KeywordFilter, type SessionInfo, type FeedRule, type FeedRulesConfig, type ListInfo, type ActorPreferences } from '@/lib/api'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Separator } from '@/components/ui/separator'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { useTheme } from 'next-themes'
@@ -1321,15 +1325,7 @@ function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'
           <p className="text-sm font-medium text-(--color-text-primary)">Hesabı Kilitle</p>
           <p className="text-xs text-(--color-text-tertiary) mt-0.5">Takip isteklerini manuel onayla</p>
         </div>
-        <button
-          onClick={() => setIsLocked((v) => !v)}
-          className={cn(
-            'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none flex-shrink-0',
-            isLocked ? 'bg-(--color-coral)' : 'bg-(--color-border)',
-          )}
-        >
-          <span className={cn('inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform', isLocked ? 'translate-x-6' : 'translate-x-1')} />
-        </button>
+        <Switch checked={isLocked} onCheckedChange={setIsLocked} aria-label="Hesabı kilitle" />
       </div>
 
       <Button
@@ -1342,7 +1338,8 @@ function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'
       </Button>
 
       {/* ── Bluesky & AT Protocol ── */}
-      <div className="border-t border-(--color-border) pt-6 space-y-5">
+      <Separator className="my-2" />
+      <div className="pt-4 space-y-5">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <AtSign className="w-4 h-4 text-(--color-text-secondary)" />
@@ -1355,36 +1352,42 @@ function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'
 
         {/* DID badge */}
         {handle && (
-          <div className="rounded-xl border border-(--color-border) bg-(--color-background-secondary) p-3 space-y-1">
-            <p className="text-[10px] text-(--color-text-tertiary) uppercase tracking-wide font-medium">Decentralized ID</p>
-            <p className="text-xs font-mono text-(--color-text-primary) break-all">
-              {`did:web:${typeof window !== 'undefined' ? new URL(process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001').host : '…'}:users:${handle}`}
-            </p>
-          </div>
+          <Card className="bg-(--color-background-secondary) ring-0 border border-(--color-border) gap-1">
+            <CardContent className="pt-3 pb-2.5">
+              <p className="text-[10px] text-(--color-text-tertiary) uppercase tracking-wide font-medium mb-1">Decentralized ID</p>
+              <p className="text-xs font-mono text-(--color-text-primary) break-all">
+                {`did:web:${typeof window !== 'undefined' ? new URL(process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001').host : '…'}:users:${handle}`}
+              </p>
+            </CardContent>
+          </Card>
         )}
 
         {/* Bridgy Fed bridge */}
-        <div className="rounded-xl border border-(--color-border) bg-(--color-background-secondary) p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <Zap className="w-3.5 h-3.5 text-sky-500" />
-            <p className="text-xs font-semibold text-(--color-text-primary)">Bridgy Fed Köprüsü</p>
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400 font-medium">Ücretsiz</span>
-          </div>
-          <p className="text-xs text-(--color-text-tertiary) leading-relaxed">
-            Bluesky kullanıcıları seni <span className="font-mono text-(--color-text-secondary)">{handle ? `@${handle}.ap.brid.gy` : '@kullanici.ap.brid.gy'}</span> üzerinden takip edebilir. Aktivasyon gerekmez — hesabın zaten görünür.
-          </p>
-          {handle && (
-            <a
-              href={`https://bsky.app/profile/${handle}.${typeof window !== 'undefined' ? new URL(process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001').host : 'floq.com'}.ap.brid.gy`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs text-sky-500 hover:text-sky-400 transition-colors"
-            >
-              <ExternalLink className="w-3 h-3" />
-              Bluesky'da profili gör
-            </a>
-          )}
-        </div>
+        <Card className="bg-(--color-background-secondary) ring-0 border border-(--color-border)">
+          <CardHeader className="pb-0">
+            <CardTitle className="flex items-center gap-2 text-xs font-semibold text-(--color-text-primary)">
+              <Zap className="w-3.5 h-3.5 text-sky-500" />
+              Bridgy Fed Köprüsü
+              <Badge className="text-[10px] bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400 border-transparent">Ücretsiz</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-2 space-y-2.5">
+            <p className="text-xs text-(--color-text-tertiary) leading-relaxed">
+              Bluesky kullanıcıları seni <span className="font-mono text-(--color-text-secondary)">{handle ? `@${handle}.ap.brid.gy` : '@kullanici.ap.brid.gy'}</span> üzerinden takip edebilir. Aktivasyon gerekmez — hesabın zaten görünür.
+            </p>
+            {handle && (
+              <a
+                href={`https://bsky.app/profile/${handle}.${typeof window !== 'undefined' ? new URL(process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001').host : 'floq.com'}.ap.brid.gy`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-sky-500 hover:text-sky-400 transition-colors"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Bluesky'da profili gör
+              </a>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Mevcut Bluesky hesabını bağla */}
         <div className="space-y-2">
@@ -1899,15 +1902,12 @@ function FiltersTab() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setNewWholeWord((v) => !v)}
-              className={cn(
-                'relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0',
-                newWholeWord ? 'bg-(--color-coral)' : 'bg-(--color-border)',
-              )}
-            >
-              <span className={cn('inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform', newWholeWord ? 'translate-x-4' : 'translate-x-0.5')} />
-            </button>
+            <Switch
+              checked={newWholeWord}
+              onCheckedChange={setNewWholeWord}
+              aria-label="Tam kelime eşleşmesi"
+              className="h-5 w-9 [&>span]:h-3.5 [&>span]:w-3.5 data-[state=checked]:[&>span]:translate-x-4 data-[state=unchecked]:[&>span]:translate-x-0.5"
+            />
             <span className="text-xs text-(--color-text-secondary)">Tam kelime eşleşmesi</span>
           </div>
           <div className="flex gap-2">
@@ -2973,23 +2973,14 @@ function LanguageFilter({ value, onChange, saving }: { value: string[]; onChange
   )
 }
 
-// Mini toggle component
+// Mini toggle component — uses Switch primitive with compact size
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
-    <button
-      role="switch"
-      aria-checked={on}
-      onClick={() => onChange(!on)}
-      className={cn(
-        'relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors',
-        on ? 'bg-(--color-coral)' : 'bg-(--color-border)',
-      )}
-    >
-      <span className={cn(
-        'inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform',
-        on ? 'translate-x-4' : 'translate-x-0.5',
-      )} />
-    </button>
+    <Switch
+      checked={on}
+      onCheckedChange={onChange}
+      className="h-5 w-9 [&>span]:h-3.5 [&>span]:w-3.5 data-[state=checked]:[&>span]:translate-x-4 data-[state=unchecked]:[&>span]:translate-x-0.5"
+    />
   )
 }
 
@@ -3166,9 +3157,9 @@ function FeedTab() {
             </p>
             <p className="text-[11px] text-(--color-text-tertiary) truncate">{activePreset.tagline}</p>
           </div>
-          <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0', activePreset.badgeColor)}>
+          <Badge className={cn('text-[10px] border-transparent flex-shrink-0', activePreset.badgeColor)}>
             {activePreset.badge}
-          </span>
+          </Badge>
         </div>
       )}
 
@@ -3208,9 +3199,9 @@ function FeedTab() {
                       <p className={cn('text-sm font-semibold', isActive ? 'text-(--color-coral)' : 'text-(--color-text-primary)')}>
                         {p.name}
                       </p>
-                      <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full', p.badgeColor)}>
+                      <Badge className={cn('text-[10px] border-transparent', p.badgeColor)}>
                         {p.badge}
-                      </span>
+                      </Badge>
                       {isActive && <Check className="w-3.5 h-3.5 text-(--color-coral) ml-auto flex-shrink-0" />}
                     </div>
                     <p className="text-[11px] text-(--color-text-tertiary) leading-relaxed">{p.desc}</p>

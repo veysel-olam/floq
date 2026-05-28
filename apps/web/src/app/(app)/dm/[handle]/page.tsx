@@ -7,6 +7,7 @@ import { ArrowLeft, Loader2, Send, Lock, ShieldCheck, Mic, MicOff, Play, Pause, 
 import { useSession } from '@/lib/auth-client'
 import { api, type Post, type Actor, type MediaAttachment } from '@/lib/api'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { generateAndStoreKeyPair, loadPrivateKey, encryptMessage, decryptMessage } from '@/lib/e2e-crypto'
 
@@ -383,9 +384,9 @@ export default function DmThreadPage({ params }: { params: Promise<{ handle: str
             {groupByDay(messages).map(({ date, messages: dayMsgs }) => (
               <div key={date}>
                 <div className="flex items-center gap-3 my-4">
-                  <div className="flex-1 h-px bg-(--color-border-secondary)" />
+                  <Separator className="flex-1 bg-(--color-border-secondary)" />
                   <span className="text-xs text-(--color-text-tertiary) flex-shrink-0">{formatDate(date)}</span>
-                  <div className="flex-1 h-px bg-(--color-border-secondary)" />
+                  <Separator className="flex-1 bg-(--color-border-secondary)" />
                 </div>
 
                 {dayMsgs.map((msg, i) => {

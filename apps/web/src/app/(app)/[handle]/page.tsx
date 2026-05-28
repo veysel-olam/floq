@@ -7,11 +7,13 @@ import { api, type Actor, type Post } from '@/lib/api'
 import { PostCard } from '@/components/posts/post-card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Loader2, CalendarDays, MoreHorizontal, ShieldOff, BellOff, Bell, MessageSquare, Pencil, Star, Images, BarChart2, X, Lock, Globe, Shield, MessageCircle, Heart, Film, FileText, Link2, Share2, Check, Copy, FolderOpen, Plus, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TimelineSkeleton } from '@/components/ui/skeleton'
 import { NotFoundContent } from '@/components/not-found-content'
 import { useInfiniteScroll } from '@/hooks/use-infinite-scroll'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 const BIO_TOKEN = /(#[a-zA-ZğüşıöçĞÜŞİÖÇ0-9_]+|@[a-zA-Z0-9._-]+)/g
 
@@ -655,22 +657,22 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
               </span>
             )}
             {actor.role === 'moderator' && (
-              <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
+              <Badge className="gap-1 text-[10px] bg-blue-500/10 text-blue-600 dark:text-blue-400 border-transparent">
                 <Shield className="w-2.5 h-2.5" /> MOD
-              </span>
+              </Badge>
             )}
             {actor.role === 'admin' && (
-              <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-(--color-coral)/10 text-(--color-coral)">
+              <Badge className="gap-1 text-[10px] bg-(--color-coral)/10 text-(--color-coral) border-transparent">
                 <Shield className="w-2.5 h-2.5" /> ADMIN
-              </span>
+              </Badge>
             )}
           </div>
           <div className="flex items-center gap-2 mt-0.5">
             <p className="text-sm text-(--color-text-tertiary)">@{actor.handle}</p>
             {!actor.isLocal && (
-              <span className="flex items-center gap-1 text-[11px] font-medium text-(--color-teal) bg-(--color-teal)/8 px-1.5 py-0.5 rounded-full">
+              <Badge className="gap-1 text-[10px] text-(--color-teal) bg-(--color-teal)/10 border-transparent">
                 <Globe className="w-3 h-3" /> Federe
-              </span>
+              </Badge>
             )}
           </div>
         </div>
@@ -790,28 +792,21 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-(--color-border) sticky top-0 z-10 bg-(--color-background)/90 backdrop-blur-md">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => handleTabChange(t.id)}
-            className={cn(
-              'flex-1 py-3 text-xs font-medium transition-all flex items-center justify-center gap-1.5',
-              tab === t.id
-                ? 'text-(--color-coral) border-b-2 border-(--color-coral)'
-                : 'text-(--color-text-tertiary) hover:text-(--color-text-secondary) hover:bg-(--color-background-secondary)/50',
-            )}
-          >
-            {t.icon}
-            <span className="hidden sm:inline">{t.label}</span>
-            {t.count != null && t.count > 0 && (
-              <span className={cn('tabular-nums', tab === t.id ? 'text-(--color-coral)' : 'text-(--color-text-tertiary)')}>
-                {t.count >= 1000 ? `${(t.count / 1000).toFixed(1)}K` : t.count}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      <Tabs value={tab} onValueChange={(v) => handleTabChange(v as Tab)}>
+        <TabsList>
+          {tabs.map((t) => (
+            <TabsTrigger key={t.id} value={t.id}>
+              {t.icon}
+              <span className="hidden sm:inline">{t.label}</span>
+              {t.count != null && t.count > 0 && (
+                <span className="tabular-nums">
+                  {t.count >= 1000 ? `${(t.count / 1000).toFixed(1)}K` : t.count}
+                </span>
+              )}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       {/* Posts tab */}
       {tab === 'posts' && (

@@ -35,6 +35,8 @@ export interface MediaAttachment {
   width: number | null
   height: number | null
   blurhash: string | null
+  duration?: number | null
+  fileSize?: number | null
 }
 
 export interface QuotedPost {
@@ -650,6 +652,21 @@ export const api = {
         method: 'POST',
         credentials: 'include',
         headers: { 'x-media-type': 'audio' },
+        body: form,
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw Object.assign(new Error((err as { error?: string }).error ?? res.statusText), { status: res.status })
+      }
+      return res.json() as Promise<MediaAttachment>
+    },
+    uploadVideo: async (file: File): Promise<MediaAttachment> => {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(`${API_URL}/api/media`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'x-media-type': 'video' },
         body: form,
       })
       if (!res.ok) {
