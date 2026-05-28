@@ -10,6 +10,7 @@ import { useInfiniteScroll } from '@/hooks/use-infinite-scroll'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useSession } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 import { Loader2, Search, Users, FileText, Globe, SlidersHorizontal, X, Image, MessageSquare, Hash, TrendingUp, UserPlus } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
 import { TimelineSkeleton } from '@/components/ui/skeleton'
@@ -501,35 +502,21 @@ function ExploreContent() {
 
           {/* Suggested users */}
           {suggestedUsers.length > 0 && (
-            <section className="px-4 pt-5 pb-4 border-b border-(--color-border-secondary)">
-              <div className="flex items-center gap-2 mb-3">
+            <section className="pt-5 pb-4 border-b border-(--color-border-secondary)">
+              <div className="flex items-center gap-2 mb-3 px-4">
                 <div className="w-6 h-6 rounded-lg bg-(--color-coral)/10 flex items-center justify-center">
                   <UserPlus className="w-3.5 h-3.5 text-(--color-coral)" />
                 </div>
                 <h2 className="text-sm font-semibold text-(--color-text-primary)">Tanıyor olabilirsin</h2>
               </div>
-              <div className="flex gap-4 overflow-x-auto scrollbar-none pb-1">
-                {suggestedUsers.map((actor) => (
-                  <Link
-                    key={actor.id}
-                    href={`/${actor.handle}`}
-                    className="flex-shrink-0 flex flex-col items-center gap-2 w-[72px] group"
-                  >
-                    <div className="w-14 h-14 rounded-full overflow-hidden ring-2 ring-transparent group-hover:ring-(--color-coral)/40 transition-all">
-                      {actor.avatarUrl
-                        ? <img src={actor.avatarUrl} alt={actor.handle} className="w-full h-full object-cover" />
-                        : <div className="w-full h-full flex items-center justify-center text-sm font-bold text-white" style={{ background: 'var(--gradient-avatar)' }}>{(actor.displayName ?? actor.handle).slice(0,2).toUpperCase()}</div>
-                      }
-                    </div>
-                    <div className="text-center w-full">
-                      <p className="text-[11px] font-medium text-(--color-text-primary) truncate group-hover:text-(--color-coral) transition-colors">
-                        {actor.displayName ?? actor.handle}
-                      </p>
-                      <p className="text-[10px] text-(--color-text-tertiary) truncate">@{actor.handle}</p>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+              <ScrollArea className="w-full">
+                <div className="flex gap-3 px-4 pb-3">
+                  {suggestedUsers.map((actor) => (
+                    <SuggestedUserCard key={actor.id} actor={actor} />
+                  ))}
+                </div>
+                <ScrollBar orientation="horizontal" />
+              </ScrollArea>
             </section>
           )}
 
@@ -624,6 +611,97 @@ function ExploreContent() {
         </>
       )}
     </div>
+  )
+}
+
+function SuggestedUserCard({ actor }: { actor: Actor }) {
+  const initials = (actor.displayName ?? actor.handle).slice(0, 2).toUpperCase()
+  const [following, setFollowing] = useState(actor.viewer?.following ?? false)
+  const [pending, setPending] = useState(actor.viewer?.followStatus === 'pending')
+  const [loading, setLoading] = useState(false)
+
+  async function handleFollow(e: React.MouseEvent) {
+    e.preventDefault()
+    if (loading) return
+    setLoading(true)
+    try {
+      if (following) {
+        await api.actors.unfollow(actor.handle)
+        setFollowing(false)
+        setPending(false)
+      } else {
+        await api.actors.follow(actor.handle)
+        if (actor.isLocked) setPending(true)
+        else setFollowing(true)
+      }
+    } catch {
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const btnLabel = following ? 'Takip ediliyor' : pending ? 'Bekliyor' : 'Takip et'
+  const btnActive = following || pending
+
+  return (
+    <Link
+      href={`/${actor.handle}`}
+      className="flex-shrink-0 w-[148px] rounded-2xl border border-(--color-border) bg-(--color-background) hover:border-(--color-coral)/40 hover:bg-(--color-blush) dark:hover:bg-(--color-coral)/5 transition-all duration-150 group overflow-hidden"
+    >
+      <div className="p-3 flex flex-col items-center gap-2.5">
+        {/* Avatar */}
+        <div className="relative">
+          <Avatar className="w-14 h-14 ring-2 ring-transparent group-hover:ring-(--color-coral)/30 transition-all">
+            {actor.avatarUrl && <AvatarImage src={actor.avatarUrl} alt={actor.displayName ?? actor.handle} />}
+            <AvatarFallback
+              className="text-base font-bold text-white"
+              style={{ background: 'var(--gradient-avatar)' }}
+            >
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+          {!actor.isLocal && (
+            <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-(--color-teal) flex items-center justify-center ring-2 ring-(--color-background)">
+              <Globe className="w-2.5 h-2.5 text-white" />
+            </span>
+          )}
+        </div>
+
+        {/* Name + handle */}
+        <div className="text-center w-full min-w-0">
+          <p
+            className="text-[13px] font-semibold text-(--color-text-primary) truncate group-hover:text-(--color-coral) transition-colors leading-tight"
+            style={{ fontFamily: 'var(--font-outfit)' }}
+          >
+            {actor.displayName ?? actor.handle}
+          </p>
+          <p className="text-[11px] text-(--color-text-tertiary) truncate mt-0.5">@{actor.handle}</p>
+        </div>
+
+        {/* Bio */}
+        {actor.bio && (
+          <p className="text-[11px] text-(--color-text-secondary) text-center line-clamp-2 leading-snug w-full">
+            {actor.bio}
+          </p>
+        )}
+
+        {/* Follow button */}
+        <Button
+          size="sm"
+          variant={btnActive ? 'outline' : 'default'}
+          onClick={handleFollow}
+          disabled={loading}
+          className={cn(
+            'w-full text-xs rounded-full h-7 mt-0.5',
+            btnActive
+              ? 'border-(--color-border) text-(--color-text-secondary) hover:border-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20'
+              : 'bg-(--color-coral) hover:bg-(--color-coral-hover) text-white border-0',
+          )}
+        >
+          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : btnLabel}
+        </Button>
+      </div>
+    </Link>
   )
 }
 
