@@ -723,11 +723,11 @@ export function PostComposer({ handle, displayName, avatarUrl, onPost, replyToId
     || templatePickerOpen || !!selectedTemplate || !!selectedFlair
 
   return (
-    <div className="border-b border-(--color-border-secondary)">
+    <div className="px-3 pt-2.5 pb-3 border-b border-(--color-border-secondary)">
 
       {/* Composer card */}
       <div
-        className="mx-3 my-2.5 rounded-2xl border bg-(--color-background-secondary)/40"
+        className="rounded-3xl border bg-(--color-background-secondary)/50"
         style={{
           borderColor: expanded
             ? 'color-mix(in srgb, var(--color-coral) 35%, var(--color-border))'
