@@ -3,6 +3,7 @@ import { Outfit, DM_Sans } from 'next/font/google'
 import { ServiceWorkerRegister } from '@/components/service-worker-register'
 import { ThemeProvider } from '@/components/theme-provider'
 import { HapticsProvider } from '@/components/haptics-provider'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from 'sonner'
 import './globals.css'
 
@@ -71,7 +72,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-full flex flex-col bg-(--color-background) text-(--color-text-primary) antialiased">
         <ThemeProvider>
           <HapticsProvider>
-            {children}
+            <TooltipProvider>
+              {children}
+            </TooltipProvider>
           </HapticsProvider>
           <Toaster position="bottom-center" richColors closeButton theme="system" />
         </ThemeProvider>

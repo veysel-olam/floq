@@ -107,11 +107,9 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <UserPrefsProvider>
-      <TooltipProvider>
-        <OnboardingGuard>
-          <AppLayoutInner>{children}</AppLayoutInner>
-        </OnboardingGuard>
-      </TooltipProvider>
+      <OnboardingGuard>
+        <AppLayoutInner>{children}</AppLayoutInner>
+      </OnboardingGuard>
     </UserPrefsProvider>
   )
 }
