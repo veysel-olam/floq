@@ -362,9 +362,9 @@ export default function FlowsPage() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-3 py-1">
+          <div className="px-4 py-4 space-y-4">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-(--color-text-tertiary) uppercase tracking-wide">İsim</label>
+              <label className="text-[11px] font-medium text-(--color-text-tertiary) uppercase tracking-wider">İsim</label>
               <Input
                 value={newFlow.name}
                 onChange={(e) => {
@@ -373,47 +373,53 @@ export default function FlowsPage() {
                   setNewFlow((f) => ({ ...f, name, slug }))
                 }}
                 placeholder="Akış adı"
-                className="h-9"
+                className="h-9 focus-visible:ring-1 focus-visible:ring-(--color-coral) focus-visible:border-(--color-coral)"
                 autoFocus
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-(--color-text-tertiary) uppercase tracking-wide">Slug</label>
+              <label className="text-[11px] font-medium text-(--color-text-tertiary) uppercase tracking-wider">Slug</label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-(--color-text-tertiary)">/</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-(--color-text-tertiary) pointer-events-none">/</span>
                 <Input
                   value={newFlow.slug}
                   onChange={(e) => setNewFlow((f) => ({ ...f, slug: e.target.value }))}
                   placeholder="teknoloji-haberleri"
-                  className="h-9 pl-6 font-mono text-sm"
+                  className="h-9 pl-5 font-mono text-sm focus-visible:ring-1 focus-visible:ring-(--color-coral) focus-visible:border-(--color-coral)"
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-(--color-text-tertiary) uppercase tracking-wide">Açıklama <span className="normal-case font-normal">(opsiyonel)</span></label>
+              <label className="text-[11px] font-medium text-(--color-text-tertiary) uppercase tracking-wider">
+                Açıklama <span className="normal-case font-normal">· opsiyonel</span>
+              </label>
               <Textarea
                 value={newFlow.description}
                 onChange={(e) => setNewFlow((f) => ({ ...f, description: e.target.value }))}
                 placeholder="Bu akış hakkında kısa bir açıklama..."
-                className="resize-none h-16 text-sm"
+                className="resize-none h-16 text-sm focus-visible:ring-1 focus-visible:ring-(--color-coral) focus-visible:border-(--color-coral)"
               />
             </div>
 
-            <button
-              onClick={() => setNewFlow((f) => ({ ...f, isPublic: !f.isPublic }))}
-              className={cn(
-                'flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-colors w-full',
-                newFlow.isPublic
-                  ? 'bg-(--color-coral)/10 text-(--color-coral)'
-                  : 'bg-(--color-background-secondary) text-(--color-text-secondary) border border-(--color-border)',
-              )}
-            >
-              {newFlow.isPublic
-                ? <><Globe className="w-3.5 h-3.5" /> Herkese açık</>
-                : <><Lock className="w-3.5 h-3.5" /> Özel — sadece davetliler</>}
-            </button>
+            {/* Visibility toggle — inline pill, not full-width */}
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium text-(--color-text-tertiary) uppercase tracking-wider">Görünürlük</span>
+              <button
+                onClick={() => setNewFlow((f) => ({ ...f, isPublic: !f.isPublic }))}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all',
+                  newFlow.isPublic
+                    ? 'bg-(--color-coral)/10 text-(--color-coral) ring-1 ring-(--color-coral)/20'
+                    : 'bg-(--color-background-secondary) text-(--color-text-secondary) ring-1 ring-(--color-border)',
+                )}
+              >
+                {newFlow.isPublic
+                  ? <><Globe className="w-3 h-3" /> Herkese açık</>
+                  : <><Lock className="w-3 h-3" /> Özel</>}
+              </button>
+            </div>
           </div>
 
           <DialogFooter className="gap-2">
