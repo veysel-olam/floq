@@ -493,27 +493,27 @@ export default function HomePage() {
 
       {/* ── Context bar ── */}
       {(activeFilters > 0 || isFederated || isForYou) && (
-        <div className="flex items-center gap-1.5 px-4 py-1.5 border-b border-(--color-border-secondary) bg-(--color-background-secondary)/30">
+        <div className="flex items-center gap-3 px-4 py-2 border-b border-(--color-border-secondary)">
           {isForYou && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-(--color-coral)/10 text-(--color-coral) text-[11px] font-semibold">
-              <span className="w-1 h-1 rounded-full bg-(--color-coral) inline-block" />
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-(--color-coral)">
+              <span className="w-1.5 h-1.5 rounded-full bg-(--color-coral) opacity-80" />
               Akıllı sıralama
             </span>
           )}
           {isFederated && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 text-[11px] font-semibold">
-              <GitBranch className="w-2.5 h-2.5" />
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-teal-500 dark:text-teal-400">
+              <GitBranch className="w-3 h-3" />
               Federe ağ
             </span>
           )}
           {activeFilters > 0 && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-(--color-background-secondary) border border-(--color-border) text-(--color-text-secondary) text-[11px] font-medium">
-              <Filter className="w-2.5 h-2.5" />
-              {activeFilters} filtre aktif
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-(--color-text-tertiary)">
+              <Filter className="w-3 h-3" />
+              {activeFilters} filtre
             </span>
           )}
           {activeFilters > 0 && (
-            <a href="/settings?tab=filters" className="ml-auto text-[11px] font-semibold text-(--color-coral) hover:opacity-80 transition-opacity">
+            <a href="/settings?tab=filters" className="ml-auto text-[11px] font-medium text-(--color-coral) hover:opacity-70 transition-opacity">
               Düzenle
             </a>
           )}
