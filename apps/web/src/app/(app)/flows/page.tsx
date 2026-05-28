@@ -275,32 +275,34 @@ export default function FlowsPage() {
             inviteOpen && 'rotate-180',
           )} />
         </CollapsibleTrigger>
-        <CollapsibleContent className="border-b border-(--color-border-secondary) px-4 py-3 bg-(--color-background-secondary)/30 space-y-2">
-          <div className="flex gap-2">
-            <Input
-              value={inviteCode}
-              onChange={(e) => setInviteCode(e.target.value)}
-              placeholder="Davet kodunu gir..."
-              className="h-8 text-sm font-mono flex-1"
-              onKeyDown={(e) => { if (e.key === 'Enter') void handleJoinInvite() }}
-            />
-            <Button
-              size="sm"
-              onClick={handleJoinInvite}
-              disabled={joiningInvite || !inviteCode.trim()}
-              className="h-8 bg-(--color-coral) hover:bg-(--color-coral-hover) text-white border-0 rounded-full px-4"
-            >
-              {joiningInvite ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Katıl'}
-            </Button>
+        <CollapsibleContent className="border-b border-(--color-border-secondary)">
+          <div className="px-3 pb-3 space-y-2">
+            <div className="flex gap-2 px-3 py-2.5 rounded-2xl bg-(--color-background-secondary)/60">
+              <Input
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value)}
+                placeholder="Davet kodunu gir..."
+                className="h-8 text-sm font-mono flex-1 border-0 bg-transparent focus-visible:ring-0 px-0 placeholder:text-(--color-text-tertiary)"
+                onKeyDown={(e) => { if (e.key === 'Enter') void handleJoinInvite() }}
+              />
+              <Button
+                size="sm"
+                onClick={handleJoinInvite}
+                disabled={joiningInvite || !inviteCode.trim()}
+                className="h-7 bg-(--color-coral) hover:bg-(--color-coral-hover) text-white border-0 rounded-full px-4 flex-shrink-0"
+              >
+                {joiningInvite ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Katıl'}
+              </Button>
+            </div>
+            {inviteMessage && (
+              <p className={cn(
+                'text-xs px-1',
+                inviteMessage.type === 'success' ? 'text-emerald-500' : 'text-red-500',
+              )}>
+                {inviteMessage.text}
+              </p>
+            )}
           </div>
-          {inviteMessage && (
-            <p className={cn(
-              'text-xs',
-              inviteMessage.type === 'success' ? 'text-emerald-500' : 'text-red-500',
-            )}>
-              {inviteMessage.text}
-            </p>
-          )}
         </CollapsibleContent>
       </Collapsible>
 
