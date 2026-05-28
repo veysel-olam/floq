@@ -27,12 +27,12 @@ const primaryItems = [
 ]
 
 const secondaryItems = [
-  { href: '/settings', icon: Settings, label: 'Ayarlar' },
   { href: '/drafts', icon: FileEdit, label: 'Taslaklar' },
   { href: '/lists', icon: List, label: 'Listeler' },
   { href: '/halka', icon: Radio, label: 'Halka' },
   { href: '/pulse', icon: Activity, label: 'Pulse' },
   { href: '/network', icon: Share2, label: 'Ağ Haritası' },
+  { href: '/settings', icon: Settings, label: 'Ayarlar' },
 ]
 
 function NavItem({
