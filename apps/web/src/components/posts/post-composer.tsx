@@ -97,34 +97,31 @@ interface ThreadItemComposerProps {
   onFilesChange: (files: FileList | null) => void
   onRemoveMedia: (mediaId: string) => void
   onRemove: () => void
-  isLast: boolean
 }
 
-function ThreadItemComposer({ item, avatarUrl, displayName, onContentChange, onFilesChange, onRemoveMedia, onRemove, isLast }: ThreadItemComposerProps) {
+function ThreadItemComposer({ item, avatarUrl, displayName, onContentChange, onFilesChange, onRemoveMedia, onRemove }: ThreadItemComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const initials = displayName.slice(0, 2).toUpperCase()
   const warn = MAX_CHARS - item.content.length < 50
 
   return (
-    <div className="flex gap-3 relative">
-      <div className="absolute left-[19px] top-0 w-px h-3 bg-(--color-border-secondary)" />
-      <div className="flex flex-col items-center flex-shrink-0">
-        <Avatar className="w-8 h-8 mt-3">
-          {avatarUrl && <AvatarImage src={avatarUrl} alt={displayName} />}
-          <AvatarFallback className="text-[10px] font-medium text-white" style={{ background: 'var(--gradient-avatar)' }}>
-            {initials}
-          </AvatarFallback>
-        </Avatar>
-        {!isLast && <div className="w-px flex-1 mt-1 bg-(--color-border-secondary)" />}
-      </div>
+    <div className="relative flex gap-3 px-4">
+      {/* Continuous thread connector, centred on the avatar; avatar sits on top */}
+      <div aria-hidden className="absolute left-9 top-0 bottom-0 w-px -translate-x-1/2 bg-(--color-border-secondary) pointer-events-none" />
+      <Avatar className="w-10 h-10 mt-3 relative z-[1] flex-shrink-0 ring-4 ring-(--color-background)">
+        {avatarUrl && <AvatarImage src={avatarUrl} alt={displayName} />}
+        <AvatarFallback className="text-xs font-medium text-white" style={{ background: 'var(--gradient-avatar)' }}>
+          {initials}
+        </AvatarFallback>
+      </Avatar>
 
       <div className="flex-1 min-w-0 pt-3 pb-2">
         <textarea
           value={item.content}
           onChange={(e) => onContentChange(e.target.value)}
-          placeholder="Devam…"
+          placeholder="Konuşmayı sürdür…"
           rows={2}
-          className="w-full resize-none border-0 bg-transparent p-0 min-h-[3rem] text-sm text-(--color-text-primary) placeholder:text-(--color-text-tertiary) focus:outline-none"
+          className="w-full resize-none border-0 bg-transparent p-0 min-h-[2.75rem] text-[15px] leading-relaxed text-(--color-text-primary) placeholder:text-(--color-text-tertiary) focus:outline-none"
         />
 
         {item.media.length > 0 && (
@@ -144,7 +141,7 @@ function ThreadItemComposer({ item, avatarUrl, displayName, onContentChange, onF
           </div>
         )}
 
-        <div className="flex items-center gap-1 mt-1.5">
+        <div className="flex items-center gap-1 mt-1">
           <input
             ref={fileInputRef}
             type="file"
@@ -156,19 +153,19 @@ function ThreadItemComposer({ item, avatarUrl, displayName, onContentChange, onF
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={item.uploading || item.media.length >= MAX_IMAGES}
-            className="p-1 rounded-lg text-(--color-text-tertiary) hover:text-(--color-coral) hover:bg-(--color-blush) dark:hover:bg-(--color-coral)/12 transition-colors disabled:opacity-40"
+            className="p-1.5 rounded-lg text-(--color-text-tertiary) hover:text-(--color-coral) hover:bg-(--color-blush) dark:hover:bg-(--color-coral)/12 transition-colors disabled:opacity-40"
             aria-label="Görsel ekle"
           >
-            {item.uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Image className="w-3.5 h-3.5" />}
+            {item.uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Image className="w-4 h-4" />}
           </button>
           <div className="flex-1" />
           {warn && <CharRing chars={item.content.length} max={MAX_CHARS} />}
           <button
             onClick={onRemove}
-            className="p-1 rounded-lg text-(--color-text-tertiary) hover:text-red-500 hover:bg-red-500/10 transition-colors"
+            className="p-1.5 rounded-lg text-(--color-text-tertiary) hover:text-red-500 hover:bg-red-500/10 transition-colors"
             aria-label="Bu gönderiyi kaldır"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -1644,11 +1641,13 @@ export function PostComposer({ handle, displayName, avatarUrl, onPost, replyToId
               </span>
             </div>
 
-            <div className="flex items-center gap-2 ml-auto flex-shrink-0 pl-2">
+            <div className="flex items-center gap-2 ml-auto flex-shrink-0 pl-3">
+              <div className="w-px h-5 bg-(--color-border-secondary)/70 flex-shrink-0" aria-hidden />
               {draftSavedAt && !posting && content.length > 0 && (
                 <span className="text-[10px] text-(--color-text-tertiary) hidden sm:inline">Kaydedildi</span>
               )}
-              {content.length > 0 && <CharRing chars={content.length} max={MAX_CHARS} />}
+              {/* Counter only near the limit — no near-empty ring cluttering the bar */}
+              {remaining < 50 && <CharRing chars={content.length} max={MAX_CHARS} />}
 
               {(content.trim() || media.length > 0) && !scheduledAt && (
                 <Tooltip>
@@ -1683,34 +1682,39 @@ export function PostComposer({ handle, displayName, avatarUrl, onPost, replyToId
       </div>
       {/* end card */}
 
-      {/* Thread items */}
-      {threadItems.map((item, index) => (
-        <ThreadItemComposer
-          key={item.id}
-          item={item}
-          avatarUrl={avatarUrl}
-          displayName={displayName}
-          onContentChange={(c) => updateThreadItemContent(item.id, c)}
-          onFilesChange={(files) => void handleThreadItemFiles(item.id, files)}
-          onRemoveMedia={(mediaId) => removeThreadItemMedia(item.id, mediaId)}
-          onRemove={() => removeThreadItem(item.id)}
-          isLast={index === threadItems.length - 1}
-        />
-      ))}
+      {/* Thread chain — aligned with the card, one continuous connector through the avatars */}
+      {(threadItems.length > 0 || ((content.trim() || media.length > 0) && !replyToId)) && (
+        <div className="mx-4 -mt-1">
+          {threadItems.map((item) => (
+            <ThreadItemComposer
+              key={item.id}
+              item={item}
+              avatarUrl={avatarUrl}
+              displayName={displayName}
+              onContentChange={(c) => updateThreadItemContent(item.id, c)}
+              onFilesChange={(files) => void handleThreadItemFiles(item.id, files)}
+              onRemoveMedia={(mediaId) => removeThreadItemMedia(item.id, mediaId)}
+              onRemove={() => removeThreadItem(item.id)}
+            />
+          ))}
 
-      {/* Add to thread — only on home composer, not reply form */}
-      {(content.trim() || media.length > 0) && !replyToId && (
-        <div className="flex items-center gap-3 mt-1">
-          <div className="w-10 flex-shrink-0 flex justify-center">
-            <div className="w-px h-4 bg-(--color-border-secondary)" />
-          </div>
-          <button
-            onClick={addThreadItem}
-            className="flex items-center gap-1.5 text-xs text-(--color-text-tertiary) hover:text-(--color-coral) transition-colors py-1"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Zincire ekle
-          </button>
+          {/* Add to thread — only on home composer, not reply form */}
+          {(content.trim() || media.length > 0) && !replyToId && (
+            <button
+              onClick={addThreadItem}
+              className="relative flex items-center gap-3 px-4 py-2 w-full text-left group/add"
+            >
+              <div aria-hidden className="absolute left-9 top-0 h-1/2 w-px -translate-x-1/2 bg-(--color-border-secondary) pointer-events-none" />
+              <span className="relative z-[1] w-10 flex justify-center flex-shrink-0">
+                <span className="w-7 h-7 rounded-full bg-(--color-background) border border-dashed border-(--color-border) flex items-center justify-center text-(--color-text-tertiary) group-hover/add:border-(--color-coral) group-hover/add:text-(--color-coral) transition-colors">
+                  <Plus className="w-4 h-4" />
+                </span>
+              </span>
+              <span className="text-sm font-medium text-(--color-text-tertiary) group-hover/add:text-(--color-coral) transition-colors">
+                Zincire ekle
+              </span>
+            </button>
+          )}
         </div>
       )}
 

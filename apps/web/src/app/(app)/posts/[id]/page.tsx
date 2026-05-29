@@ -337,7 +337,7 @@ function FocusedPost({ post, handle, displayName, avatarUrl, hasAncestors, onRep
         {/* Content */}
         {post.content && (
           <div className="px-4 pb-3">
-            <p className="text-lg leading-[1.7] text-(--color-text-primary) whitespace-pre-wrap break-words">
+            <p className="text-base leading-[1.7] text-(--color-text-primary) whitespace-pre-wrap break-words">
               {renderContent(post.content)}
             </p>
           </div>
@@ -347,7 +347,7 @@ function FocusedPost({ post, handle, displayName, avatarUrl, hasAncestors, onRep
         {translation && (
           <div className="mx-4 mb-3 p-3 rounded-xl bg-(--color-background-secondary) border border-(--color-border-secondary)">
             <p className="text-[11px] text-(--color-text-tertiary) mb-1.5 font-medium">{translation.from} → Türkçe</p>
-            <p className="text-base leading-[1.7] text-(--color-text-primary)">{translation.text}</p>
+            <p className="text-sm leading-[1.7] text-(--color-text-primary)">{translation.text}</p>
           </div>
         )}
 
