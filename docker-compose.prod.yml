@@ -80,6 +80,7 @@ services:
       REQUIRE_INVITE: ${REQUIRE_INVITE:-false}
       ADMIN_SECRET: ${ADMIN_SECRET:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
+      KLIPY_API_KEY: ${KLIPY_API_KEY:-}
 
   web:
     image: ghcr.io/${GITHUB_REPO}-web:latest
