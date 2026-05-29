@@ -15,26 +15,29 @@ interface KlipyFile {
   size?: number
 }
 
+type KlipyVariant = { gif?: KlipyFile; webp?: KlipyFile; mp4?: KlipyFile; jpg?: KlipyFile }
+
 interface KlipyResult {
   id: number
   title: string
-  file: {
-    hd?: { gif?: KlipyFile; webp?: KlipyFile }
-    md?: { gif?: KlipyFile; webp?: KlipyFile }
-    sd?: { gif?: KlipyFile; webp?: KlipyFile }
-  }
+  // Klipy ships four sizes, largest → smallest: hd, md, sm, xs
+  file: Partial<Record<'hd' | 'md' | 'sm' | 'xs', KlipyVariant>>
 }
 
 function mapResult(r: KlipyResult) {
-  const full = r.file.md?.gif ?? r.file.hd?.gif ?? r.file.sd?.gif
-  const preview = r.file.hd?.gif ?? full
+  const f = r.file
+  // Grid preview: smallest webp (falls back to small gif) so the picker stays light
+  const preview =
+    f.sm?.webp ?? f.xs?.webp ?? f.sm?.gif ?? f.xs?.gif ?? f.md?.webp ?? f.md?.gif
+  // Attached to the post: a reasonably-sized animated gif
+  const full = f.md?.gif ?? f.hd?.gif ?? f.sm?.gif ?? preview
   return {
     id: String(r.id),
     title: r.title,
     url: full?.url ?? '',
     previewUrl: preview?.url ?? full?.url ?? '',
-    width: preview?.width ?? full?.width ?? 0,
-    height: preview?.height ?? full?.height ?? 0,
+    width: full?.width ?? preview?.width ?? 0,
+    height: full?.height ?? preview?.height ?? 0,
   }
 }
 

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Heart, Repeat2, MessageCircle, Bookmark, MoreHorizontal, Pencil, Trash2, Check, X, Eye, Users, Lock, CornerDownRight, Feather, BarChart2, Pin, PinOff, Loader2, Languages, UserCheck, Flag, Globe, Link2, Code2, FolderPlus, Plus, Play, Pause, Volume2, Volume1, VolumeX, Maximize, Minimize, PictureInPicture2, MapPin, AlertTriangle, Star, LayoutTemplate } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
 import { api, type Post, type Poll, type Actor, type PostCollection, proxyMediaUrl } from '@/lib/api'
 import type { FilterResult } from '@/lib/keyword-filters'
@@ -16,6 +17,8 @@ import { useUserPrefs } from '@/lib/user-prefs-context'
 import { triggerHaptic } from '@/hooks/use-haptics'
 import { MediaLightbox } from '@/components/ui/media-lightbox'
 import { toast } from 'sonner'
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
 
 export const FLAIR_COLORS: Record<string, string> = {
   coral:  'bg-red-50 text-red-600 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900',
@@ -39,6 +42,8 @@ interface PostCardProps {
   onPinChange?: (postId: string, pinned: boolean) => void
   hideActions?: boolean
   detail?: boolean
+  /** Draws a continuous vertical thread connector down from the avatar and removes the bottom border (for ancestor posts in a thread). */
+  threadLine?: boolean
   communityPin?: { isPinned: boolean; onToggle: () => Promise<void> }
 }
 
@@ -158,6 +163,35 @@ function MentionLink({ handle, children }: { handle: string; children: React.Rea
 const CODE_BLOCK_RE = /```(\w*)\n?([\s\S]*?)```/g
 const INLINE_CODE_RE = /`([^`\n]+)`/g
 
+// LaTeX math: $$...$$ (block) and $...$ (inline, only when it looks like math, not currency)
+export const MATH_RE = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/g
+
+export function renderMathPart(part: string, key: string): React.ReactNode | null {
+  let tex: string | null = null
+  let display = false
+  if (part.startsWith('$$') && part.endsWith('$$') && part.length > 4) {
+    tex = part.slice(2, -2)
+    display = true
+  } else if (part.startsWith('$') && part.endsWith('$') && part.length > 2) {
+    const inner = part.slice(1, -1)
+    // require a math indicator so "$5 ... $10" currency isn't rendered as math
+    if (/[\\^_{}]/.test(inner)) tex = inner
+  }
+  if (tex == null) return null
+  try {
+    const html = katex.renderToString(tex, { displayMode: display, throwOnError: false, output: 'html' })
+    return (
+      <span
+        key={key}
+        className={display ? 'block my-2 overflow-x-auto' : ''}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    )
+  } catch {
+    return null
+  }
+}
+
 function renderInlineText(text: string, keyPrefix: string) {
   // Split by inline code first
   const inlineParts = text.split(INLINE_CODE_RE)
@@ -173,25 +207,29 @@ function renderInlineText(text: string, keyPrefix: string) {
         </code>
       )
     }
-    // Apply hashtag / mention tokenisation on plain text
-    const richParts = part.split(RICH_TOKEN)
-    return richParts.map((rp, ri) => {
-      if (rp.startsWith('#')) {
-        const tag = rp.slice(1).toLowerCase()
-        return (
-          <Link key={`${keyPrefix}-r-${ii}-${ri}`} href={`/hashtag/${encodeURIComponent(tag)}`} className="text-(--color-coral) hover:underline" onClick={(e) => e.stopPropagation()}>
-            {rp}
-          </Link>
-        )
-      }
-      if (rp.startsWith('@')) {
-        return (
-          <MentionLink key={`${keyPrefix}-r-${ii}-${ri}`} handle={rp.slice(1)}>
-            {rp}
-          </MentionLink>
-        )
-      }
-      return <Fragment key={`${keyPrefix}-r-${ii}-${ri}`}>{rp}</Fragment>
+    // Math first (so $...$ isn't broken by token splitting), then hashtag/mention on the rest
+    return part.split(MATH_RE).map((mp, mi) => {
+      const math = mi % 2 === 1 ? renderMathPart(mp, `${keyPrefix}-m-${ii}-${mi}`) : null
+      if (math) return math
+      const richParts = mp.split(RICH_TOKEN)
+      return richParts.map((rp, ri) => {
+        if (rp.startsWith('#')) {
+          const tag = rp.slice(1).toLowerCase()
+          return (
+            <Link key={`${keyPrefix}-r-${ii}-${mi}-${ri}`} href={`/hashtag/${encodeURIComponent(tag)}`} className="text-(--color-coral) hover:underline" onClick={(e) => e.stopPropagation()}>
+              {rp}
+            </Link>
+          )
+        }
+        if (rp.startsWith('@')) {
+          return (
+            <MentionLink key={`${keyPrefix}-r-${ii}-${mi}-${ri}`} handle={rp.slice(1)}>
+              {rp}
+            </MentionLink>
+          )
+        }
+        return <Fragment key={`${keyPrefix}-r-${ii}-${mi}-${ri}`}>{rp}</Fragment>
+      })
     })
   })
 }
@@ -232,16 +270,58 @@ function formatRelativeTime(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })
 }
 
-function detectPlatformFromUrl(url: string): string | null {
+export function extractYouTubeId(url: string): string | null {
+  try {
+    const u = new URL(url)
+    const host = u.hostname.replace(/^www\./, '')
+    if (host === 'youtu.be') return u.pathname.slice(1).split('?')[0] ?? null
+    if (host === 'youtube.com') return u.searchParams.get('v')
+  } catch {}
+  return null
+}
+
+export function detectPlatformFromUrl(url: string): string | null {
   try {
     const host = new URL(url).hostname.replace(/^www\./, '')
     if (host === 'open.spotify.com' || host === 'spotify.com') return 'spotify'
     if (host === 'music.youtube.com') return 'ytmusic'
-    if (host === 'youtube.com' || host === 'youtu.be') return 'youtube'
+    // youtube.com / youtu.be are video platforms — rendered as regular link cards, not MusicCard
     if (host === 'music.apple.com') return 'applemusic'
     if (host === 'deezer.com') return 'deezer'
     if (host === 'soundcloud.com') return 'soundcloud'
     if (host === 'tidal.com' || host === 'listen.tidal.com') return 'tidal'
+    if (host.endsWith('bandcamp.com')) return 'bandcamp'
+  } catch {}
+  return null
+}
+
+// Video platforms rendered as click-to-play embeds (YouTube has its own dedicated card)
+export function detectVideoEmbed(url: string): { platform: string; embedUrl: string } | null {
+  try {
+    const u = new URL(url)
+    const host = u.hostname.replace(/^www\./, '')
+    const parent = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
+
+    if (host === 'vimeo.com' || host === 'player.vimeo.com') {
+      const m = u.pathname.match(/\/(?:video\/)?(\d+)/)
+      if (m) return { platform: 'vimeo', embedUrl: `https://player.vimeo.com/video/${m[1]}` }
+    }
+    if (host === 'tiktok.com' || host.endsWith('.tiktok.com')) {
+      const m = u.pathname.match(/\/video\/(\d+)/)
+      if (m) return { platform: 'tiktok', embedUrl: `https://www.tiktok.com/embed/v2/${m[1]}` }
+    }
+    if (host === 'twitch.tv') {
+      const vod = u.pathname.match(/^\/videos\/(\d+)/)
+      if (vod) return { platform: 'twitch', embedUrl: `https://player.twitch.tv/?video=${vod[1]}&parent=${parent}&autoplay=false` }
+      const clip = u.pathname.match(/^\/[^/]+\/clip\/([^/?]+)/)
+      if (clip) return { platform: 'twitch', embedUrl: `https://clips.twitch.tv/embed?clip=${clip[1]}&parent=${parent}&autoplay=false` }
+      const ch = u.pathname.match(/^\/([^/?]+)\/?$/)
+      if (ch && ch[1]) return { platform: 'twitch', embedUrl: `https://player.twitch.tv/?channel=${ch[1]}&parent=${parent}&autoplay=false` }
+    }
+    if (host === 'clips.twitch.tv') {
+      const slug = u.pathname.slice(1).split('/')[0]
+      if (slug) return { platform: 'twitch', embedUrl: `https://clips.twitch.tv/embed?clip=${slug}&parent=${parent}&autoplay=false` }
+    }
   } catch {}
   return null
 }
@@ -254,9 +334,13 @@ const PLATFORM_META: Record<string, { label: string; color: string; textColor: s
   deezer:     { label: 'Deezer',       color: '#A238FF', textColor: '#fff' },
   soundcloud: { label: 'SoundCloud',   color: '#FF5500', textColor: '#fff' },
   tidal:      { label: 'Tidal',        color: '#000000', textColor: '#fff' },
+  bandcamp:   { label: 'Bandcamp',     color: '#629AA9', textColor: '#fff' },
+  vimeo:      { label: 'Vimeo',        color: '#1AB7EA', textColor: '#fff' },
+  twitch:     { label: 'Twitch',       color: '#9146FF', textColor: '#fff' },
+  tiktok:     { label: 'TikTok',       color: '#000000', textColor: '#fff' },
 }
 
-function MusicCard({ preview }: { preview: NonNullable<Post['linkPreview']> }) {
+export function MusicCard({ preview }: { preview: NonNullable<Post['linkPreview']> }) {
   const [expanded, setExpanded] = useState(false)
   const platform = PLATFORM_META[preview.musicPlatform ?? '']
 
@@ -323,7 +407,12 @@ function MusicCard({ preview }: { preview: NonNullable<Post['linkPreview']> }) {
           <iframe
             src={preview.musicEmbedUrl}
             width="100%"
-            height={preview.musicPlatform === 'soundcloud' ? 120 : preview.musicPlatform === 'youtube' || preview.musicPlatform === 'ytmusic' ? 200 : 80}
+            height={
+              preview.musicPlatform === 'soundcloud' ? 120
+              : preview.musicPlatform === 'youtube' || preview.musicPlatform === 'ytmusic' ? 200
+              : preview.musicPlatform === 'bandcamp' ? (preview.musicType === 'album' ? 470 : 120)
+              : 80
+            }
             allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
             loading="lazy"
             className="block"
@@ -331,6 +420,198 @@ function MusicCard({ preview }: { preview: NonNullable<Post['linkPreview']> }) {
           />
         </div>
       )}
+    </div>
+  )
+}
+
+export function YouTubeCard({ preview, videoId }: { preview: NonNullable<Post['linkPreview']>; videoId: string }) {
+  const [playing, setPlaying] = useState(false)
+  const thumbnail = preview.image ?? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+
+  return (
+    <div
+      className="mt-2.5 rounded-xl border border-(--color-border) overflow-hidden hover:border-(--color-coral)/30 transition-colors"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {playing ? (
+        <iframe
+          src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`}
+          className="w-full aspect-video"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+          loading="lazy"
+        />
+      ) : (
+        <button
+          onClick={() => setPlaying(true)}
+          className="relative w-full block group"
+          aria-label="Videoyu oynat"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={thumbnail}
+            alt={preview.title ?? ''}
+            className="w-full aspect-video object-cover bg-(--color-background-secondary)"
+            loading="lazy"
+          />
+          {/* Subtle dark overlay + glass play button */}
+          <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-black/22 transition-colors">
+            <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+              <Play className="w-5 h-5 text-white fill-white ml-0.5" />
+            </div>
+          </div>
+        </button>
+      )}
+      <a
+        href={preview.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-(--color-background-secondary) transition-colors group/yt"
+      >
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] text-(--color-text-tertiary) mb-0.5 uppercase tracking-wide">YouTube</p>
+          {preview.title && (
+            <p className="text-sm font-medium text-(--color-text-primary) line-clamp-1 group-hover/yt:text-(--color-coral) transition-colors">
+              {preview.title}
+            </p>
+          )}
+        </div>
+      </a>
+    </div>
+  )
+}
+
+// Generic click-to-play embed for Vimeo / TikTok / Twitch
+export function VideoEmbedCard({ preview, platform, embedUrl }: {
+  preview: NonNullable<Post['linkPreview']>
+  platform: string
+  embedUrl: string
+}) {
+  const [playing, setPlaying] = useState(false)
+  const meta = PLATFORM_META[platform]
+  const portrait = platform === 'tiktok'
+
+  return (
+    <div
+      className="mt-2.5 rounded-xl border border-(--color-border) overflow-hidden hover:border-(--color-coral)/30 transition-colors"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className={cn('relative w-full', portrait ? 'aspect-[9/16] max-h-[580px] mx-auto' : 'aspect-video')}>
+        {playing ? (
+          <iframe
+            src={embedUrl}
+            className="absolute inset-0 w-full h-full"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+            allowFullScreen
+            loading="lazy"
+          />
+        ) : (
+          <button
+            onClick={() => setPlaying(true)}
+            className="group/v absolute inset-0 w-full h-full block"
+            aria-label="Oynat"
+          >
+            {preview.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={preview.image} alt={preview.title ?? ''} className="w-full h-full object-cover bg-(--color-background-secondary)" loading="lazy" />
+            ) : (
+              <div className="w-full h-full" style={{ background: meta?.color ?? 'var(--color-background-secondary)' }} />
+            )}
+            <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover/v:bg-black/22 transition-colors">
+              <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center shadow-md group-hover/v:scale-105 transition-transform">
+                <Play className="w-5 h-5 text-white fill-white ml-0.5" />
+              </div>
+            </div>
+            {meta && (
+              <span
+                className="absolute top-2 left-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                style={{ background: meta.color, color: meta.textColor }}
+              >
+                {meta.label}
+              </span>
+            )}
+          </button>
+        )}
+      </div>
+      {preview.title && (
+        <a
+          href={preview.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-(--color-background-secondary) transition-colors group/ve"
+        >
+          <div className="flex-1 min-w-0">
+            {meta && <p className="text-[11px] text-(--color-text-tertiary) mb-0.5 uppercase tracking-wide">{meta.label}</p>}
+            <p className="text-sm font-medium text-(--color-text-primary) line-clamp-1 group-hover/ve:text-(--color-coral) transition-colors">
+              {preview.title}
+            </p>
+          </div>
+        </a>
+      )}
+    </div>
+  )
+}
+
+// Location card — click-to-load mini map (key-free OSM embed); name links to the in-app feed
+export function LocationCard({ name, lat, lng }: { name: string; lat?: number | null; lng?: number | null }) {
+  const [shown, setShown] = useState(false)
+  const hasCoords = typeof lat === 'number' && typeof lng === 'number'
+
+  if (!hasCoords) {
+    return (
+      <div className="mt-2">
+        <Link
+          href={`/location/${encodeURIComponent(name)}`}
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1 text-[11px] text-(--color-text-tertiary) hover:text-(--color-coral) transition-colors"
+        >
+          <MapPin className="w-3 h-3 flex-shrink-0" />
+          <span>{name}</span>
+        </Link>
+      </div>
+    )
+  }
+
+  const d = 0.008
+  const embedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${lng! - d}%2C${lat! - d}%2C${lng! + d}%2C${lat! + d}&layer=mapnik&marker=${lat}%2C${lng}`
+  const osmUrl = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=15/${lat}/${lng}`
+
+  return (
+    <div className="mt-2 rounded-xl border border-(--color-border) overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      {shown ? (
+        <iframe src={embedUrl} className="w-full h-40 block" loading="lazy" title={name} style={{ border: 'none' }} />
+      ) : (
+        <button
+          onClick={() => setShown(true)}
+          className="group/map relative w-full h-28 flex items-center justify-center bg-(--color-background-secondary) overflow-hidden"
+          aria-label="Haritayı göster"
+        >
+          <div className="absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)', backgroundSize: '16px 16px' }} />
+          <div className="relative flex flex-col items-center gap-1 text-(--color-text-tertiary) group-hover/map:text-(--color-coral) transition-colors">
+            <MapPin className="w-6 h-6" />
+            <span className="text-[11px] font-medium">Haritayı göster</span>
+          </div>
+        </button>
+      )}
+      <div className="flex items-center gap-1.5 px-3 py-2 border-t border-(--color-border-secondary)">
+        <MapPin className="w-3.5 h-3.5 text-(--color-coral) flex-shrink-0" />
+        <Link
+          href={`/location/${encodeURIComponent(name)}`}
+          onClick={(e) => e.stopPropagation()}
+          className="text-xs font-medium text-(--color-text-primary) hover:text-(--color-coral) transition-colors truncate flex-1 min-w-0"
+        >
+          {name}
+        </Link>
+        <a
+          href={osmUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="text-[11px] text-(--color-text-tertiary) hover:text-(--color-coral) transition-colors flex-shrink-0"
+        >
+          Haritada aç ↗
+        </a>
+      </div>
     </div>
   )
 }
@@ -396,9 +677,6 @@ type PostCardState = {
   quoteOpen: boolean
   quoteContent: string
   quoteSubmitting: boolean
-  quotesModalOpen: boolean
-  quotesList: Post[] | null
-  quotesLoading: boolean
   boostMenuOpen: boolean
   menuOpen: boolean
   reportOpen: boolean
@@ -438,10 +716,6 @@ type PostCardAction =
   | { type: 'QUOTE_CONTENT'; text: string }
   | { type: 'QUOTE_SUBMITTING'; value: boolean }
   | { type: 'QUOTE_SUCCESS' }
-  | { type: 'QUOTES_MODAL_OPEN' }
-  | { type: 'QUOTES_MODAL_CLOSE' }
-  | { type: 'QUOTES_LOADING' }
-  | { type: 'QUOTES_LOADED'; posts: Post[] }
   | { type: 'BOOST_MENU_TOGGLE' }
   | { type: 'BOOST_MENU_CLOSE' }
   | { type: 'MENU_TOGGLE' }
@@ -481,7 +755,7 @@ function formatVideoDuration(s: number) {
   return `${m}:${Math.floor(s % 60).toString().padStart(2, '0')}`
 }
 
-function InlineVideoPlayer({ url, previewUrl, altText, square }: {
+export function InlineVideoPlayer({ url, previewUrl, altText, square }: {
   url: string
   previewUrl: string | null
   altText: string | null
@@ -831,10 +1105,6 @@ function postCardReducer(state: PostCardState, action: PostCardAction): PostCard
     case 'QUOTE_CONTENT':       return { ...state, quoteContent: action.text }
     case 'QUOTE_SUBMITTING':    return { ...state, quoteSubmitting: action.value }
     case 'QUOTE_SUCCESS':       return { ...state, quoteOpen: false, quoteContent: '', quoteSubmitting: false, quotesCount: state.quotesCount + 1 }
-    case 'QUOTES_MODAL_OPEN':   return { ...state, quotesModalOpen: true }
-    case 'QUOTES_MODAL_CLOSE':  return { ...state, quotesModalOpen: false }
-    case 'QUOTES_LOADING':      return { ...state, quotesLoading: true }
-    case 'QUOTES_LOADED':       return { ...state, quotesList: action.posts, quotesLoading: false }
     case 'BOOST_MENU_TOGGLE':   return { ...state, boostMenuOpen: !state.boostMenuOpen }
     case 'BOOST_MENU_CLOSE':    return { ...state, boostMenuOpen: false }
     case 'MENU_TOGGLE':         return { ...state, menuOpen: !state.menuOpen }
@@ -867,10 +1137,12 @@ function postCardReducer(state: PostCardState, action: PostCardAction): PostCard
   }
 }
 
-function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filterResult, pinned, onPinChange, hideActions, detail, communityPin }: PostCardProps) {
+function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filterResult, pinned, onPinChange, hideActions, detail, threadLine, communityPin }: PostCardProps) {
   const router = useRouter()
   const { nsfwMode } = useUserPrefs()
   const isNsfwBlurred = post.sensitive && nsfwMode === 'blur'
+
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
 
   const [s, dispatch] = useReducer(postCardReducer, post, (p): PostCardState => ({
     warnDismissed: false,
@@ -890,9 +1162,6 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
     quoteOpen: false,
     quoteContent: '',
     quoteSubmitting: false,
-    quotesModalOpen: false,
-    quotesList: null,
-    quotesLoading: false,
     boostMenuOpen: false,
     menuOpen: false,
     reportOpen: false,
@@ -917,11 +1186,10 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
   const {
     warnDismissed, nsfwRevealed,
     liked, boosted, bookmarked,
-    likesCount, boostsCount, repliesCount, quotesCount,
+    likesCount, boostsCount, repliesCount,
     reactions, myReactions,
     replyOpen, replyContent, replySubmitting,
     quoteOpen, quoteContent, quoteSubmitting,
-    quotesModalOpen, quotesList, quotesLoading,
     boostMenuOpen, menuOpen, reportOpen,
     editOpen, editContent, editVisibility, editSaving,
     editHistoryOpen, editHistory, editHistoryLoading,
@@ -1143,19 +1411,6 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
     }
   }
 
-  async function openQuotesModal(e: React.MouseEvent) {
-    e.stopPropagation()
-    dispatch({ type: 'QUOTES_MODAL_OPEN' })
-    if (quotesList) return
-    dispatch({ type: 'QUOTES_LOADING' })
-    try {
-      const data = await api.posts.quotes(post.id)
-      dispatch({ type: 'QUOTES_LOADED', posts: data.posts })
-    } catch {
-      dispatch({ type: 'QUOTES_LOADED', posts: [] })
-    }
-  }
-
   async function openEditHistory(e: React.MouseEvent) {
     e.stopPropagation()
     dispatch({ type: 'EDIT_HISTORY_OPEN' })
@@ -1248,14 +1503,25 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
     <article
       data-post-card
       data-postcard
+      {...(threadLine ? { 'data-thread-line': '' } : {})}
       onClick={detail ? undefined : handleCardClick}
       className={cn(
         'group',
         detail
           ? 'px-4 pt-5 pb-3 cursor-default'
-          : 'border-b border-(--color-border-secondary) hover:bg-(--color-background-secondary)/60 transition-colors cursor-pointer',
+          : threadLine
+            ? 'relative hover:bg-(--color-background-secondary)/60 transition-colors cursor-pointer'
+            : 'border-b border-(--color-border-secondary) hover:bg-(--color-background-secondary)/60 transition-colors cursor-pointer',
       )}
     >
+      {/* Thread connector — runs from the avatar centre down to the bottom edge, behind the avatar */}
+      {threadLine && (
+        <div
+          aria-hidden
+          className="absolute w-0.5 bg-(--color-border-secondary) pointer-events-none z-0"
+          style={{ left: '35px', top: '34px', bottom: 0 }}
+        />
+      )}
       {pinned && (
         <div className="flex items-center gap-1.5 px-4 pt-2.5 pb-0 text-xs text-(--color-text-tertiary)">
           <Pin className="w-3 h-3" />
@@ -1272,7 +1538,7 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
         </div>
       )}
       <div className={cn('flex gap-3', detail ? 'pb-4' : cn('px-4 pb-3.5', post.boostedBy ? 'pt-2' : 'pt-3.5'))}>
-        <Link href={`/${handle}`} className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+        <Link href={`/${handle}`} className={cn('flex-shrink-0', threadLine && 'relative z-[1]')} onClick={(e) => e.stopPropagation()}>
           <Avatar className={detail ? 'w-12 h-12' : 'w-10 h-10'}>
             {post.author?.avatarUrl && <AvatarImage src={proxyMediaUrl(post.author.avatarUrl) ?? post.author.avatarUrl} alt={displayName} />}
             <AvatarFallback
@@ -1432,7 +1698,7 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
                         <>
                           <div className="my-1 border-t border-(--color-border-secondary)" />
                           <button
-                            onClick={() => { dispatch({ type: 'MENU_CLOSE' }); onDelete(post.id) }}
+                            onClick={() => { dispatch({ type: 'MENU_CLOSE' }); setDeleteConfirmOpen(true) }}
                             className="w-full flex items-center gap-2 px-3.5 py-2 text-[13px] text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
                           >
                             <Trash2 className="w-3.5 h-3.5" /> Sil
@@ -1732,64 +1998,66 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
             )}
 
             {/* Link preview */}
-            {!editOpen && post.linkPreview && !post.media?.length && (
-              (post.linkPreview.musicPlatform ?? detectPlatformFromUrl(post.linkPreview.url))
-                ? <MusicCard preview={{
-                    ...post.linkPreview,
-                    musicPlatform: post.linkPreview.musicPlatform ?? detectPlatformFromUrl(post.linkPreview.url) ?? undefined,
-                  }} />
-                : (
+            {!editOpen && post.linkPreview && !post.media?.length && (() => {
+              const lp = post.linkPreview
+              const rawPlatform = lp.musicPlatform ?? detectPlatformFromUrl(lp.url)
+              // 'youtube' was previously mis-tagged as music; treat it as video
+              const isMusicCard = !!rawPlatform && rawPlatform !== 'youtube'
+              const ytId = !isMusicCard ? extractYouTubeId(lp.url) : null
+              const videoEmbed = !isMusicCard && !ytId ? detectVideoEmbed(lp.url) : null
+
+              if (isMusicCard) return (
+                <MusicCard preview={{ ...lp, musicPlatform: rawPlatform ?? undefined }} />
+              )
+              if (ytId) return (
+                <YouTubeCard preview={lp} videoId={ytId} />
+              )
+              if (videoEmbed) return (
+                <VideoEmbedCard preview={lp} platform={videoEmbed.platform} embedUrl={videoEmbed.embedUrl} />
+              )
+              return (
                   <a
-                    href={post.linkPreview.url}
+                    href={lp.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
                     className="mt-2.5 block rounded-xl border border-(--color-border) overflow-hidden hover:border-(--color-coral)/40 transition-colors group/preview"
                   >
-                    {post.linkPreview.image && (
+                    {lp.image && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={post.linkPreview.image}
+                        src={lp.image}
                         alt=""
                         className="w-full max-h-48 object-cover bg-(--color-background-secondary)"
                         loading="lazy"
                       />
                     )}
                     <div className="px-3 py-2.5">
-                      {post.linkPreview.siteName && (
+                      {lp.siteName && (
                         <p className="text-[11px] text-(--color-text-tertiary) mb-0.5 uppercase tracking-wide">
-                          {post.linkPreview.siteName}
+                          {lp.siteName}
                         </p>
                       )}
-                      {post.linkPreview.title && (
+                      {lp.title && (
                         <p className="text-sm font-medium text-(--color-text-primary) line-clamp-2 group-hover/preview:text-(--color-coral) transition-colors">
-                          {post.linkPreview.title}
+                          {lp.title}
                         </p>
                       )}
-                      {post.linkPreview.description && (
+                      {lp.description && (
                         <p className="text-xs text-(--color-text-tertiary) mt-0.5 line-clamp-2">
-                          {post.linkPreview.description}
+                          {lp.description}
                         </p>
                       )}
                       <p className="text-[11px] text-(--color-text-tertiary) mt-1.5 truncate">
-                        {post.linkPreview.url}
+                        {lp.url}
                       </p>
                     </div>
                   </a>
-                )
-            )}
-            {/* Location chip */}
+              )
+            })()}
+            {/* Location — mini map card when coords exist, else a simple chip */}
             {post.locationName && (
-              <div className="mt-2">
-                <Link
-                  href={`/location/${encodeURIComponent(post.locationName)}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="inline-flex items-center gap-1 text-[11px] text-(--color-text-tertiary) hover:text-(--color-coral) transition-colors"
-                >
-                  <MapPin className="w-3 h-3 flex-shrink-0" />
-                  <span>{post.locationName}</span>
-                </Link>
-              </div>
+              <LocationCard name={post.locationName} lat={post.locationLat} lng={post.locationLng} />
             )}
 
             {/* Poll */}
@@ -1962,7 +2230,7 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
               dataAction="reply"
             />
             {/* Boost / Quote dropdown */}
-            <div className="relative">
+            <div className="relative flex items-center gap-0.5">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -1980,21 +2248,6 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
                 </TooltipTrigger>
                 <TooltipContent>{boosted ? 'Yeniden paylaşımı geri al' : 'Yeniden paylaş'}</TooltipContent>
               </Tooltip>
-              {quotesCount > 0 && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      aria-label={`${quotesCount} alıntı, görmek için tıkla`}
-                      onClick={openQuotesModal}
-                      className="flex items-center gap-1.5 px-2 py-1.5 rounded-full transition-all text-xs font-medium text-(--color-text-tertiary) hover:text-(--color-coral) hover:bg-(--color-coral)/8 active:scale-90"
-                    >
-                      <Feather className="w-3.5 h-3.5" />
-                      <span>{quotesCount}</span>
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>Alıntıları gör</TooltipContent>
-                </Tooltip>
-              )}
               {boostMenuOpen && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => dispatch({ type: 'BOOST_MENU_CLOSE' })} />
@@ -2313,62 +2566,24 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
         </div>
       </>
     )}
-    {quotesModalOpen && (
-      <>
-        <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={() => dispatch({ type: 'QUOTES_MODAL_CLOSE' })} />
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-          <div
-            className="pointer-events-auto w-full max-w-md rounded-2xl border border-(--color-border) bg-(--color-background) shadow-2xl overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-(--color-border)">
-              <p className="text-sm font-semibold text-(--color-text-primary)">Alıntılar</p>
-              <button onClick={() => dispatch({ type: 'QUOTES_MODAL_CLOSE' })} className="p-1 rounded-lg text-(--color-text-tertiary) hover:text-(--color-text-primary)">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="max-h-[70vh] overflow-y-auto divide-y divide-(--color-border-secondary)">
-              {quotesLoading && (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="w-5 h-5 animate-spin text-(--color-coral)" />
-                </div>
-              )}
-              {quotesList?.map((q) => (
-                <a
-                  key={q.id}
-                  href={`/posts/${q.id}`}
-                  className="flex gap-3 px-4 py-3 hover:bg-(--color-background-secondary)/60 transition-colors group"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Avatar className="w-8 h-8 flex-shrink-0 mt-0.5">
-                    {q.author?.avatarUrl && <AvatarImage src={q.author.avatarUrl} alt="" />}
-                    <AvatarFallback className="text-xs">{(q.author?.displayName ?? q.author?.handle ?? '?')[0]?.toUpperCase()}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-1.5 flex-wrap">
-                      <span className="text-sm font-semibold text-(--color-text-primary) group-hover:text-(--color-coral) transition-colors truncate">
-                        {q.author?.displayName ?? q.author?.handle}
-                      </span>
-                      <span className="text-xs text-(--color-text-tertiary) truncate">@{q.author?.handle}</span>
-                      <span className="text-xs text-(--color-text-tertiary) ml-auto flex-shrink-0">
-                        {new Date(q.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
-                      </span>
-                    </div>
-                    <p className="text-sm text-(--color-text-secondary) line-clamp-2 mt-0.5">{q.content || '(medya)'}</p>
-                  </div>
-                </a>
-              ))}
-              {quotesList?.length === 0 && !quotesLoading && (
-                <div className="px-4 py-10 text-center">
-                  <p className="text-sm text-(--color-text-secondary) font-medium">Henüz alıntı yok</p>
-                  <p className="text-xs text-(--color-text-tertiary) mt-0.5">Bu gönderiyi ilk alıntılayan sen ol</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </>
-    )}
+    {/* Delete confirmation */}
+    <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Gönderiyi sil</AlertDialogTitle>
+          <AlertDialogDescription>
+            Bu gönderi kalıcı olarak silinecek. Bu işlem geri alınamaz.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+          <AlertDialogAction onClick={() => onDelete!(post.id)}>
+            Sil
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
     </Fragment>
   )
 }

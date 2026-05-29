@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { api, type Actor, type Post, type MediaAttachment, type QuotedPost, type GifResult, type PostTemplate } from '@/lib/api'
 import { Image, X, Loader2, AlertTriangle, Globe, Lock, Users, Eye, BarChart2, Plus, Trash2, UserCheck, Clock, Code2, FileEdit, MapPin, Check, LayoutTemplate, Tag, Video } from 'lucide-react'
@@ -120,12 +119,12 @@ function ThreadItemComposer({ item, avatarUrl, displayName, onContentChange, onF
       </div>
 
       <div className="flex-1 min-w-0 pt-3 pb-2">
-        <Textarea
+        <textarea
           value={item.content}
           onChange={(e) => onContentChange(e.target.value)}
           placeholder="Devam…"
           rows={2}
-          className="resize-none border-0 bg-transparent p-0 min-h-[3rem] text-sm text-(--color-text-primary) placeholder:text-(--color-text-tertiary) focus-visible:ring-0 focus-visible:ring-offset-0"
+          className="w-full resize-none border-0 bg-transparent p-0 min-h-[3rem] text-sm text-(--color-text-primary) placeholder:text-(--color-text-tertiary) focus:outline-none"
         />
 
         {item.media.length > 0 && (
@@ -251,6 +250,28 @@ export function PostComposer({ handle, displayName, avatarUrl, onPost, replyToId
     }, 500)
     return () => clearTimeout(t)
   }, [content, cw, draftKey])
+
+  // Cross-device sync (home composer only). Load server autosave once on mount —
+  // a local draft on this device wins; otherwise pull what was typed elsewhere.
+  const serverDraftLoaded = useRef(false)
+  useEffect(() => {
+    if (replyToId || serverDraftLoaded.current) return
+    serverDraftLoaded.current = true
+    api.composerDraft.get().then(({ draft }) => {
+      if (!draft) return
+      setContent((c: string) => (c.trim() ? c : draft.content))
+      if (draft.contentWarning) { setCw((w: string) => w || draft.contentWarning!); setCwOpen(true) }
+    }).catch(() => {})
+  }, [replyToId])
+
+  // Push autosave to the server (debounced); empty content clears it server-side.
+  useEffect(() => {
+    if (replyToId || !serverDraftLoaded.current) return
+    const t = setTimeout(() => {
+      void api.composerDraft.save(content, cwOpen && cw ? cw : null).catch(() => {})
+    }, 2000)
+    return () => clearTimeout(t)
+  }, [content, cw, cwOpen, replyToId])
 
   // Auto-grow textarea
   function autoGrow(el: HTMLTextAreaElement | null) {
@@ -650,6 +671,7 @@ export function PostComposer({ handle, displayName, avatarUrl, onPost, replyToId
       setLocationLng(null)
       setLocationPickerOpen(false)
       try { localStorage.removeItem(draftKey) } catch {}
+      if (!replyToId) void api.composerDraft.clear().catch(() => {})
       void triggerHaptic('success')
       onPost(firstPost)
     } catch (err) {
@@ -865,7 +887,7 @@ export function PostComposer({ handle, displayName, avatarUrl, onPost, replyToId
 
           {/* Textarea — always mounted, height transitions smoothly */}
           <div className="relative">
-            <Textarea
+            <textarea
               ref={textareaRef}
               value={content}
               onChange={handleContentChange}
@@ -876,7 +898,7 @@ export function PostComposer({ handle, displayName, avatarUrl, onPost, replyToId
               placeholder="Ne düşünüyorsun?"
               rows={1}
               className={cn(
-                'resize-none overflow-hidden border-0 bg-transparent p-0 text-[15px] leading-relaxed text-(--color-text-primary) placeholder:text-(--color-text-tertiary) focus-visible:ring-0 focus-visible:ring-offset-0',
+                'w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-[15px] leading-relaxed text-(--color-text-primary) placeholder:text-(--color-text-tertiary) focus:outline-none',
                 'transition-[min-height] duration-200 ease-in-out',
                 expanded ? 'min-h-[5rem]' : 'min-h-[3rem]',
               )}

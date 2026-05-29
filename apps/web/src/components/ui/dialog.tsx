@@ -57,10 +57,14 @@ function DialogContent({
   )
 }
 
-function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
+function DialogHeader({ className, border = true, ...props }: React.ComponentProps<'div'> & { border?: boolean }) {
   return (
     <div
-      className={cn('flex items-center justify-between px-4 py-3 border-b border-(--color-border)', className)}
+      className={cn(
+        'flex items-center justify-between px-4 py-3',
+        border && 'border-b border-(--color-border)',
+        className,
+      )}
       {...props}
     />
   )
@@ -84,10 +88,14 @@ function DialogDescription({ className, ...props }: React.ComponentProps<typeof 
   )
 }
 
-function DialogFooter({ className, ...props }: React.ComponentProps<'div'>) {
+function DialogFooter({ className, border = true, ...props }: React.ComponentProps<'div'> & { border?: boolean }) {
   return (
     <div
-      className={cn('flex items-center justify-end gap-2 px-4 py-3 border-t border-(--color-border)', className)}
+      className={cn(
+        'flex items-center justify-end gap-2 px-4 py-3',
+        border && 'border-t border-(--color-border)',
+        className,
+      )}
       {...props}
     />
   )

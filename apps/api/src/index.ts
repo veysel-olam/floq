@@ -38,6 +38,7 @@ import { postCollectionsRoutes } from './routes/postCollections.js'
 import { atProtocolRoutes } from './routes/atprotocol.js'
 import { pollsRoutes } from './routes/polls.js'
 import { gifsRoutes } from './routes/gifs.js'
+import { composerDraftRoutes } from './routes/composerDraft.js'
 import { translateRoutes } from './routes/translate.js'
 import { pushRoutes } from './routes/push.js'
 import { closeFriendsRoutes } from './routes/closeFriends.js'
@@ -138,6 +139,7 @@ await app.register(postCollectionsRoutes)
 await app.register(atProtocolRoutes)
 await app.register(pollsRoutes)
 await app.register(gifsRoutes)
+await app.register(composerDraftRoutes)
 await app.register(translateRoutes)
 await app.register(pushRoutes)
 await app.register(closeFriendsRoutes)

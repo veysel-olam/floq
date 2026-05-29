@@ -6,12 +6,13 @@ import Link from 'next/link'
 import {
   ArrowLeft, Loader2, Send, Lock, ShieldCheck, Mic, MicOff, Play, Pause,
   Square, Trash2, Users, ImagePlus, ExternalLink, Pencil, Check, X,
-  CornerUpLeft, Search, BellOff, Bell, Archive, Smile, CheckCheck, Video,
+  CornerUpLeft, Search, BellOff, Bell, Archive, Smile, CheckCheck, ChevronDown,
 } from 'lucide-react'
 import { useSession } from '@/lib/auth-client'
 import { api, type Post, type Actor, type MediaAttachment, type GifResult } from '@/lib/api'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { generateAndStoreKeyPair, loadPrivateKey, encryptMessage, decryptMessage } from '@/lib/e2e-crypto'
 import { useRealtime } from '@/hooks/use-realtime'
 import { triggerHaptic } from '@/hooks/use-haptics'
@@ -298,6 +299,7 @@ function MessageRow({ msg, isMine, isTail, showAvatar, myPrivateKey, partnerPubl
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [emojiOpen, setEmojiOpen] = useState(false)
+  const [heartAnim, setHeartAnim] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const emojiRef = useRef<HTMLDivElement>(null)
@@ -323,6 +325,13 @@ function MessageRow({ msg, isMine, isTail, showAvatar, myPrivateKey, partnerPubl
   }
   function endLongPress() {
     if (longPressRef.current) { clearTimeout(longPressRef.current); longPressRef.current = null }
+  }
+
+  function handleDoubleClick() {
+    onReact(msg.id, '❤️')
+    setHeartAnim(false)
+    requestAnimationFrame(() => setHeartAnim(true))
+    setTimeout(() => setHeartAnim(false), 650)
   }
 
   async function handleDelete(mode: 'self' | 'everyone') {
@@ -357,17 +366,18 @@ function MessageRow({ msg, isMine, isTail, showAvatar, myPrivateKey, partnerPubl
           {emojiOpen && (
             <div
               ref={emojiRef}
+              onPointerDown={(e) => e.stopPropagation()}
               className={cn(
-                'absolute bottom-full mb-2 z-30 flex items-center gap-0.5 bg-(--color-background) border border-(--color-border) rounded-full px-2 py-1.5 shadow-2xl',
+                'absolute bottom-full mb-2 z-30 flex items-center bg-(--color-background) border border-(--color-border) rounded-full px-1.5 py-1.5 shadow-2xl',
                 isMine ? 'right-0' : 'left-0',
               )}
             >
               {QUICK_EMOJIS.map((emoji) => (
                 <button
                   key={emoji}
-                  onMouseDown={(e) => { e.preventDefault(); onReact(msg.id, emoji); setEmojiOpen(false) }}
+                  onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); onReact(msg.id, emoji); setEmojiOpen(false) }}
                   className={cn(
-                    'text-xl p-1 rounded-full hover:scale-125 active:scale-110 transition-transform leading-none',
+                    'w-11 h-11 rounded-full flex items-center justify-center text-xl leading-none hover:opacity-75 transition-opacity',
                     (msg.viewer?.reactions ?? []).includes(emoji) ? 'bg-(--color-coral)/10' : '',
                   )}
                 >
@@ -375,6 +385,13 @@ function MessageRow({ msg, isMine, isTail, showAvatar, myPrivateKey, partnerPubl
                 </button>
               ))}
             </div>
+          )}
+
+          {/* Floating heart animation */}
+          {heartAnim && (
+            <span className={cn('absolute text-2xl heart-pop z-40', isMine ? 'right-2' : 'left-2', 'bottom-2')}>
+              ❤️
+            </span>
           )}
 
           {/* The actual bubble */}
@@ -386,6 +403,7 @@ function MessageRow({ msg, isMine, isTail, showAvatar, myPrivateKey, partnerPubl
             onTouchEnd={endLongPress}
             onTouchCancel={endLongPress}
             onContextMenu={(e) => { e.preventDefault(); setEmojiOpen(true) }}
+            onDoubleClick={handleDoubleClick}
             className="select-none"
           >
             {deleting ? (
@@ -533,21 +551,41 @@ function TypingDots({ avatarUrl, initials }: { avatarUrl: string | null | undefi
 
 function RecordingBar({ seconds, onCancel, onStop }: { seconds: number; onCancel: () => void; onStop: () => void }) {
   return (
-    <div className="flex items-center gap-2.5 h-11">
-      <button onClick={onCancel} className="w-10 h-10 rounded-full flex items-center justify-center text-(--color-text-tertiary) hover:bg-(--color-background-secondary) flex-shrink-0">
-        <MicOff className="w-4.5 h-4.5" />
+    <div className="flex items-center gap-2">
+      {/* İptal */}
+      <button
+        onClick={onCancel}
+        className="w-11 h-11 rounded-full flex items-center justify-center text-(--color-text-tertiary) hover:bg-(--color-background-secondary) flex-shrink-0 transition-colors"
+      >
+        <X className="w-4 h-4" />
       </button>
-      <div className="flex-1 flex items-center gap-2 bg-(--color-background-secondary) rounded-2xl px-3 py-2 h-10">
-        <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
-        <div className="flex-1 flex gap-px items-center h-4">
-          {Array.from({ length: 28 }).map((_, i) => (
-            <div key={i} className="flex-1 bg-(--color-coral)/60 rounded-[1px] animate-pulse"
-              style={{ height: `${30 + Math.abs(Math.sin(i * 0.7)) * 70}%`, animationDelay: `${i * 40}ms`, animationDuration: `${700 + (i % 5) * 120}ms` }} />
+
+      {/* Waveform + timer */}
+      <div className="flex-1 flex items-center gap-2.5 bg-(--color-background-secondary) rounded-full px-4 h-11">
+        <span className="w-2 h-2 rounded-full bg-(--color-coral) animate-pulse flex-shrink-0" />
+        <div className="flex-1 flex gap-[2px] items-center h-5">
+          {Array.from({ length: 32 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex-1 rounded-full bg-(--color-coral)/50 animate-pulse"
+              style={{
+                height: `${28 + Math.abs(Math.sin(i * 0.7)) * 72}%`,
+                animationDelay: `${i * 35}ms`,
+                animationDuration: `${650 + (i % 5) * 110}ms`,
+              }}
+            />
           ))}
         </div>
-        <span className="text-xs text-(--color-text-secondary) tabular-nums flex-shrink-0 font-medium">{formatDuration(seconds)}</span>
+        <span className="text-xs text-(--color-text-secondary) tabular-nums flex-shrink-0 font-medium">
+          {formatDuration(seconds)}
+        </span>
       </div>
-      <button onClick={onStop} className="w-10 h-10 rounded-full bg-(--color-coral) flex items-center justify-center text-white flex-shrink-0 hover:opacity-90 shadow-sm shadow-(--color-coral)/30">
+
+      {/* Gönder */}
+      <button
+        onClick={onStop}
+        className="w-11 h-11 rounded-full bg-(--color-coral) flex items-center justify-center text-white flex-shrink-0 hover:opacity-90 shadow-sm shadow-(--color-coral)/25 transition-opacity"
+      >
         <Square className="w-3.5 h-3.5 fill-current" />
       </button>
     </div>
@@ -644,6 +682,8 @@ export default function DmThreadPage({ params }: { params: Promise<{ handle: str
   const lastTypingSentRef = useRef<number>(0)
 
   const bottomRef = useRef<HTMLDivElement>(null)
+  const messagesRef = useRef<HTMLDivElement>(null)
+  const [showScrollDown, setShowScrollDown] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const myHandle = (session?.user as { handle?: string } | undefined)?.handle
@@ -919,26 +959,26 @@ export default function DmThreadPage({ params }: { params: Promise<{ handle: str
   const displayMessages = searchResults ?? messages
 
   return (
-    <div className="max-w-xl mx-auto flex flex-col" style={{ height: '100dvh' }}>
+    <div className="max-w-xl mx-auto flex flex-col relative" style={{ height: '100dvh' }}>
 
       {/* ── Header ─────────────────────────────────────────── */}
-      <header className="flex-shrink-0 bg-(--color-background)/95 backdrop-blur-xl border-b border-(--color-border-secondary) px-3 h-14 flex items-center gap-2 z-10">
+      <header className="flex-shrink-0 bg-(--color-background)/95 backdrop-blur-xl border-b border-(--color-border) px-3 h-14 flex items-center gap-2 z-10">
         <Link href="/dm" className="p-2 rounded-full hover:bg-(--color-background-secondary) text-(--color-text-secondary) flex-shrink-0">
           <ArrowLeft className="w-4.5 h-4.5" />
         </Link>
 
         {partner ? (
           <Link href={`/${partner.handle}`} className="flex items-center gap-2.5 min-w-0 flex-1">
-            <Avatar className="w-8 h-8 flex-shrink-0">
+            <Avatar className="w-9 h-9 flex-shrink-0">
               {partner.avatarUrl && <AvatarImage src={partner.avatarUrl} alt={partner.displayName ?? partner.handle} />}
               <AvatarFallback className="text-xs text-white" style={{ background: 'var(--gradient-avatar)' }}>{initials}</AvatarFallback>
             </Avatar>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <p className="text-[14px] font-semibold text-(--color-text-primary) truncate leading-tight" style={{ fontFamily: 'var(--font-outfit)' }}>
+                <p className="text-[15px] font-semibold text-(--color-text-primary) truncate leading-tight" style={{ fontFamily: 'var(--font-outfit)' }}>
                   {partner.displayName ?? partner.handle}
                 </p>
-                {e2eReady && partner.dmPublicKey && <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />}
+                {e2eReady && partner.dmPublicKey && <ShieldCheck className="w-3.5 h-3.5 text-(--color-teal) flex-shrink-0" />}
               </div>
               <p className="text-[11px] text-(--color-text-tertiary) leading-tight">@{partner.handle}</p>
             </div>
@@ -954,7 +994,7 @@ export default function DmThreadPage({ params }: { params: Promise<{ handle: str
         )}
 
         {/* Header actions */}
-        <div className="flex items-center gap-0.5 flex-shrink-0">
+        <div className="flex items-center gap-1 flex-shrink-0">
           <button
             onClick={() => { setSearchOpen((v) => !v); setSearchQuery(''); setSearchResults(null) }}
             className={cn('p-2 rounded-full transition-colors', searchOpen ? 'bg-(--color-coral)/10 text-(--color-coral)' : 'hover:bg-(--color-background-secondary) text-(--color-text-tertiary)')}
@@ -988,8 +1028,8 @@ export default function DmThreadPage({ params }: { params: Promise<{ handle: str
 
       {/* ── Search bar ─────────────────────────────────────── */}
       {searchOpen && (
-        <div className="flex-shrink-0 px-3 py-2 border-b border-(--color-border-secondary)">
-          <div className="flex items-center gap-2 bg-(--color-background-secondary) rounded-xl px-3 py-2">
+        <div className="flex-shrink-0 px-3 py-2 border-b border-(--color-border)">
+          <div className="flex items-center gap-2 bg-(--color-background-secondary) rounded-full px-3 py-2">
             <Search className="w-3.5 h-3.5 text-(--color-text-tertiary) flex-shrink-0" />
             <input
               autoFocus value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
@@ -1008,8 +1048,25 @@ export default function DmThreadPage({ params }: { params: Promise<{ handle: str
         </div>
       )}
 
+      {/* ── Scroll to bottom ───────────────────────────────── */}
+      {showScrollDown && (
+        <button
+          onClick={() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' })}
+          className="absolute bottom-20 right-4 z-20 w-8 h-8 rounded-full bg-(--color-background) border border-(--color-border) shadow-md flex items-center justify-center text-(--color-text-secondary) hover:bg-(--color-background-secondary) transition-colors"
+        >
+          <ChevronDown className="w-4 h-4" />
+        </button>
+      )}
+
       {/* ── Messages ───────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-4 py-3">
+      <div
+        ref={messagesRef}
+        onScroll={(e) => {
+          const el = e.currentTarget
+          setShowScrollDown(el.scrollHeight - el.scrollTop - el.clientHeight > 120)
+        }}
+        className="flex-1 overflow-y-auto px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         {loading ? (
           <div className="flex justify-center py-16">
             <Loader2 className="w-5 h-5 animate-spin text-(--color-coral)" />
@@ -1091,53 +1148,46 @@ export default function DmThreadPage({ params }: { params: Promise<{ handle: str
       </div>
 
       {/* ── Media preview modal ────────────────────────────── */}
-      {pendingFile && pendingFileUrl && (
-        <>
-          <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm" onClick={cancelPendingFile} />
-          <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center pointer-events-none">
-            <div className="pointer-events-auto w-full max-w-sm rounded-2xl overflow-hidden bg-(--color-background) border border-(--color-border) shadow-2xl">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-(--color-border-secondary)">
-                <p className="text-sm font-semibold text-(--color-text-primary)">Medya gönder</p>
-                <button onClick={cancelPendingFile} className="p-1 rounded-lg text-(--color-text-tertiary) hover:text-(--color-text-primary)">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="p-3 flex justify-center bg-(--color-background-secondary)">
-                {pendingFile.type.startsWith('video/') ? (
-                  <video src={pendingFileUrl} controls className="max-h-64 max-w-full rounded-xl object-contain" />
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={pendingFileUrl} alt="" className="max-h-64 max-w-full rounded-xl object-contain" />
-                )}
-              </div>
-              <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-(--color-border-secondary)">
-                <p className="text-xs text-(--color-text-tertiary) truncate">{pendingFile.name}</p>
-                <div className="flex gap-2 flex-shrink-0">
-                  <button onClick={cancelPendingFile} className="px-3.5 py-1.5 rounded-full text-xs font-medium border border-(--color-border) text-(--color-text-secondary) hover:bg-(--color-background-secondary) transition-colors">
-                    İptal
-                  </button>
-                  <button
-                    onClick={() => void confirmSendFile()}
-                    disabled={attachUploading}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-(--color-coral) text-white hover:opacity-90 transition-opacity disabled:opacity-50"
-                  >
-                    {attachUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                    Gönder
-                  </button>
-                </div>
-              </div>
-            </div>
+      <Dialog open={!!(pendingFile && pendingFileUrl)} onOpenChange={(open) => { if (!open) cancelPendingFile() }}>
+        <DialogContent showClose={false} className="max-w-sm p-0 overflow-hidden">
+          <DialogHeader className="px-4 py-3">
+            <DialogTitle>Medya gönder</DialogTitle>
+          </DialogHeader>
+          <div className="flex justify-center bg-(--color-background-secondary) px-3 py-3">
+            {pendingFile?.type.startsWith('video/') ? (
+              <video src={pendingFileUrl!} controls className="max-h-64 max-w-full rounded-xl object-contain" />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={pendingFileUrl!} alt="" className="max-h-64 max-w-full rounded-xl object-contain" />
+            )}
           </div>
-        </>
-      )}
+          <DialogFooter>
+            <p className="text-xs text-(--color-text-tertiary) truncate mr-auto">{pendingFile?.name}</p>
+            <button
+              onClick={cancelPendingFile}
+              className="px-3.5 py-1.5 rounded-full text-xs font-medium border border-(--color-border) text-(--color-text-secondary) hover:bg-(--color-background-secondary) transition-colors"
+            >
+              İptal
+            </button>
+            <button
+              onClick={() => void confirmSendFile()}
+              disabled={attachUploading}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-(--color-coral) text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              {attachUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+              Gönder
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Composer ───────────────────────────────────────── */}
       {!searchResults && (
-        <div className="flex-shrink-0 bg-(--color-background) border-t border-(--color-border-secondary)">
+        <div className="flex-shrink-0 bg-(--color-background) border-t border-(--color-border)">
 
           {/* Reply bar */}
           {replyingTo && (
-            <div className="flex items-center gap-2 px-4 pt-2.5 pb-1">
+            <div className="flex items-center gap-2 px-4 py-2.5">
               <CornerUpLeft className="w-3.5 h-3.5 text-(--color-coral) flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-[11px] font-semibold text-(--color-coral) truncate">
@@ -1156,83 +1206,84 @@ export default function DmThreadPage({ params }: { params: Promise<{ handle: str
               <RecordingBar seconds={recordingSeconds} onCancel={cancelRecording} onStop={stopRecording} />
             ) : (
               <div className="flex items-end gap-2">
-                <div className="flex-1 flex items-end bg-(--color-background-secondary) rounded-[22px] border border-(--color-border-secondary) focus-within:border-(--color-coral)/50 transition-colors min-h-[44px] pl-2 pr-4">
 
-                  {/* Left action buttons */}
-                  <div className="flex items-center gap-0.5 pb-2.5 flex-shrink-0">
+                {/* Action buttons — outside the pill */}
+                <div className="flex items-center gap-0.5 mb-1.5 flex-shrink-0">
 
-                    {/* Emoji picker */}
-                    <div className="relative">
-                      <button
-                        onClick={() => { setEmojiPickerOpen((v) => !v); setGifOpen(false) }}
-                        className={cn(
-                          'p-1.5 rounded-full transition-colors',
-                          emojiPickerOpen ? 'text-(--color-coral)' : 'text-(--color-text-tertiary) hover:text-(--color-text-primary)',
-                        )}
-                        title="Emoji"
-                      >
-                        <Smile className="w-4 h-4" />
-                      </button>
-                      {emojiPickerOpen && (
-                        <EmojiPicker
-                          onSelect={(emoji) => {
-                            const ta = textareaRef.current
-                            if (ta) {
-                              const start = ta.selectionStart ?? content.length
-                              const end = ta.selectionEnd ?? content.length
-                              const next = content.slice(0, start) + emoji + content.slice(end)
-                              setContent(next)
-                              setTimeout(() => { ta.focus(); ta.setSelectionRange(start + emoji.length, start + emoji.length) }, 0)
-                            } else {
-                              setContent((c) => c + emoji)
-                            }
-                            setEmojiPickerOpen(false)
-                          }}
-                          onClose={() => setEmojiPickerOpen(false)}
-                        />
-                      )}
-                    </div>
-
-                    {/* Photo / Video */}
+                  {/* Emoji */}
+                  <div className="relative">
                     <button
-                      onClick={() => fileRef.current?.click()}
-                      disabled={attachUploading}
-                      className="p-1.5 rounded-full text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors disabled:opacity-40"
-                      title="Fotoğraf veya video"
-                    >
-                      <ImagePlus className="w-4 h-4" />
-                    </button>
-
-                    {/* GIF */}
-                    <div className="relative">
-                      <button
-                        onClick={() => { setGifOpen((v) => !v); setEmojiPickerOpen(false) }}
-                        disabled={attachUploading}
-                        className={cn(
-                          'px-1.5 py-1 rounded-md text-[10px] font-bold tracking-wide transition-colors disabled:opacity-40',
-                          gifOpen ? 'bg-(--color-coral)/15 text-(--color-coral)' : 'text-(--color-text-tertiary) hover:text-(--color-text-primary)',
-                        )}
-                      >
-                        GIF
-                      </button>
-                      {gifOpen && (
-                        <GifPicker
-                          direction="up"
-                          onSelect={(gif) => void sendGif(gif)}
-                          onClose={() => setGifOpen(false)}
-                        />
+                      onClick={() => { setEmojiPickerOpen((v) => !v); setGifOpen(false) }}
+                      className={cn(
+                        'w-9 h-9 rounded-full flex items-center justify-center transition-colors',
+                        emojiPickerOpen ? 'text-(--color-coral)' : 'text-(--color-text-tertiary) hover:text-(--color-text-primary)',
                       )}
-                    </div>
+                      title="Emoji"
+                    >
+                      <Smile className="w-5 h-5" />
+                    </button>
+                    {emojiPickerOpen && (
+                      <EmojiPicker
+                        onSelect={(emoji) => {
+                          const ta = textareaRef.current
+                          if (ta) {
+                            const start = ta.selectionStart ?? content.length
+                            const end = ta.selectionEnd ?? content.length
+                            const next = content.slice(0, start) + emoji + content.slice(end)
+                            setContent(next)
+                            setTimeout(() => { ta.focus(); ta.setSelectionRange(start + emoji.length, start + emoji.length) }, 0)
+                          } else {
+                            setContent((c) => c + emoji)
+                          }
+                          setEmojiPickerOpen(false)
+                        }}
+                        onClose={() => setEmojiPickerOpen(false)}
+                      />
+                    )}
                   </div>
 
+                  {/* Image */}
+                  <button
+                    onClick={() => fileRef.current?.click()}
+                    disabled={attachUploading}
+                    className="w-9 h-9 rounded-full flex items-center justify-center text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors disabled:opacity-40"
+                    title="Fotoğraf veya video"
+                  >
+                    <ImagePlus className="w-5 h-5" />
+                  </button>
+
+                  {/* GIF */}
+                  <div className="relative">
+                    <button
+                      onClick={() => { setGifOpen((v) => !v); setEmojiPickerOpen(false) }}
+                      disabled={attachUploading}
+                      className={cn(
+                        'w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold tracking-widest transition-colors disabled:opacity-40',
+                        gifOpen ? 'text-(--color-coral)' : 'text-(--color-text-tertiary) hover:text-(--color-text-primary)',
+                      )}
+                    >
+                      GIF
+                    </button>
+                    {gifOpen && (
+                      <GifPicker
+                        direction="up"
+                        onSelect={(gif) => void sendGif(gif)}
+                        onClose={() => setGifOpen(false)}
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {/* Pill — sadece textarea */}
+                <div className="flex-1 flex items-end bg-(--color-background-secondary) rounded-[22px] border border-(--color-border) focus-within:border-(--color-coral)/60 transition-colors min-h-[44px] px-4">
                   <textarea
                     ref={textareaRef}
                     value={content}
                     onChange={handleContentChange}
                     placeholder="Mesaj yaz…"
                     rows={1}
-                    className="flex-1 resize-none bg-transparent py-2.5 text-sm text-(--color-text-primary) placeholder:text-(--color-text-tertiary) focus:outline-none leading-snug max-h-[120px] overflow-y-auto"
-                    style={{ minHeight: '24px' }}
+                    className="flex-1 resize-none bg-transparent py-[11px] text-sm text-(--color-text-primary) placeholder:text-(--color-text-tertiary) focus:outline-none leading-snug max-h-[120px] overflow-y-auto"
+                    style={{ minHeight: '22px' }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void sendMessage() }
                     }}

@@ -1818,3 +1818,14 @@ export const confederationVoteBallotsRelations = relations(confederationVoteBall
   actor: one(actors, { fields: [confederationVoteBallots.actorId], references: [actors.id] }),
   community: one(apGroups, { fields: [confederationVoteBallots.communityId], references: [apGroups.id] }),
 }))
+
+// ── Composer autosave draft — cross-device sync of the in-progress home composer ──
+export const composerDrafts = pgTable('composer_drafts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  actorId: uuid('actor_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+  content: text('content').notNull().default(''),
+  contentWarning: varchar('content_warning', { length: 500 }),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('composer_drafts_actor_unique').on(t.actorId),
+])

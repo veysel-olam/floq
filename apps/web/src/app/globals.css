@@ -102,6 +102,7 @@
 html {
   background-color: var(--color-background);
   color: var(--color-text-primary);
+  scrollbar-gutter: stable;
 }
 
 body {
@@ -176,6 +177,16 @@ body {
   50%       { transform: scaleY(1.5); }
 }
 
+@keyframes heart-pop {
+  0%   { opacity: 1; transform: scale(0.5) translateY(0); }
+  50%  { opacity: 1; transform: scale(1.5) translateY(-8px); }
+  100% { opacity: 0; transform: scale(1.8) translateY(-24px); }
+}
+.heart-pop {
+  animation: heart-pop 0.6s ease-out forwards;
+  pointer-events: none;
+}
+
 /* Dot grid — hero background. Adapts to dark mode. */
 .hero-grid {
   background-image: radial-gradient(circle, rgba(26,26,24,0.065) 1px, transparent 1px);
@@ -236,13 +247,34 @@ html:not(.dark)[data-bg-tone="paper"] { --color-background: #F5F0E8; --color-bac
   box-shadow: none;
 }
 
-/* Thread/detail pages always use flat style regardless of card preference */
-[data-thread-view] [data-post-card] {
+/* Thread/detail pages always use flat style regardless of card preference.
+   Scoped to card mode only — in stream mode posts are already flat, and the
+   blanket reset would otherwise strip the border-b separators between replies. */
+[data-post-style="card"] [data-thread-view] [data-post-card] {
   margin: 0 !important;
   border-radius: 0 !important;
   border: none !important;
   box-shadow: none !important;
   background: transparent !important;
+}
+/* Keep a flat separator between stacked, non-threaded cards (e.g. replies),
+   but not on threaded ancestor cards which carry their own connector line. */
+[data-post-style="card"] [data-thread-view] [data-post-card]:not([data-thread-line]) {
+  border-bottom: 1px solid var(--color-border-secondary) !important;
+}
+/* In card mode, the whole conversation sits inside one elevated surface
+   (rather than per-post boxes), keeping the threaded flow intact. */
+[data-post-style="card"] [data-thread-surface] {
+  margin: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 12px);
+  background: var(--color-surface, #fff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+.dark [data-post-style="card"] [data-thread-surface] {
+  background: var(--color-background-secondary);
+  box-shadow: none;
 }
 
 /* ── Kelvin slider — hide native thumb, keep interaction ──────── */

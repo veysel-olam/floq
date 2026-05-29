@@ -6,23 +6,24 @@ import Link from 'next/link'
 import { useSession } from '@/lib/auth-client'
 import { api, type Notification } from '@/lib/api'
 import { Button } from '@/components/ui/button'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { useInfiniteScroll } from '@/hooks/use-infinite-scroll'
 import { useRealtime } from '@/hooks/use-realtime'
 import { cn } from '@/lib/utils'
 import { Loader2, Heart, Repeat2, MessageCircle, UserPlus, AtSign, Check, X, Trash2, BarChart2, Bell, Zap, ShieldOff } from 'lucide-react'
-import { Separator } from '@/components/ui/separator'
 import { EmptyState } from '@/components/ui/empty-state'
 import { NotificationsSkeleton } from '@/components/ui/skeleton'
 
 type FilterTab = 'all' | 'mention' | 'like' | 'boost' | 'follow' | 'reply'
 
 const FILTER_TABS: { id: FilterTab; label: string; types: Notification['type'][] }[] = [
-  { id: 'all',     label: 'Tümü',     types: [] },
-  { id: 'mention', label: 'Mention',  types: ['mention'] },
-  { id: 'like',    label: 'Beğeni',   types: ['like'] },
-  { id: 'boost',   label: 'Boost',    types: ['boost'] },
-  { id: 'follow',  label: 'Takip',    types: ['follow', 'follow_request'] },
-  { id: 'reply',   label: 'Yanıt',    types: ['reply'] },
+  { id: 'all',     label: 'Tümü',    types: [] },
+  { id: 'mention', label: 'Mention', types: ['mention'] },
+  { id: 'like',    label: 'Beğeni',  types: ['like'] },
+  { id: 'boost',   label: 'Boost',   types: ['boost'] },
+  { id: 'follow',  label: 'Takip',   types: ['follow', 'follow_request'] },
+  { id: 'reply',   label: 'Yanıt',   types: ['reply'] },
 ]
 
 /* ── Notification type config ─────────────────────────────── */
@@ -30,15 +31,15 @@ const typeConfig: Record<
   Notification['type'],
   { icon: React.ReactNode; bg: string; label: string }
 > = {
-  like:          { icon: <Heart className="w-3 h-3 fill-current" />,     bg: 'bg-(--color-coral) text-white',          label: 'gönderini beğendi' },
-  boost:         { icon: <Repeat2 className="w-3 h-3" />,                bg: 'bg-[#2A9D8F] text-white',                label: 'yeniden paylaştı' },
-  reply:         { icon: <MessageCircle className="w-3 h-3" />,          bg: 'bg-blue-500 text-white',                 label: 'yanıtladı' },
-  mention:       { icon: <AtSign className="w-3 h-3" />,                 bg: 'bg-violet-500 text-white',               label: 'senden bahsetti' },
-  follow:        { icon: <UserPlus className="w-3 h-3" />,               bg: 'bg-(--color-teal) text-white',           label: 'seni takip etmeye başladı' },
-  follow_request:   { icon: <UserPlus className="w-3 h-3" />,   bg: 'bg-(--color-stone) text-white',  label: 'takip isteği gönderdi' },
-  poll_ended:       { icon: <BarChart2 className="w-3 h-3" />,  bg: 'bg-amber-500 text-white',        label: 'anketi sona erdi' },
-  flow_post:        { icon: <Zap className="w-3 h-3" />,        bg: 'bg-violet-500 text-white',       label: 'yeni gönderi paylaştı' },
-  account_suspended:{ icon: <ShieldOff className="w-3 h-3" />, bg: 'bg-red-600 text-white',          label: 'hesabınızı askıya aldı' },
+  like:             { icon: <Heart className="w-3 h-3 fill-current" />,    bg: 'bg-(--color-coral) text-white',  label: 'gönderini beğendi' },
+  boost:            { icon: <Repeat2 className="w-3 h-3" />,               bg: 'bg-(--color-teal) text-white',   label: 'yeniden paylaştı' },
+  reply:            { icon: <MessageCircle className="w-3 h-3" />,         bg: 'bg-(--color-stone) text-white',  label: 'yanıtladı' },
+  mention:          { icon: <AtSign className="w-3 h-3" />,                bg: 'bg-(--color-stone) text-white',  label: 'senden bahsetti' },
+  follow:           { icon: <UserPlus className="w-3 h-3" />,              bg: 'bg-(--color-teal) text-white',   label: 'seni takip etmeye başladı' },
+  follow_request:   { icon: <UserPlus className="w-3 h-3" />,              bg: 'bg-(--color-stone) text-white',  label: 'takip isteği gönderdi' },
+  poll_ended:       { icon: <BarChart2 className="w-3 h-3" />,             bg: 'bg-(--color-stone) text-white',  label: 'anketi sona erdi' },
+  flow_post:        { icon: <Zap className="w-3 h-3" />,                   bg: 'bg-(--color-coral) text-white',  label: 'yeni gönderi paylaştı' },
+  account_suspended:{ icon: <ShieldOff className="w-3 h-3" />,             bg: 'bg-red-600 text-white',          label: 'hesabınızı askıya aldı' },
 }
 
 /* ── Time helpers ─────────────────────────────────────────── */
@@ -125,18 +126,13 @@ function NotificationItem({
     <div
       onClick={handleClick}
       className={cn(
-        'relative flex gap-4 px-4 py-3.5 border-b border-(--color-border-secondary) transition-colors group',
+        'relative flex gap-3.5 mx-2 px-3 py-3.5 rounded-xl transition-colors group',
         (postHref && !isFollowRequest) ? 'cursor-pointer' : '',
         isUnread
-          ? 'bg-(--color-coral)/[0.04] dark:bg-(--color-coral)/[0.07] hover:bg-(--color-coral)/[0.07]'
+          ? 'bg-(--color-coral)/[0.05] dark:bg-(--color-coral)/[0.08] hover:bg-(--color-coral)/[0.08]'
           : 'hover:bg-(--color-background-secondary)',
       )}
     >
-      {/* Left unread indicator */}
-      {isUnread && (
-        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-10 rounded-r-full bg-(--color-coral)" />
-      )}
-
       {/* Avatar with type badge */}
       <div className="relative flex-shrink-0 self-start mt-0.5">
         <button
@@ -155,7 +151,6 @@ function NotificationItem({
               </div>
             )}
         </button>
-        {/* Type badge */}
         <span
           className={cn(
             'absolute -bottom-0.5 -right-0.5 w-[18px] h-[18px] rounded-full flex items-center justify-center ring-2 ring-(--color-background)',
@@ -174,10 +169,7 @@ function NotificationItem({
               <Link
                 href={`/${handle}`}
                 onClick={(e) => e.stopPropagation()}
-                className={cn(
-                  'font-semibold hover:underline',
-                  isUnread ? 'text-(--color-text-primary)' : 'text-(--color-text-primary)',
-                )}
+                className="font-semibold text-(--color-text-primary) hover:underline"
                 style={{ fontFamily: 'var(--font-outfit)' }}
               >
                 {displayName}
@@ -186,7 +178,7 @@ function NotificationItem({
             </p>
 
             {notification.post?.content && (
-              <p className="text-xs text-(--color-text-tertiary) mt-1.5 line-clamp-2 leading-relaxed bg-(--color-background-secondary)/60 rounded-lg px-2.5 py-1.5 border border-(--color-border-secondary)">
+              <p className="text-xs text-(--color-text-tertiary) mt-1.5 line-clamp-2 leading-relaxed bg-(--color-background-secondary)/70 rounded-lg px-2.5 py-1.5">
                 {notification.post.content}
               </p>
             )}
@@ -215,17 +207,21 @@ function NotificationItem({
 
           {/* Time + delete */}
           <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
-            <span className="text-[11px] text-(--color-text-tertiary)">
+            <span className="text-[11px] text-(--color-text-tertiary) tabular-nums">
               {formatRelativeTime(notification.createdAt)}
             </span>
-            <button
-              onClick={handleDeleteClick}
-              disabled={deleting}
-              className="p-1 rounded-md text-(--color-text-tertiary) hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
-              title="Sil"
-            >
-              {deleting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={handleDeleteClick}
+                  disabled={deleting}
+                  className="p-1 rounded-md text-(--color-text-tertiary) hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
+                >
+                  {deleting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Sil</TooltipContent>
+            </Tooltip>
           </div>
         </div>
       </div>
@@ -233,13 +229,12 @@ function NotificationItem({
   )
 }
 
-/* ── Date group divider ───────────────────────────────────── */
-function GroupDivider({ label }: { label: string }) {
+/* ── Date group label ─────────────────────────────────────── */
+function GroupLabel({ label }: { label: string }) {
   return (
-    <div className="px-4 py-2 border-b border-(--color-border-secondary) flex items-center gap-3">
-      <p className="text-[11px] font-semibold text-(--color-text-tertiary) uppercase tracking-widest">{label}</p>
-      <Separator className="flex-1 bg-(--color-border-secondary)" />
-    </div>
+    <p className="px-5 pt-5 pb-1.5 text-[11px] font-semibold text-(--color-text-tertiary) uppercase tracking-widest">
+      {label}
+    </p>
   )
 }
 
@@ -333,107 +328,103 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div className="max-w-xl mx-auto">
-      <header className="sticky top-0 z-10 bg-(--color-background)/90 backdrop-blur-md border-b border-(--color-border) px-4 py-3.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Bell className="w-5 h-5 text-(--color-coral)" />
-            <h1
-              className="text-base font-bold text-(--color-text-primary)"
-              style={{ fontFamily: 'var(--font-outfit)' }}
-            >
-              Bildirimler
-            </h1>
+    <TooltipProvider>
+      <div className="max-w-xl mx-auto">
+        <header className="sticky top-0 z-10 bg-(--color-background)/90 backdrop-blur-md border-b border-(--color-border) px-4 py-3.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Bell className="w-5 h-5 text-(--color-coral)" />
+              <h1
+                className="text-base font-bold text-(--color-text-primary)"
+                style={{ fontFamily: 'var(--font-outfit)' }}
+              >
+                Bildirimler
+              </h1>
+            </div>
             {unreadCount > 0 && (
-              <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-(--color-coral) text-white text-[11px] font-bold flex items-center justify-center tabular-nums">
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={markAllRead}
+                disabled={markingRead}
+                className="text-xs text-(--color-text-tertiary) hover:text-(--color-coral) hover:bg-(--color-coral)/8 rounded-full px-3"
+              >
+                {markingRead ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Tümünü okundu işaretle'}
+              </Button>
             )}
           </div>
-          {unreadCount > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={markAllRead}
-              disabled={markingRead}
-              className="text-xs text-(--color-text-tertiary) hover:text-(--color-coral) hover:bg-(--color-coral)/8 rounded-full px-3"
-            >
-              {markingRead ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Tümünü okundu işaretle'}
-            </Button>
-          )}
-        </div>
-        {/* Filter tabs */}
-        <div className="flex gap-1 mt-2.5 overflow-x-auto no-scrollbar -mx-1 px-1">
-          {FILTER_TABS.map((tab) => {
-            const count = tab.types.length === 0
-              ? notifications.length
-              : notifications.filter((n) => tab.types.includes(n.type)).length
-            const isActive = activeFilter === tab.id
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveFilter(tab.id)}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors flex-shrink-0',
-                  isActive
-                    ? 'bg-(--color-coral) text-white'
-                    : 'text-(--color-text-tertiary) hover:text-(--color-text-primary) hover:bg-(--color-background-secondary)',
-                )}
-              >
-                {tab.label}
-                {count > 0 && (
-                  <span className={cn('text-[10px] tabular-nums', isActive ? 'text-white/80' : 'text-(--color-text-tertiary)')}>
-                    {count}
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      </header>
 
-      {loadError ? (
-        <EmptyState
-          icon={Bell}
-          title="Bildirimler yüklenemedi"
-          description="Bir sorun oluştu. Sayfayı yenilemeyi dene."
-          action={<button onClick={() => { setLoadError(false); setLoading(true); void load() }} className="text-xs px-4 py-2 rounded-full bg-(--color-coral) text-white font-medium hover:opacity-90">Tekrar dene</button>}
-        />
-      ) : filtered.length === 0 ? (
-        <EmptyState
-          icon={Bell}
-          title={activeFilter === 'all' ? 'Henüz bildirim yok' : 'Bu kategoride bildirim yok'}
-          description={activeFilter === 'all' ? 'Biri seni takip ettiğinde, gönderini beğendiğinde veya yanıtladığında burada görünür.' : 'Farklı bir filtre seçmeyi dene.'}
-        />
-      ) : (
-        <>
-          {groups.map((group) => (
-            <div key={group.label}>
-              <GroupDivider label={group.label} />
-              {group.items.map((notification) => (
-                <NotificationItem
-                  key={notification.id}
-                  notification={notification}
-                  onRead={(id) => {
-                    setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n))
-                    api.notifications.readOne(id).catch(() => {
-                      setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: false } : n))
-                    })
-                  }}
-                  onRemove={(id) => setNotifications((prev) => prev.filter((n) => n.id !== id))}
-                  onDelete={(id) => setNotifications((prev) => prev.filter((n) => n.id !== id))}
-                />
-              ))}
-            </div>
-          ))}
-          {loadingMore && (
-            <div className="py-6 flex justify-center">
-              <Loader2 className="w-5 h-5 animate-spin text-(--color-coral)" />
-            </div>
-          )}
-          <div ref={loadMoreRef} className="h-1" />
-        </>
-      )}
-    </div>
+          {/* Filter tabs */}
+          <Tabs value={activeFilter} onValueChange={(v) => setActiveFilter(v as FilterTab)}>
+            <TabsList className="mt-2.5 border-0 bg-transparent h-auto -mx-1 px-1 gap-1 overflow-x-auto flex-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {FILTER_TABS.map((tab) => {
+                const count = tab.types.length === 0
+                  ? notifications.length
+                  : notifications.filter((n) => tab.types.includes(n.type)).length
+                return (
+                  <TabsTrigger
+                    key={tab.id}
+                    value={tab.id}
+                    className={cn(
+                      'flex-none rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap border-0',
+                      'data-[state=active]:bg-(--color-coral) data-[state=active]:text-white data-[state=active]:shadow-none data-[state=active]:border-b-0',
+                      'data-[state=inactive]:text-(--color-text-tertiary) data-[state=inactive]:hover:text-(--color-text-primary) data-[state=inactive]:hover:bg-(--color-background-secondary)',
+                    )}
+                  >
+                    {tab.label}
+                    {count > 0 && (
+                      <span className="ml-1 text-[10px] tabular-nums opacity-70">{count}</span>
+                    )}
+                  </TabsTrigger>
+                )
+              })}
+            </TabsList>
+          </Tabs>
+        </header>
+
+        {loadError ? (
+          <EmptyState
+            icon={Bell}
+            title="Bildirimler yüklenemedi"
+            description="Bir sorun oluştu. Sayfayı yenilemeyi dene."
+            action={<button onClick={() => { setLoadError(false); setLoading(true); void load() }} className="text-xs px-4 py-2 rounded-full bg-(--color-coral) text-white font-medium hover:opacity-90">Tekrar dene</button>}
+          />
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            icon={Bell}
+            title={activeFilter === 'all' ? 'Henüz bildirim yok' : 'Bu kategoride bildirim yok'}
+            description={activeFilter === 'all' ? 'Biri seni takip ettiğinde, gönderini beğendiğinde veya yanıtladığında burada görünür.' : 'Farklı bir filtre seçmeyi dene.'}
+          />
+        ) : (
+          <>
+            {groups.map((group) => (
+              <div key={group.label}>
+                <GroupLabel label={group.label} />
+                {group.items.map((notification) => (
+                  <NotificationItem
+                    key={notification.id}
+                    notification={notification}
+                    onRead={(id) => {
+                      setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n))
+                      api.notifications.readOne(id).catch(() => {
+                        setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: false } : n))
+                      })
+                    }}
+                    onRemove={(id) => setNotifications((prev) => prev.filter((n) => n.id !== id))}
+                    onDelete={(id) => setNotifications((prev) => prev.filter((n) => n.id !== id))}
+                  />
+                ))}
+              </div>
+            ))}
+            {loadingMore && (
+              <div className="py-6 flex justify-center">
+                <Loader2 className="w-5 h-5 animate-spin text-(--color-coral)" />
+              </div>
+            )}
+            <div ref={loadMoreRef} className="h-1" />
+          </>
+        )}
+      </div>
+    </TooltipProvider>
   )
 }

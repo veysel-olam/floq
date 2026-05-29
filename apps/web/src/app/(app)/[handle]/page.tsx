@@ -7,6 +7,11 @@ import { api, type Actor, type Post, type ActorCommunityBadge } from '@/lib/api'
 import { PostCard } from '@/components/posts/post-card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { Switch } from '@/components/ui/switch'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Loader2, CalendarDays, MoreHorizontal, ShieldOff, BellOff, Bell, MessageSquare, Pencil, Star, Images, BarChart2, X, Lock, Globe, Shield, MessageCircle, Heart, Film, FileText, Link2, Share2, Check, Copy, FolderOpen, Plus, Trash2, UserPlus, UserMinus, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TimelineSkeleton } from '@/components/ui/skeleton'
@@ -45,13 +50,9 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
   const [cfLoading, setCfLoading] = useState(false)
   const [blocked, setBlocked] = useState(false)
   const [muted, setMuted] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [editForm, setEditForm] = useState({ displayName: '', bio: '', location: '', website: '', isLocked: false })
   const [editSaving, setEditSaving] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
-  const [ownMenuOpen, setOwnMenuOpen] = useState(false)
-  const ownMenuRef = useRef<HTMLDivElement>(null)
 
   const [tab, setTab] = useState<Tab>('posts')
 
@@ -109,16 +110,12 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
     if (navigator.share) {
       try { await navigator.share({ title: actor?.displayName ?? handle, url }) } catch { /* cancelled */ }
     }
-    setMenuOpen(false)
-    setOwnMenuOpen(false)
   }
 
   async function copyLink() {
     const url = `${window.location.origin}/${handle}`
     await navigator.clipboard.writeText(url)
     setCopied(true)
-    setMenuOpen(false)
-    setOwnMenuOpen(false)
     setTimeout(() => setCopied(false), 2000)
   }
 
@@ -168,14 +165,6 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
     load()
   }, [handle, isOwn])
 
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
-      if (ownMenuRef.current && !ownMenuRef.current.contains(e.target as Node)) setOwnMenuOpen(false)
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
 
   const loadReplies = useCallback(async (cursor?: string) => {
     try {
@@ -346,7 +335,6 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
   }
 
   async function toggleBlock() {
-    setMenuOpen(false)
     try {
       if (blocked) {
         await api.moderation.blocks.unblock(handle)
@@ -359,7 +347,6 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
   }
 
   async function toggleMute() {
-    setMenuOpen(false)
     try {
       if (muted) {
         await api.moderation.mutes.unmute(handle)
@@ -478,6 +465,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
   ]
 
   return (
+    <TooltipProvider>
     <div className="max-w-xl mx-auto">
       {/* Moved account banner */}
       {actor.movedToUri && (
@@ -509,8 +497,8 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
           )}
       </div>
 
-      <div className="px-4 pb-4">
-        <div className="flex items-end justify-between -mt-10 mb-3">
+      <div className="px-4 pb-4 space-y-3">
+        <div className="flex items-end justify-between -mt-10">
           <Avatar className="w-20 h-20 border-4 border-(--color-background)">
             {actor.avatarUrl && <AvatarImage src={actor.avatarUrl} alt={actor.displayName ?? actor.handle} />}
             <AvatarFallback
@@ -543,34 +531,22 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                   Profili Düzenle
                 </Button>
               </Link>
-              <div ref={ownMenuRef} className="relative">
-                <button
-                  onClick={() => setOwnMenuOpen((o) => !o)}
-                  className="p-2 rounded-full border border-(--color-border) text-(--color-text-secondary) hover:bg-(--color-background-secondary) transition-colors"
-                >
-                  <MoreHorizontal className="w-4 h-4" />
-                </button>
-                {ownMenuOpen && (
-                  <div className="absolute right-0 top-full mt-1 w-48 bg-(--color-background) border border-(--color-border) rounded-xl shadow-lg z-20 overflow-hidden">
-                    <button
-                      onClick={() => void shareProfile()}
-                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left text-(--color-text-primary) transition-colors hover:bg-(--color-background-secondary)"
-                    >
-                      <Share2 className="w-4 h-4" />
-                      Paylaş
-                    </button>
-                    <button
-                      onClick={() => void copyLink()}
-                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors hover:bg-(--color-background-secondary)"
-                    >
-                      {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-(--color-text-primary)" />}
-                      <span className={copied ? 'text-green-500' : 'text-(--color-text-primary)'}>
-                        {copied ? 'Kopyalandı!' : 'Linki Kopyala'}
-                      </span>
-                    </button>
-                  </div>
-                )}
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="p-2 rounded-full border border-(--color-border) text-(--color-text-secondary) hover:bg-(--color-background-secondary) transition-colors">
+                    <MoreHorizontal className="w-4 h-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onSelect={() => void shareProfile()}>
+                    <Share2 className="w-4 h-4" /> Paylaş
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => void copyLink()}>
+                    {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                    <span className={copied ? 'text-green-500' : ''}>{copied ? 'Kopyalandı!' : 'Linki Kopyala'}</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           ) : (
             <div className="flex items-center gap-2">
@@ -584,21 +560,25 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                 </Button>
               </Link>
               {following && (
-                <button
-                  onClick={() => void toggleCloseFriend()}
-                  disabled={cfLoading}
-                  title={isCloseFriend ? 'Yakın Çevreden Çıkar' : 'Yakın Çevreye Ekle'}
-                  className={cn(
-                    'p-2 rounded-full border transition-colors',
-                    isCloseFriend
-                      ? 'border-green-300 text-green-500 bg-green-500/10'
-                      : 'border-(--color-border) text-(--color-text-secondary) hover:border-green-300 hover:text-green-500',
-                  )}
-                >
-                  {cfLoading
-                    ? <Loader2 className="w-4 h-4 animate-spin" />
-                    : <Star className={cn('w-4 h-4', isCloseFriend && 'fill-current')} />}
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => void toggleCloseFriend()}
+                      disabled={cfLoading}
+                      className={cn(
+                        'p-2 rounded-full border transition-colors',
+                        isCloseFriend
+                          ? 'border-green-300 text-green-500 bg-green-500/10'
+                          : 'border-(--color-border) text-(--color-text-secondary) hover:border-green-300 hover:text-green-500',
+                      )}
+                    >
+                      {cfLoading
+                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                        : <Star className={cn('w-4 h-4', isCloseFriend && 'fill-current')} />}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>{isCloseFriend ? 'Yakın Çevreden Çıkar' : 'Yakın Çevreye Ekle'}</TooltipContent>
+                </Tooltip>
               )}
               <Button
                 size="sm"
@@ -620,76 +600,54 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                     : 'Takip et'}
               </Button>
               {following && (
-                <button
-                  onClick={toggleNotify}
-                  disabled={notifyLoading}
-                  title={notifyOnActivity ? 'Bildirimleri kapat' : 'Bildirimleri aç'}
-                  className={cn(
-                    'p-2 rounded-full border transition-colors',
-                    notifyOnActivity
-                      ? 'border-(--color-border) text-(--color-coral) hover:bg-(--color-coral)/8'
-                      : 'border-(--color-border) text-(--color-text-tertiary) hover:text-(--color-text-primary) hover:bg-(--color-background-secondary)',
-                  )}
-                >
-                  {notifyLoading
-                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    : notifyOnActivity ? <Bell className="w-3.5 h-3.5" /> : <BellOff className="w-3.5 h-3.5" />}
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={toggleNotify}
+                      disabled={notifyLoading}
+                      className={cn(
+                        'p-2 rounded-full border transition-colors',
+                        notifyOnActivity
+                          ? 'border-(--color-border) text-(--color-coral) hover:bg-(--color-coral)/8'
+                          : 'border-(--color-border) text-(--color-text-tertiary) hover:text-(--color-text-primary) hover:bg-(--color-background-secondary)',
+                      )}
+                    >
+                      {notifyLoading
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : notifyOnActivity ? <Bell className="w-3.5 h-3.5" /> : <BellOff className="w-3.5 h-3.5" />}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>{notifyOnActivity ? 'Bildirimleri kapat' : 'Bildirimleri aç'}</TooltipContent>
+                </Tooltip>
               )}
-              <div ref={menuRef} className="relative">
-                <button
-                  onClick={() => setMenuOpen((o) => !o)}
-                  className="p-2 rounded-full border border-(--color-border) text-(--color-text-secondary) hover:bg-(--color-background-secondary) transition-colors"
-                >
-                  <MoreHorizontal className="w-4 h-4" />
-                </button>
-                {menuOpen && (
-                  <div className="absolute right-0 top-full mt-1 w-48 bg-(--color-background) border border-(--color-border) rounded-xl shadow-lg z-20 overflow-hidden">
-                    <button
-                      onClick={() => void shareProfile()}
-                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left text-(--color-text-primary) transition-colors hover:bg-(--color-background-secondary)"
-                    >
-                      <Share2 className="w-4 h-4" />
-                      Paylaş
-                    </button>
-                    <button
-                      onClick={() => void copyLink()}
-                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors hover:bg-(--color-background-secondary)"
-                    >
-                      {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-(--color-text-primary)" />}
-                      <span className={copied ? 'text-green-500' : 'text-(--color-text-primary)'}>
-                        {copied ? 'Kopyalandı!' : 'Linki Kopyala'}
-                      </span>
-                    </button>
-                    <div className="border-t border-(--color-border-secondary)" />
-                    <button
-                      onClick={() => void toggleMute()}
-                      className={cn(
-                        'w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors hover:bg-(--color-background-secondary)',
-                        muted ? 'text-(--color-coral)' : 'text-(--color-text-primary)',
-                      )}
-                    >
-                      <BellOff className="w-4 h-4" />
-                      {muted ? 'Susturmayı Kaldır' : 'Sustur'}
-                    </button>
-                    <button
-                      onClick={() => void toggleBlock()}
-                      className={cn(
-                        'w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors hover:bg-(--color-background-secondary)',
-                        blocked ? 'text-(--color-coral)' : 'text-red-500',
-                      )}
-                    >
-                      <ShieldOff className="w-4 h-4" />
-                      {blocked ? 'Engeli Kaldır' : 'Engelle'}
-                    </button>
-                  </div>
-                )}
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="p-2 rounded-full border border-(--color-border) text-(--color-text-secondary) hover:bg-(--color-background-secondary) transition-colors">
+                    <MoreHorizontal className="w-4 h-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onSelect={() => void shareProfile()}>
+                    <Share2 className="w-4 h-4" /> Paylaş
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => void copyLink()}>
+                    {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                    <span className={copied ? 'text-green-500' : ''}>{copied ? 'Kopyalandı!' : 'Linki Kopyala'}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => void toggleMute()} className={muted ? 'text-(--color-coral)' : ''}>
+                    <BellOff className="w-4 h-4" /> {muted ? 'Susturmayı Kaldır' : 'Sustur'}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => void toggleBlock()} destructive={!blocked} className={blocked ? 'text-(--color-coral)' : ''}>
+                    <ShieldOff className="w-4 h-4" /> {blocked ? 'Engeli Kaldır' : 'Engelle'}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )}
         </div>
 
-        <div className="mb-3">
+        <div>
           <div className="flex items-center gap-2 flex-wrap">
             <h1
               className="text-xl font-bold text-(--color-text-primary) leading-tight"
@@ -698,9 +656,12 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
               {actor.displayName ?? actor.handle}
             </h1>
             {actor.isLocked && (
-              <span title="Kilitli hesap">
-                <Lock className="w-4 h-4 text-(--color-text-tertiary)" />
-              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span><Lock className="w-4 h-4 text-(--color-text-tertiary)" /></span>
+                </TooltipTrigger>
+                <TooltipContent>Kilitli hesap</TooltipContent>
+              </Tooltip>
             )}
             {actor.role === 'moderator' && (
               <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
@@ -733,10 +694,10 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
         </div>
 
         {actor.bio && (
-          <p className="text-sm text-(--color-text-secondary) mb-3 leading-relaxed">{renderBio(actor.bio)}</p>
+          <p className="text-sm text-(--color-text-secondary) leading-relaxed">{renderBio(actor.bio)}</p>
         )}
 
-        <div className="flex items-center gap-4 mb-2 text-sm">
+        <div className="flex items-center gap-4 text-sm">
           <button
             onClick={() => void openFollowModal('followers')}
             className="flex items-center gap-1.5 hover:underline underline-offset-2 group"
@@ -759,7 +720,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
 
         {/* Mutual followers */}
         {!isOwn && mutualFollowers.length > 0 && (
-          <div className="flex items-center gap-2.5 mb-3 py-2 px-3 rounded-xl bg-(--color-background-secondary)/60">
+          <div className="flex items-center gap-2.5">
             <div className="flex -space-x-1.5 flex-shrink-0">
               {mutualFollowers.slice(0, 3).map((m) => (
                 <Avatar key={m.id} className="w-6 h-6 ring-2 ring-(--color-background)">
@@ -781,7 +742,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <div className="flex items-center gap-1 text-xs text-(--color-text-tertiary)">
             <CalendarDays className="w-3.5 h-3.5" />
             <span>{joinDate} katıldı</span>
@@ -849,10 +810,9 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
               href={`${process.env['NEXT_PUBLIC_API_URL'] ?? ''}/users/${actor.handle}/did.json`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 text-xs text-(--color-text-tertiary) hover:text-(--color-teal) transition-colors"
-              title="AT Protocol DID belgesi"
+              className="font-mono text-[10px] text-(--color-text-tertiary) hover:text-(--color-teal) transition-colors"
             >
-              <span className="font-mono text-[10px] px-1 py-0.5 rounded border border-(--color-border) bg-(--color-background-secondary)">did:web</span>
+              did:web
             </a>
           )}
         </div>
@@ -862,7 +822,6 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
       {/* Community Badges */}
       {communityBadges.length > 0 && (
         <div className="px-4 pb-3">
-          <p className="text-[10px] font-semibold text-(--color-text-tertiary) uppercase tracking-widest mb-2">Topluluk Rozetleri</p>
           <div className="flex flex-wrap gap-2">
             {communityBadges.map((b) => (
               <Link
@@ -883,28 +842,24 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-(--color-border) sticky top-0 z-10 bg-(--color-background)/90 backdrop-blur-md">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => handleTabChange(t.id)}
-            className={cn(
-              'flex-1 py-3 text-xs font-medium transition-all flex items-center justify-center gap-1.5',
-              tab === t.id
-                ? 'text-(--color-coral) border-b-2 border-(--color-coral)'
-                : 'text-(--color-text-tertiary) hover:text-(--color-text-secondary) hover:bg-(--color-background-secondary)/50',
-            )}
-          >
-            {t.icon}
-            <span className="hidden sm:inline">{t.label}</span>
-            {t.count != null && t.count > 0 && (
-              <span className={cn('tabular-nums', tab === t.id ? 'text-(--color-coral)' : 'text-(--color-text-tertiary)')}>
-                {t.count >= 1000 ? `${(t.count / 1000).toFixed(1)}K` : t.count}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      <Tabs value={tab} onValueChange={(v) => handleTabChange(v as Tab)}>
+        <TabsList className="w-full">
+          {tabs.map((t) => (
+            <TabsTrigger key={t.id} value={t.id} className="gap-1.5">
+              {t.icon}
+              <span className="hidden sm:inline">{t.label}</span>
+              {t.count != null && t.count > 0 && (
+                <span className="tabular-nums text-[10px] opacity-60">
+                  {t.count >= 1000 ? `${(t.count / 1000).toFixed(1)}K` : t.count}
+                </span>
+              )}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
+      {/* Tab content — min-h prevents scrollbar appearing/disappearing between tabs */}
+      <div className="min-h-[70vh]">
 
       {/* Posts tab */}
       {tab === 'posts' && (
@@ -1085,23 +1040,16 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
         </div>
       )}
 
+      </div>{/* end min-h tab content wrapper */}
+
       <div ref={loadMoreRef} className="h-1" />
 
       {/* ── Profile edit modal ──────────────────────────────── */}
-      {editModalOpen && (
-        <>
-          <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={() => setEditModalOpen(false)} />
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 pointer-events-none">
-            <div
-              className="pointer-events-auto w-full sm:max-w-md bg-(--color-background) rounded-t-2xl sm:rounded-2xl border border-(--color-border) shadow-2xl overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between px-4 py-3.5 border-b border-(--color-border-secondary)">
-                <h2 className="text-base font-semibold text-(--color-text-primary)" style={{ fontFamily: 'var(--font-outfit)' }}>Profili Düzenle</h2>
-                <button onClick={() => setEditModalOpen(false)} className="p-1 rounded-full hover:bg-(--color-background-secondary) text-(--color-text-tertiary)">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle style={{ fontFamily: 'var(--font-outfit)' }}>Profili Düzenle</DialogTitle>
+          </DialogHeader>
               <div className="px-4 py-4 space-y-4">
                 <div>
                   <label className="text-xs font-medium text-(--color-text-tertiary) mb-1 block">Görünen ad</label>
@@ -1146,123 +1094,99 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                     className="w-full text-sm bg-(--color-background-secondary) border border-(--color-border) rounded-xl px-3 py-2.5 text-(--color-text-primary) placeholder:text-(--color-text-tertiary) focus:outline-none focus:border-(--color-coral)/60 transition-colors"
                   />
                 </div>
-                <label className="flex items-center justify-between gap-3 cursor-pointer">
+                <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-medium text-(--color-text-primary)">Kilitli hesap</p>
                     <p className="text-xs text-(--color-text-tertiary)">Takip isteklerini onaylamak zorunda kalırsın</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setEditForm((f) => ({ ...f, isLocked: !f.isLocked }))}
-                    className={cn(
-                      'relative inline-flex w-10 h-6 flex-shrink-0 rounded-full border-2 transition-colors',
-                      editForm.isLocked ? 'bg-(--color-coral) border-(--color-coral)' : 'bg-(--color-border) border-transparent',
-                    )}
-                  >
-                    <span className={cn('inline-block w-4 h-4 rounded-full bg-white shadow transition-transform mt-0.5', editForm.isLocked ? 'translate-x-4' : 'translate-x-0.5')} />
-                  </button>
-                </label>
+                  <Switch
+                    checked={editForm.isLocked}
+                    onCheckedChange={(v) => setEditForm((f) => ({ ...f, isLocked: v }))}
+                  />
+                </div>
               </div>
-              <div className="flex gap-2 px-4 pb-4">
-                <button
-                  onClick={() => setEditModalOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-(--color-border) text-sm font-medium text-(--color-text-secondary) hover:bg-(--color-background-secondary) transition-colors"
-                >
-                  İptal
-                </button>
-                <button
-                  onClick={() => void saveEditProfile()}
-                  disabled={editSaving}
-                  className="flex-1 py-2.5 rounded-xl bg-(--color-coral) text-white text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-1.5"
-                >
-                  {editSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  Kaydet
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+          <DialogFooter>
+            <DialogClose asChild>
+              <button className="px-4 py-2 rounded-full border border-(--color-border) text-sm font-medium text-(--color-text-secondary) hover:bg-(--color-background-secondary) transition-colors">
+                İptal
+              </button>
+            </DialogClose>
+            <button
+              onClick={() => void saveEditProfile()}
+              disabled={editSaving}
+              className="px-4 py-2 rounded-full bg-(--color-coral) text-white text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {editSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              Kaydet
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Follow list modal */}
-      {followModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-          onClick={() => setFollowModal(null)}
-        >
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-          <div
-            className="relative w-full sm:max-w-md bg-(--color-background) rounded-t-3xl sm:rounded-2xl shadow-xl flex flex-col max-h-[80vh] sm:max-h-[70vh] overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Handle bar (mobile) */}
-            <div className="sm:hidden flex justify-center pt-3 pb-1 flex-shrink-0">
-              <div className="w-9 h-1 rounded-full bg-(--color-border)" />
+      <Dialog open={!!followModal} onOpenChange={(o) => { if (!o) setFollowModal(null) }}>
+        <DialogContent showClose={false} className="flex flex-col max-h-[75vh] p-0">
+          <DialogHeader className="flex-shrink-0">
+            <div>
+              <DialogTitle style={{ fontFamily: 'var(--font-outfit)' }}>
+                {followModal === 'followers' ? 'Takipçiler' : 'Takip Edilenler'}
+              </DialogTitle>
+              {!modalLoading && modalTotal !== null && (
+                <p className="text-xs text-(--color-text-tertiary) mt-0.5">{modalTotal} kişi</p>
+              )}
             </div>
-            <div className="flex items-center justify-between px-4 py-3 border-b border-(--color-border-secondary) flex-shrink-0">
-              <div>
-                <h2 className="text-base font-semibold text-(--color-text-primary)" style={{ fontFamily: 'var(--font-outfit)' }}>
-                  {followModal === 'followers' ? 'Takipçiler' : 'Takip Edilenler'}
-                </h2>
-                {!modalLoading && modalTotal !== null && (
-                  <p className="text-xs text-(--color-text-tertiary)">
-                    {modalTotal} kişi
-                  </p>
-                )}
-              </div>
-              <button
-                onClick={() => setFollowModal(null)}
-                className="p-1.5 rounded-full hover:bg-(--color-background-secondary) text-(--color-text-tertiary) transition-colors"
-              >
+            <DialogClose asChild>
+              <button className="p-1.5 rounded-full hover:bg-(--color-background-secondary) text-(--color-text-tertiary) transition-colors">
                 <X className="w-4 h-4" />
               </button>
+            </DialogClose>
+          </DialogHeader>
+          {!modalLoading && modalList.length > 5 && (
+            <div className="px-3 py-2 border-b border-(--color-border-secondary) flex-shrink-0">
+              <input
+                value={modalSearch}
+                onChange={(e) => setModalSearch(e.target.value)}
+                placeholder="İsim veya kullanıcı adı ara..."
+                className="w-full text-sm bg-(--color-background-secondary) border border-(--color-border) rounded-xl px-3 py-1.5 text-(--color-text-primary) placeholder:text-(--color-text-tertiary) focus:outline-none focus:border-(--color-coral)/50"
+              />
             </div>
-            {!modalLoading && modalList.length > 5 && (
-              <div className="px-3 py-2 border-b border-(--color-border-secondary) flex-shrink-0">
-                <input
-                  value={modalSearch}
-                  onChange={(e) => setModalSearch(e.target.value)}
-                  placeholder="İsim veya kullanıcı adı ara..."
-                  className="w-full text-sm bg-(--color-background-secondary) border border-(--color-border) rounded-xl px-3 py-1.5 text-(--color-text-primary) placeholder:text-(--color-text-tertiary) focus:outline-none focus:border-(--color-coral)/50"
-                />
+          )}
+          <div className="overflow-y-auto flex-1">
+            {modalLoading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="w-5 h-5 animate-spin text-(--color-coral)" />
               </div>
-            )}
-            <div className="overflow-y-auto flex-1">
-              {modalLoading ? (
-                <div className="flex justify-center py-12">
-                  <Loader2 className="w-5 h-5 animate-spin text-(--color-coral)" />
+            ) : (() => {
+              const q = modalSearch.toLowerCase()
+              const visible = q
+                ? modalList.filter((a) => (a.displayName ?? a.handle).toLowerCase().includes(q) || a.handle.toLowerCase().includes(q))
+                : modalList
+              return visible.length === 0 ? (
+                <div className="py-12 text-center">
+                  <p className="text-sm text-(--color-text-tertiary)">
+                    {modalSearch ? 'Sonuç bulunamadı.' : followModal === 'followers' ? 'Henüz takipçi yok.' : 'Henüz kimse takip edilmiyor.'}
+                  </p>
                 </div>
-              ) : (() => {
-                const q = modalSearch.toLowerCase()
-                const visible = q
-                  ? modalList.filter((a) => (a.displayName ?? a.handle).toLowerCase().includes(q) || a.handle.toLowerCase().includes(q))
-                  : modalList
-                return visible.length === 0 ? (
-                  <div className="py-12 text-center">
-                    <p className="text-sm text-(--color-text-tertiary)">
-                      {modalSearch ? 'Sonuç bulunamadı.' : followModal === 'followers' ? 'Henüz takipçi yok.' : 'Henüz kimse takip edilmiyor.'}
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    {visible.map((a) => <ActorRow key={a.id} actor={a} currentHandle={currentHandle} onNavigate={() => setFollowModal(null)} />)}
-                    {!modalSearch && modalNextCursor && (
-                      <button
-                        onClick={() => void loadMoreModal()}
-                        disabled={modalLoadingMore}
-                        className="w-full py-3 text-sm text-(--color-coral) hover:bg-(--color-background-secondary) transition-colors disabled:opacity-50"
-                      >
-                        {modalLoadingMore ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Daha fazla göster'}
-                      </button>
-                    )}
-                  </>
-                )
-              })()}
-            </div>
+              ) : (
+                <>
+                  {visible.map((a) => <ActorRow key={a.id} actor={a} currentHandle={currentHandle} onNavigate={() => setFollowModal(null)} />)}
+                  {!modalSearch && modalNextCursor && (
+                    <button
+                      onClick={() => void loadMoreModal()}
+                      disabled={modalLoadingMore}
+                      className="w-full py-3 text-sm text-(--color-coral) hover:bg-(--color-background-secondary) transition-colors disabled:opacity-50"
+                    >
+                      {modalLoadingMore ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Daha fazla göster'}
+                    </button>
+                  )}
+                </>
+              )
+            })()}
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
+    </TooltipProvider>
   )
 }
 

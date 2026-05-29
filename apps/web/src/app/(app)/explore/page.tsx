@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { api, type Post, type Actor } from '@/lib/api'
 import { PostCard } from '@/components/posts/post-card'
 import { Input } from '@/components/ui/input'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useInfiniteScroll } from '@/hooks/use-infinite-scroll'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useSession } from '@/lib/auth-client'
@@ -447,22 +448,19 @@ function ExploreContent() {
         )}
 
         {isSearchMode && (
-          <div className="flex gap-1">
-            {tabs.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-colors',
-                  tab === t.id
-                    ? 'bg-(--color-blush) dark:bg-(--color-coral)/12 text-(--color-coral) dark:bg-(--color-coral)/12'
-                    : 'text-(--color-text-tertiary) hover:text-(--color-text-primary)',
-                )}
-              >
-                {t.icon}{t.label}
-              </button>
-            ))}
-          </div>
+          <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
+            <TabsList className="border-0 bg-transparent h-auto gap-1">
+              {tabs.map((t) => (
+                <TabsTrigger
+                  key={t.id}
+                  value={t.id}
+                  className="flex-none rounded-lg px-3 py-1 text-xs font-medium gap-1.5 border-b-0 data-[state=active]:bg-(--color-blush) dark:data-[state=active]:bg-(--color-coral)/12 data-[state=active]:text-(--color-coral) data-[state=active]:shadow-none data-[state=active]:border-b-0 data-[state=inactive]:text-(--color-text-tertiary) data-[state=inactive]:hover:text-(--color-text-primary)"
+                >
+                  {t.icon}{t.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
         )}
       </header>
 

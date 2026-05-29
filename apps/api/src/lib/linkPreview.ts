@@ -72,17 +72,12 @@ function detectMusicPlatform(url: URL): MusicMeta | null {
     }
   }
 
-  // YouTube / YT Music: youtube.com/watch?v=ID or youtu.be/ID
-  if (host === 'youtube.com' || host === 'youtu.be' || host === 'music.youtube.com') {
-    let videoId: string | null = null
-    if (host === 'youtu.be') {
-      videoId = path.slice(1).split('?')[0] ?? null
-    } else {
-      videoId = url.searchParams.get('v')
-    }
+  // YouTube Music only — regular youtube.com/youtu.be are video platforms, not music
+  if (host === 'music.youtube.com') {
+    const videoId = url.searchParams.get('v')
     if (videoId) {
       return {
-        platform: host === 'music.youtube.com' ? 'ytmusic' : 'youtube',
+        platform: 'ytmusic',
         type: 'track',
         embedUrl: `https://www.youtube.com/embed/${videoId}?rel=0`,
       }
@@ -140,6 +135,16 @@ function detectMusicPlatform(url: URL): MusicMeta | null {
         type: m[1] ?? 'track',
         embedUrl: null, // Tidal has no public embed
       }
+    }
+  }
+
+  // Bandcamp: {artist}.bandcamp.com/track|album/...  (embed id resolved from og:video later)
+  if (host === 'bandcamp.com' || host.endsWith('.bandcamp.com')) {
+    const m = path.match(/^\/(track|album)\//)
+    return {
+      platform: 'bandcamp',
+      type: m?.[1] === 'album' ? 'album' : 'track',
+      embedUrl: null,
     }
   }
 
@@ -217,12 +222,14 @@ export async function fetchLinkPreview(rawUrl: string): Promise<LinkPreview | nu
 
   try {
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 6000)
+    const timer = setTimeout(() => controller.abort(), 8000)
     const res = await fetch(url.href, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'floq-preview-bot/1.0 (+https://floq.com)',
-        Accept: 'text/html',
+        // Twitterbot is whitelisted by most news sites for Twitter Cards
+        'User-Agent': 'Twitterbot/1.0',
+        Accept: 'text/html,application/xhtml+xml',
+        'Accept-Language': 'tr,en;q=0.9',
       },
       redirect: 'follow',
     })
@@ -232,20 +239,9 @@ export async function fetchLinkPreview(rawUrl: string): Promise<LinkPreview | nu
     const ct = res.headers.get('content-type') ?? ''
     if (!ct.includes('text/html')) return null
 
-    const reader = res.body?.getReader()
-    if (!reader) return null
-    const chunks: Uint8Array[] = []
-    let total = 0
-    while (total < 65_536) {
-      const { done, value } = await reader.read()
-      if (done || !value) break
-      chunks.push(value)
-      total += value.byteLength
-    }
-    reader.cancel().catch(() => {})
-    const html = new TextDecoder().decode(
-      chunks.reduce((a, b) => { const c = new Uint8Array(a.length + b.length); c.set(a); c.set(b, a.length); return c }, new Uint8Array()),
-    )
+    // res.text() handles gzip/deflate/br decompression automatically (unlike getReader())
+    const full = await res.text()
+    const html = full.slice(0, 100_000)
 
     const image = getMeta(html, 'og:image') ?? getMeta(html, 'twitter:image')
     const rawTitle = getMeta(html, 'og:title') ?? getMeta(html, 'twitter:title') ?? getTitle(html)
@@ -267,11 +263,17 @@ export async function fetchLinkPreview(rawUrl: string): Promise<LinkPreview | nu
         base.description,
         html,
       )
+      // Bandcamp exposes its iframe player via og:video (no deterministic URL form)
+      let embedUrl = musicMeta.embedUrl
+      if (!embedUrl && musicMeta.platform === 'bandcamp') {
+        const ogVideo = getMeta(html, 'og:video') ?? getMeta(html, 'og:video:url') ?? getMeta(html, 'og:video:secure_url')
+        if (ogVideo && /bandcamp\.com\/EmbeddedPlayer/i.test(ogVideo)) embedUrl = ogVideo
+      }
       return {
         ...base,
         musicPlatform: musicMeta.platform,
         musicType: musicMeta.type,
-        ...(musicMeta.embedUrl != null && { musicEmbedUrl: musicMeta.embedUrl }),
+        ...(embedUrl != null && { musicEmbedUrl: embedUrl }),
         ...(artist != null && { musicArtist: artist }),
         ...(track != null && { musicTrack: track }),
       }

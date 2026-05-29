@@ -81,6 +81,30 @@ _(Temizlendi — tüm maddeler tamamlandı)_
 
 ---
 
+## Onaylandı — Sırada (adım adım uygulanıyor)
+
+Aşağıdaki maddeler tartışılıp onaylandı ve sırayla uygulanıyor. İçerik gömme / medya zenginleştirme odaklı.
+
+### Embed & medya
+- **TikTok / Vimeo / Twitch / Bandcamp gömme** — mevcut `linkPreview` platform-tespit + embed sistemini (Spotify/YouTube/Apple/Deezer…) genişlet. `detectMusicPlatform`/`detectPlatformFromUrl` + `MusicCard`/`YouTubeCard` desenine yeni platform kartları ekle.
+- **Dış gönderi gömme (oEmbed)** — tweet/Mastodon/Bluesky gönderi URL'i yapıştırınca kart olarak render. oEmbed endpoint'lerinden veri çek.
+- **Harita önizlemesi** — `locationName` zaten var; statik harita görseli (örn. OSM/static tile) + tıkla-aç.
+- **GIF seçici (KLIPY)** — composer'daki "GIF" butonu var ama servis bağlı değil; KLIPY API ile arama + seçim.
+- **Tıkla-yükle gömme / "veri tasarrufu"** — YouTube'daki click-to-play mantığını tüm ağır embed'lere yay (gizlilik + performans). Ayarlardan toggle.
+
+### Medya zekâsı (AI)
+- **Otomatik altyazı** — yüklenen videoya Whisper ile transkript/altyazı (VTT).
+- **Otomatik alt-text** — görsele vision modeliyle erişilebilirlik metni önerisi + "alt-text ekle" hatırlatması.
+
+### Okuma & composer
+- **Thread okuma süresi / ilerleme** — uzun thread'lerde tahmini okuma süresi + ilerleme göstergesi.
+- **"Kaldığın yerden"** — etkileşimde bulunduğun thread'e yeni yanıt geldiğinde okunmamış işareti.
+- **LaTeX/matematik render** — `$...$` / `$$...$$` katex ile render (CS/STEM içerik).
+- **Sunucu-taraflı taslak senkronu** — şu an local; cihazlar arası senkron için DB + API.
+- **Yinelenen gönderi tespiti** — kısa sürede aynı içeriği tekrar göndermeyi tespit/uyar.
+
+---
+
 ## Reddedilen / Sonraya Bırakılan
 _(buraya taşı, silme — neden yapılmadığını hatırlamak için)_
 

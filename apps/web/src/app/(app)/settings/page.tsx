@@ -4046,6 +4046,11 @@ function SettingsPageContent() {
     return (t && ['profile','privacy','moderation','filters','feed','notifications','security','sessions','appearance','account','help'].includes(t) ? t : 'profile') as Tab
   })
 
+  // Avoid hydration mismatch: useSession resolves synchronously on the client
+  // (cached session) but is pending during SSR, so gate tab content on mount.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
   useEffect(() => {
     if (!isPending && !session) router.push('/login')
   }, [isPending, session, router])
@@ -4081,7 +4086,7 @@ function SettingsPageContent() {
         </nav>
 
         <main className="flex-1 p-4 sm:p-6">
-          {isPending ? (
+          {!mounted || isPending ? (
             <div className="flex items-center justify-center h-48">
               <Loader2 className="w-5 h-5 animate-spin text-(--color-coral)" />
             </div>

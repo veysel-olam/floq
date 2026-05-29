@@ -681,6 +681,10 @@ export const api = {
       apiFetch<{ posts: Post[]; nextCursor: string | null }>(
         `/api/posts/${id}/quotes${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
       ),
+    likes: (id: string, cursor?: string) =>
+      apiFetch<{ actors: Actor[]; nextCursor: string | null }>(
+        `/api/posts/${id}/likes${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
+      ),
   },
   notifications: {
     list: (cursor?: string) =>
@@ -898,6 +902,12 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ url: gif.url, previewUrl: gif.previewUrl, width: gif.width, height: gif.height }),
       }),
+  },
+  composerDraft: {
+    get: () => apiFetch<{ draft: { content: string; contentWarning: string | null; updatedAt: string } | null }>('/api/composer-draft'),
+    save: (content: string, contentWarning?: string | null) =>
+      apiFetch<{ ok: boolean }>('/api/composer-draft', { method: 'PUT', body: JSON.stringify({ content, contentWarning: contentWarning ?? null }) }),
+    clear: () => apiFetch<{ ok: boolean }>('/api/composer-draft', { method: 'DELETE' }),
   },
   translate: {
     text: (text: string, to = 'tr') =>

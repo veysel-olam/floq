@@ -1,7 +1,7 @@
 import { db } from '../db/client.js'
 import { notifications, posts, actors, follows, actorPreferences } from '../db/schema.js'
 import type { InferSelectModel } from 'drizzle-orm'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, or } from 'drizzle-orm'
 import { publish } from './pubsub.js'
 import { sendPushToActor } from '../routes/push.js'
 
@@ -139,6 +139,37 @@ export async function notifyReply(actorId: string, replyPostId: string, parentPo
     type: 'reply',
     postId: replyPostId,
   })
+}
+
+// "Kaldığın yerden" — notify everyone who participated in the thread (replied earlier),
+// not just the direct parent author, so people can follow conversations they joined.
+// Reuses the 'reply' notification type (built-in read/unread = the unread marker).
+export async function notifyThreadParticipants(opts: {
+  actorId: string        // author of the new reply
+  replyPostId: string
+  rootId: string         // thread root post id
+  parentPostId: string   // direct parent — its author is already handled by notifyReply
+}) {
+  const { actorId, replyPostId, rootId, parentPostId } = opts
+  const parent = await db.query.posts.findFirst({ where: eq(posts.id, parentPostId), columns: { authorId: true } })
+  const parentAuthorId = parent?.authorId
+  const rows = await db
+    .selectDistinct({ authorId: posts.authorId })
+    .from(posts)
+    .where(and(
+      eq(posts.isDeleted, false),
+      or(eq(posts.rootId, rootId), eq(posts.id, rootId)),
+    ))
+    .limit(100)
+
+  const recipients = rows
+    .map((r) => r.authorId)
+    .filter((id) => id !== actorId && id !== parentAuthorId)
+
+  for (const recipientId of recipients) {
+    if (await isNotifySuppressed(actorId, recipientId)) continue
+    await createNotification({ recipientId, actorId, type: 'reply', postId: replyPostId })
+  }
 }
 
 export async function notifyFollow(followerId: string, followingId: string) {

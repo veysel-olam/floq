@@ -1,12 +1,12 @@
 import type { FastifyInstance } from 'fastify'
 import { createHash, randomUUID } from 'node:crypto'
-import { eq, and, sql, inArray, lt, desc, isNull, isNotNull } from 'drizzle-orm'
+import { eq, and, sql, inArray, lt, gt, desc, isNull, isNotNull } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../db/client.js'
 import { posts, actors, likes, boosts, bookmarks, bookmarkCollections, closeFriends, mediaAttachments, polls, pollOptions, reactions, postEdits, customEmojis, actorPreferences, follows, apGroups, communityTrustRecord, type TrustLevel } from '../db/schema.js'
 import { requireActor, getSession } from '../lib/session.js'
 import { env } from '../lib/env.js'
-import { notifyLike, notifyBoost, notifyReply } from '../lib/notify.js'
+import { notifyLike, notifyBoost, notifyReply, notifyThreadParticipants } from '../lib/notify.js'
 import { buildNote, buildQuestion, buildCreate, buildDelete, buildUpdateNote } from '../lib/activityPub.js'
 import { deliverToFollowers } from '../lib/federation.js'
 import { publish } from '../lib/pubsub.js'
@@ -82,6 +82,23 @@ export async function postsRoutes(app: FastifyInstance) {
     }
 
     const scheduledDate = scheduledAt && new Date(scheduledAt).getTime() > Date.now() ? new Date(scheduledAt) : undefined
+
+    // Yinelenen gönderi tespiti — aynı yazar aynı içeriği aynı bağlamda son 5 dk içinde paylaştıysa engelle
+    if (content.trim() && !isDraft && !scheduledDate) {
+      const dup = await db.query.posts.findFirst({
+        where: and(
+          eq(posts.authorId, actor.id),
+          eq(posts.content, content),
+          eq(posts.isDeleted, false),
+          replyToId ? eq(posts.replyToId, replyToId) : isNull(posts.replyToId),
+          gt(posts.createdAt, new Date(Date.now() - 5 * 60 * 1000)),
+        ),
+        columns: { id: true },
+      })
+      if (dup) {
+        return reply.code(409).send({ error: 'Aynı içeriği az önce paylaştın — çift gönderim engellendi.' })
+      }
+    }
 
     // Resolve group actor
     let resolvedGroupId: string | null = null
@@ -219,6 +236,7 @@ export async function postsRoutes(app: FastifyInstance) {
         .set({ repliesCount: sql`${posts.repliesCount} + 1` })
         .where(eq(posts.id, replyToId))
       void notifyReply(actor.id, post!.id, replyToId)
+      void notifyThreadParticipants({ actorId: actor.id, replyPostId: post!.id, rootId: rootId ?? replyToId, parentPostId: replyToId })
     }
 
     // Push SSE event to local followers
@@ -234,12 +252,12 @@ export async function postsRoutes(app: FastifyInstance) {
       }
     }
 
-    // Link preview — 3 sn timeout ile senkron çek
+    // Link preview — fetchLinkPreview has its own 8s abort; we add a safety net at 9s
     const previewUrl = extractFirstUrl(content)
     if (previewUrl) {
       const preview = await Promise.race([
         fetchLinkPreview(previewUrl),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 9000)),
       ]).catch(() => null)
       if (preview) {
         await db.update(posts).set({ linkPreview: preview }).where(eq(posts.id, post!.id))
@@ -883,6 +901,60 @@ export async function postsRoutes(app: FastifyInstance) {
       return reply.send({
         posts: enriched,
         nextCursor: hasMore ? items.at(-1)?.createdAt.toISOString() : null,
+      })
+    },
+  )
+
+  // GET /api/posts/:id/likes — bu gönderiyi beğenen kullanıcılar
+  app.get<{ Params: { id: string }; Querystring: { cursor?: string } }>(
+    '/api/posts/:id/likes',
+    async (req, reply) => {
+      const session = await getSession(req)
+      const viewer = session
+        ? await db.query.actors.findFirst({ where: eq(actors.userId, session.user.id) })
+        : null
+
+      const limit = 20
+      const offset = req.query.cursor ? parseInt(req.query.cursor, 10) || 0 : 0
+
+      const likeRows = await db.query.likes.findMany({
+        where: eq(likes.postId, req.params.id),
+        columns: { actorId: true },
+        orderBy: [desc(likes.createdAt)],
+        limit: limit + 1,
+        offset,
+      })
+
+      const hasMore = likeRows.length > limit
+      const orderedActorIds = likeRows.slice(0, limit).map((l) => l.actorId)
+      const actorRows = orderedActorIds.length > 0
+        ? await db.query.actors.findMany({ where: inArray(actors.id, orderedActorIds) })
+        : []
+      const actorById = new Map(actorRows.map((a) => [a.id, a]))
+      const items = orderedActorIds.map((id) => actorById.get(id)).filter((a): a is NonNullable<typeof a> => !!a)
+
+      let viewerFollows = new Set<string>()
+      if (viewer && items.length > 0) {
+        const rows = await db.query.follows.findMany({
+          where: and(
+            eq(follows.followerId, viewer.id),
+            eq(follows.status, 'accepted'),
+            inArray(follows.followingId, items.map((a) => a.id)),
+          ),
+          columns: { followingId: true },
+        })
+        viewerFollows = new Set(rows.map((f) => f.followingId))
+      }
+
+      return reply.send({
+        actors: items.map((a) => ({
+          ...a,
+          viewer: viewer ? {
+            following: viewerFollows.has(a.id),
+            followStatus: viewerFollows.has(a.id) ? 'accepted' : null,
+          } : undefined,
+        })),
+        nextCursor: hasMore ? String(offset + limit) : null,
       })
     },
   )

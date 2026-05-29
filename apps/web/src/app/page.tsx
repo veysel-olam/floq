@@ -7,8 +7,9 @@ import { FloqLogo } from '@/components/floq-logo'
 import { PostCard } from '@/components/posts/post-card'
 import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { api, type Post } from '@/lib/api'
-import { Search, TrendingUp, Hash, Users, FileText, Loader2 } from 'lucide-react'
+import { Search, TrendingUp, Hash, Loader2, Check } from 'lucide-react'
 
 const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'
 
@@ -23,6 +24,9 @@ interface InstanceAdmin {
 }
 
 /* ── Mock post builder (fallback while API loads) ── */
+// Fixed reference avoids SSR/client hydration mismatch on relative timestamps
+const MOCK_BASE = new Date('2026-05-27T12:00:00Z').getTime()
+
 function mockPost(
   id: string, handle: string, displayName: string, isLocal: boolean,
   content: string, likesCount: number, boostsCount: number, repliesCount: number,
@@ -36,7 +40,7 @@ function mockPost(
     replyToId: null, quotedPostId: null,
     replyToAuthor: null, replyTo: null, quotedPost: null,
     poll: null, linkPreview: null, tags: [],
-    createdAt: new Date(Date.now() - minsAgo * 60 * 1000).toISOString(),
+    createdAt: new Date(MOCK_BASE - minsAgo * 60 * 1000).toISOString(),
     editedAt: null,
     author: {
       id: `mock-${id}`, handle, displayName, bio: null,
@@ -102,112 +106,103 @@ function ServerInfoSidebar() {
     return n.toString()
   }
 
+  const DIFFERENTIATORS = [
+    { text: 'Algoritma yok' },
+    { text: 'Reklam yok' },
+    { text: 'Açık kaynak ve federe', sub: 'Mastodon, Bluesky ile bağlantılı' },
+    { text: 'Veriler sana ait' },
+  ]
+
   return (
-    <aside className="hidden lg:flex flex-col sticky top-0 h-screen w-[280px] xl:w-[300px] flex-shrink-0 border-r border-(--color-border-secondary) px-6 py-6 gap-4 overflow-y-auto scrollbar-none">
+    <aside className="hidden lg:flex flex-col sticky top-0 h-screen w-[280px] xl:w-[300px] flex-shrink-0 border-r border-(--color-border-secondary) px-6 py-6 gap-5 overflow-y-auto scrollbar-none">
       <FloqLogo size="md" />
 
-      {/* Description */}
-      <div>
-        <p className="text-sm font-semibold text-(--color-text-primary) mb-1.5" style={{ fontFamily: 'var(--font-outfit)' }}>
-          floq.com
-        </p>
-        <p className="text-sm text-(--color-text-secondary) leading-relaxed">
-          Kullanıcı özgürlüğünü ön planda tutan, açık kaynak ve federe sosyal ağ.
-          ActivityPub protokolüyle Mastodon, Bluesky ve binlerce platformla bağlantılı.
-          Algoritma yok. Reklam yok. Veriler sana ait.
+      {/* Tagline */}
+      <p className="text-base font-semibold text-(--color-text-primary) leading-snug" style={{ fontFamily: 'var(--font-outfit)' }}>
+        Sosyal medya, senin kurallarınla.
+      </p>
+
+      {/* Differentiators */}
+      <ul className="flex flex-col gap-2.5">
+        {DIFFERENTIATORS.map((d) => (
+          <li key={d.text} className="flex items-start gap-2">
+            <Check className="w-4 h-4 text-(--color-coral) flex-shrink-0 mt-0.5" />
+            <span className="text-sm text-(--color-text-secondary)">
+              {d.text}
+              {d.sub && <span className="text-(--color-text-tertiary)"> — {d.sub}</span>}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      {/* CTAs */}
+      <div className="flex flex-col gap-3">
+        <Link
+          href="/login"
+          className="flex items-center justify-center px-5 py-2.5 rounded-full font-semibold text-white text-sm bg-(--color-coral) hover:bg-(--color-coral-hover) transition-colors active:scale-[0.97]"
+        >
+          Giriş yap
+        </Link>
+        <p className="text-sm text-(--color-text-tertiary) text-center">
+          Hesabın yok mu?{' '}
+          <Link href="/register" className="font-medium text-(--color-coral) hover:underline underline-offset-2 transition-colors">
+            Hesap oluştur
+          </Link>
         </p>
       </div>
 
-      {/* Stats */}
-      <div className="rounded-xl border border-(--color-border-secondary) overflow-hidden">
-        <div className="px-4 py-2.5 border-b border-(--color-border-secondary)">
-          <p className="text-[10px] font-bold text-(--color-text-tertiary) uppercase tracking-widest">
-            Sunucu İstatistikleri
-          </p>
-        </div>
-        <div className="divide-y divide-(--color-border-secondary)">
-          <div className="flex items-center gap-3 px-4 py-3">
-            <Users className="w-4 h-4 text-(--color-text-tertiary) flex-shrink-0" />
-            <div className="flex-1">
-              <p className="text-xs text-(--color-text-tertiary)">Kullanıcılar</p>
-            </div>
-            <p className="text-sm font-bold text-(--color-text-primary) tabular-nums">
+      {/* Stats + footer in one card */}
+      <div className="rounded-2xl border border-(--color-border) overflow-hidden">
+        <div className="divide-y divide-(--color-border)">
+          <div className="flex items-center justify-between px-4 py-3">
+            <p className="text-sm text-(--color-text-tertiary)">Kullanıcılar</p>
+            <p className="text-sm font-semibold text-(--color-text-primary) tabular-nums">
               {userCount !== null ? fmt(userCount) : '—'}
             </p>
           </div>
-          <div className="flex items-center gap-3 px-4 py-3">
-            <FileText className="w-4 h-4 text-(--color-text-tertiary) flex-shrink-0" />
-            <div className="flex-1">
-              <p className="text-xs text-(--color-text-tertiary)">Gönderiler</p>
-            </div>
-            <p className="text-sm font-bold text-(--color-text-primary) tabular-nums">
+          <div className="flex items-center justify-between px-4 py-3">
+            <p className="text-sm text-(--color-text-tertiary)">Gönderiler</p>
+            <p className="text-sm font-semibold text-(--color-text-primary) tabular-nums">
               {postCount !== null ? fmt(postCount) : '—'}
             </p>
           </div>
-          <div className="flex items-center gap-3 px-4 py-3">
-            <div className="w-4 h-4 flex-shrink-0 flex items-center justify-center">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            </div>
-            <div className="flex-1">
-              <p className="text-xs text-(--color-text-tertiary)">Kayıt</p>
-            </div>
-            <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">Açık</p>
+          <div className="flex items-center justify-between px-4 py-3">
+            <p className="text-sm text-(--color-text-tertiary)">Kayıt</p>
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Açık
+            </span>
           </div>
+        </div>
+        <div className="px-4 py-3 border-t border-(--color-border) bg-(--color-background-secondary) flex flex-wrap gap-x-3 gap-y-1.5">
+          {['Hakkında', 'Kurallar', 'Gizlilik', 'Kaynak kod', 'API', '© 2026 floq'].map(l => (
+            <span key={l} className="text-[11px] text-(--color-text-tertiary) hover:text-(--color-text-secondary) cursor-pointer transition-colors">
+              {l}
+            </span>
+          ))}
         </div>
       </div>
 
       {/* Admin */}
       {admins.length > 0 && (
-        <div>
-          <p className="text-[10px] font-bold text-(--color-text-tertiary) uppercase tracking-widest mb-2.5">
-            Yönetici
-          </p>
-          <div className="flex flex-col gap-2">
-            {admins.slice(0, 2).map(admin => (
-              <Link key={admin.handle} href={`/${admin.handle}`} className="flex items-center gap-2.5 group">
-                <Avatar className="w-8 h-8 flex-shrink-0">
-                  {admin.avatarUrl && <AvatarImage src={admin.avatarUrl} alt={admin.displayName ?? admin.handle} />}
-                  <AvatarFallback className="text-xs text-white font-bold" style={{ background: 'var(--gradient-avatar)' }}>
-                    {(admin.displayName ?? admin.handle).slice(0, 1).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-(--color-text-primary) truncate group-hover:underline">
-                    {admin.displayName ?? admin.handle}
-                  </p>
-                  <p className="text-xs text-(--color-text-tertiary) truncate">@{admin.handle}</p>
-                </div>
-              </Link>
-            ))}
-          </div>
+        <div className="flex flex-col gap-2">
+          {admins.slice(0, 2).map(admin => (
+            <Link key={admin.handle} href={`/${admin.handle}`} className="flex items-center gap-2.5 group">
+              <Avatar className="w-8 h-8 flex-shrink-0">
+                {admin.avatarUrl && <AvatarImage src={admin.avatarUrl} alt={admin.displayName ?? admin.handle} />}
+                <AvatarFallback className="text-xs text-white font-bold" style={{ background: 'var(--gradient-avatar)' }}>
+                  {(admin.displayName ?? admin.handle).slice(0, 1).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-(--color-text-primary) truncate group-hover:underline">
+                  {admin.displayName ?? admin.handle}
+                </p>
+                <p className="text-xs text-(--color-text-tertiary) truncate">@{admin.handle}</p>
+              </div>
+            </Link>
+          ))}
         </div>
       )}
-
-      {/* CTAs */}
-      <div className="flex flex-col gap-2.5 mt-auto pt-2">
-        <Link
-          href="/register"
-          className="flex items-center justify-center px-5 py-3 rounded-full font-semibold text-white text-sm transition-all active:scale-[0.97]"
-          style={{ background: '#E8593C', boxShadow: '0 3px 16px rgba(232,89,60,0.32)' }}
-        >
-          Hesap oluştur
-        </Link>
-        <Link
-          href="/login"
-          className="flex items-center justify-center px-5 py-2.5 rounded-full font-semibold text-sm text-(--color-text-primary) border border-(--color-border) hover:bg-(--color-background-secondary) transition-all"
-        >
-          Giriş yap
-        </Link>
-      </div>
-
-      {/* Footer */}
-      <div className="flex flex-wrap gap-x-3 gap-y-1">
-        {['Gizlilik', 'Kullanım koşulları', 'Açık kaynak', '© 2026 floq'].map(l => (
-          <span key={l} className="text-xs text-(--color-text-tertiary) hover:text-(--color-text-secondary) cursor-pointer transition-colors">
-            {l}
-          </span>
-        ))}
-      </div>
     </aside>
   )
 }
@@ -233,7 +228,7 @@ function RightSidebar() {
   }
 
   return (
-    <aside className="hidden xl:flex flex-col w-[300px] xl:w-[320px] flex-shrink-0 sticky top-0 h-screen overflow-y-auto pt-4 pr-4 gap-3 scrollbar-none">
+    <aside className="hidden xl:flex flex-col w-[300px] xl:w-[320px] flex-shrink-0 sticky top-0 h-screen overflow-y-auto pt-[53px] px-4 gap-3 scrollbar-none">
 
       {/* Search — identical to RightPanel */}
       <form onSubmit={handleSearch} className="relative">
@@ -286,14 +281,6 @@ function RightSidebar() {
         </section>
       )}
 
-      {/* Footer */}
-      <div className="px-1 py-2 flex flex-wrap gap-x-3 gap-y-1 mt-auto">
-        {['Gizlilik', 'Kullanım koşulları', 'Açık kaynak', '© 2026 floq'].map(l => (
-          <span key={l} className="text-xs text-(--color-text-tertiary) hover:text-(--color-text-secondary) cursor-pointer transition-colors">
-            {l}
-          </span>
-        ))}
-      </div>
     </aside>
   )
 }
@@ -301,29 +288,24 @@ function RightSidebar() {
 /* ─────────────────────────────────────────────────────────── */
 export default function Page() {
   const [posts, setPosts] = useState<Post[]>(FALLBACK_POSTS)
-  const [realLoaded, setRealLoaded] = useState(false)
 
   useEffect(() => {
     api.timeline.explore()
-      .then(data => {
-        if (data.posts.length >= 3) {
-          setPosts(data.posts.slice(0, 10))
-          setRealLoaded(true)
-        }
-      })
+      .then(data => { if (data.posts.length >= 3) setPosts(data.posts.slice(0, 8)) })
       .catch(() => {})
   }, [])
 
   return (
+    <TooltipProvider>
     <div className="min-h-screen bg-(--color-background) text-(--color-text-primary)">
       <div className="max-w-[1280px] mx-auto flex min-h-screen">
 
         <ServerInfoSidebar />
 
         {/* ── Main feed ── */}
-        <main className="flex-1 min-w-0 border-r border-(--color-border-secondary)">
+        <main className="flex-1 min-w-0 lg:border-r border-(--color-border-secondary)">
 
-          {/* Mobile sticky header */}
+          {/* Mobile sticky header — hidden on desktop */}
           <div className="lg:hidden sticky top-0 z-20 bg-(--color-background)/95 backdrop-blur-sm border-b border-(--color-border-secondary) px-4 py-3 flex items-center justify-between">
             <FloqLogo size="sm" />
             <div className="flex gap-2">
@@ -336,39 +318,29 @@ export default function Page() {
             </div>
           </div>
 
-          {/* Feed tabs */}
-          <div className="border-b border-(--color-border-secondary) flex sticky top-0 lg:top-0 z-10 bg-(--color-background)/95 backdrop-blur-sm">
-            <button className="flex-1 py-4 text-sm font-semibold text-(--color-text-primary) border-b-2 transition-colors" style={{ borderBottomColor: '#E8593C' }}>
-              Keşfet
-            </button>
-            <button className="flex-1 py-4 text-sm font-medium text-(--color-text-tertiary) hover:text-(--color-text-secondary) hover:bg-(--color-background-secondary) border-b-2 border-transparent transition-colors">
-              Gündem
-            </button>
+          {/* Feed header — desktop only, mobile header already covers it */}
+          <div className="hidden lg:block border-b border-(--color-border-secondary) sticky top-0 z-10 bg-(--color-background)/95 backdrop-blur-sm px-4 py-3.5">
+            <h2 className="text-sm font-semibold text-(--color-text-secondary)" style={{ fontFamily: 'var(--font-outfit)' }}>Keşfet</h2>
           </div>
 
-          {/* Posts — max-w-xl matches home page */}
-          <div className="max-w-xl mx-auto">
-            {realLoaded && (
-              <div className="flex items-center gap-2 px-4 py-2 border-b border-(--color-border-secondary) bg-(--color-background-secondary)/50">
-                <span className="w-1.5 h-1.5 rounded-full animate-pulse flex-shrink-0" style={{ background: '#E8593C' }} />
-                <span className="text-xs text-(--color-text-tertiary)">Gerçek zamanlı gönderiler</span>
-              </div>
-            )}
+          {/* Posts — pb-28 so last card clears the sticky bottom fade */}
+          <div className="max-w-xl mx-auto pb-28">
             {posts.map(post => (
               <PostCard key={post.id} post={post} />
             ))}
           </div>
 
-          {/* Mobile bottom CTA */}
-          <div className="sticky bottom-0 lg:hidden border-t border-(--color-border-secondary) bg-(--color-background) px-4 py-4 text-center">
-            <p className="text-sm text-(--color-text-secondary) mb-3">Tüm akışı görmek için katıl</p>
-            <Link
-              href="/register"
-              className="inline-flex items-center justify-center w-full px-5 py-3 rounded-full font-semibold text-white text-sm transition-all active:scale-[0.97]"
-              style={{ background: '#E8593C' }}
-            >
-              Ücretsiz hesap oluştur
-            </Link>
+          {/* Bottom fade — desktop only, mobile header handles navigation */}
+          <div className="hidden lg:block sticky bottom-0">
+            <div className="h-20 bg-gradient-to-t from-(--color-background) to-transparent pointer-events-none" />
+            <div className="bg-(--color-background) pb-5 flex justify-center">
+              <Link
+                href="/register"
+                className="text-sm text-(--color-text-tertiary) hover:text-(--color-coral) transition-colors flex items-center gap-1"
+              >
+                Devamını görmek için katıl →
+              </Link>
+            </div>
           </div>
         </main>
 
@@ -376,5 +348,6 @@ export default function Page() {
 
       </div>
     </div>
+    </TooltipProvider>
   )
 }

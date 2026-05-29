@@ -10,10 +10,16 @@ import { Loader2, Activity, Globe, Users, CheckCircle, XCircle, Clock, ArrowUpRi
 
 type Tab = 'stats' | 'map'
 
+function StatusDot({ status }: { status: string }) {
+  if (status === 'done') return <span className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" />
+  if (status === 'failed') return <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
+  return <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
+}
+
 function StatusIcon({ status }: { status: string }) {
-  if (status === 'done') return <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-  if (status === 'failed') return <XCircle className="w-3.5 h-3.5 text-red-500" />
-  return <Clock className="w-3.5 h-3.5 text-amber-500" />
+  if (status === 'done') return <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+  if (status === 'failed') return <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+  return <Clock className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
 }
 
 function ConnectionBar({ domain, following, followers, total, max }: {
@@ -21,26 +27,69 @@ function ConnectionBar({ domain, following, followers, total, max }: {
 }) {
   const pct = max > 0 ? (total / max) * 100 : 0
   return (
-    <div className="flex items-center gap-3 py-2.5 border-b border-(--color-border-secondary)">
-      <div className="w-5 h-5 rounded bg-gradient-to-br from-(--color-coral) to-(--color-peach) flex items-center justify-center flex-shrink-0">
-        <Globe className="w-3 h-3 text-white" />
-      </div>
+    <div className="flex items-center gap-3 mx-2 px-3 py-3 rounded-xl hover:bg-(--color-background-secondary) transition-colors group">
       <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-sm font-medium text-(--color-text-primary) truncate">{domain}</span>
-          <div className="flex items-center gap-2 ml-2 text-xs text-(--color-text-tertiary) flex-shrink-0">
-            <span className="flex items-center gap-0.5"><ArrowUpRight className="w-3 h-3" />{following}</span>
-            <span className="flex items-center gap-0.5"><Users className="w-3 h-3" />{followers}</span>
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[13px] font-medium text-(--color-text-primary) truncate">{domain}</span>
+          <div className="flex items-center gap-2.5 ml-2 flex-shrink-0">
+            <span className="flex items-center gap-1 text-[11px] text-(--color-text-tertiary)">
+              <ArrowUpRight className="w-3 h-3" />{following}
+            </span>
+            <span className="flex items-center gap-1 text-[11px] text-(--color-text-tertiary)">
+              <Users className="w-3 h-3" />{followers}
+            </span>
           </div>
         </div>
-        <div className="h-1.5 rounded-full bg-(--color-background-tertiary) overflow-hidden">
+        <div className="h-1 rounded-full bg-(--color-background-tertiary) overflow-hidden">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-(--color-coral) to-(--color-peach) transition-all"
+            className="h-full rounded-full bg-(--color-coral)/60 transition-all"
             style={{ width: `${pct}%` }}
           />
         </div>
       </div>
     </div>
+  )
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="px-5 pt-5 pb-2 text-[11px] font-semibold text-(--color-text-tertiary) uppercase tracking-widest">
+      {children}
+    </p>
+  )
+}
+
+function PageHeader({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
+  return (
+    <header className="sticky top-0 z-10 bg-(--color-background)/90 backdrop-blur-md border-b border-(--color-border) px-4 py-3.5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Activity className="w-5 h-5 text-(--color-coral)" />
+          <div>
+            <h1 className="text-base font-bold text-(--color-text-primary) leading-tight" style={{ fontFamily: 'var(--font-outfit)' }}>
+              Federation Pulse
+            </h1>
+            <p className="text-[11px] text-(--color-text-tertiary) leading-tight">Fediverse bağlantı durumun</p>
+          </div>
+        </div>
+        <div className="inline-flex items-center rounded-full bg-(--color-background-secondary) p-0.5 gap-0.5">
+          {([['stats', Activity, 'İstatistik'], ['map', Map, 'Harita']] as const).map(([id, Icon, label]) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              className={cn(
+                'flex items-center gap-1.5 px-3 h-7 rounded-full text-xs font-medium transition-all duration-150 select-none',
+                tab === id
+                  ? 'bg-(--color-background) text-(--color-text-primary) shadow-sm'
+                  : 'text-(--color-text-tertiary) hover:text-(--color-text-secondary)',
+              )}
+            >
+              <Icon className="w-3 h-3" />{label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </header>
   )
 }
 
@@ -67,13 +116,7 @@ export default function PulsePage() {
   if (isPending || loading) {
     return (
       <div className="max-w-xl mx-auto">
-        <header className="sticky top-0 z-10 bg-(--color-background)/90 backdrop-blur-md border-b border-(--color-border) px-4 py-3.5">
-          <div className="flex items-center gap-2">
-            <Activity className="w-5 h-5 text-(--color-coral)" />
-            <h1 className="text-base font-bold text-(--color-text-primary)" style={{ fontFamily: 'var(--font-outfit)' }}>Federation Pulse</h1>
-          </div>
-          <p className="text-xs text-(--color-text-tertiary) mt-0.5">Fediverse bağlantı durumun</p>
-        </header>
+        <PageHeader tab={tab} setTab={setTab} />
         <div className="flex items-center justify-center h-48">
           <Loader2 className="w-5 h-5 animate-spin text-(--color-coral)" />
         </div>
@@ -84,35 +127,10 @@ export default function PulsePage() {
   if (!data) {
     return (
       <div className="max-w-xl mx-auto">
-        <header className="sticky top-0 z-10 bg-(--color-background)/90 backdrop-blur-md border-b border-(--color-border) px-4 py-3.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Activity className="w-5 h-5 text-(--color-coral)" />
-              <h1 className="text-base font-bold text-(--color-text-primary)" style={{ fontFamily: 'var(--font-outfit)' }}>
-                Federation Pulse
-              </h1>
-            </div>
-            <div className="flex gap-1">
-              {([['stats', Activity, 'İstatistik'], ['map', Map, 'Harita']] as const).map(([id, Icon, label]) => (
-                <button
-                  key={id}
-                  onClick={() => setTab(id)}
-                  className={cn(
-                    'flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-colors',
-                    tab === id
-                      ? 'bg-(--color-blush) dark:bg-(--color-coral)/12 text-(--color-coral) dark:bg-(--color-coral)/12'
-                      : 'text-(--color-text-tertiary) hover:text-(--color-text-primary)',
-                  )}
-                >
-                  <Icon className="w-3 h-3" />{label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <p className="text-xs text-(--color-text-tertiary) mt-0.5">Fediverse bağlantı durumun</p>
-        </header>
-        <div className="py-16 text-center">
-          <p className="text-(--color-text-tertiary)">Veri yüklenemedi.</p>
+        <PageHeader tab={tab} setTab={setTab} />
+        <div className="flex flex-col items-center gap-2 py-20 text-center px-6">
+          <Globe className="w-8 h-8 text-(--color-text-tertiary)" />
+          <p className="text-sm text-(--color-text-tertiary) mt-1">Veri yüklenemedi.</p>
         </div>
       </div>
     )
@@ -122,65 +140,40 @@ export default function PulsePage() {
   const { done, failed, pending } = data.globalStats.deliveries
   const total = done + failed + pending
   const successRate = total > 0 ? Math.round((done / total) * 100) : 100
+  const successColor = successRate >= 95 ? 'text-green-500' : successRate >= 80 ? 'text-amber-500' : 'text-red-500'
 
   return (
     <div className="max-w-xl mx-auto">
-      <header className="sticky top-0 z-10 bg-(--color-background)/90 backdrop-blur-md border-b border-(--color-border) px-4 py-3.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Activity className="w-5 h-5 text-(--color-coral)" />
-            <h1 className="text-base font-bold text-(--color-text-primary)" style={{ fontFamily: 'var(--font-outfit)' }}>
-              Federation Pulse
-            </h1>
-          </div>
-          <div className="flex gap-1">
-            {([['stats', Activity, 'İstatistik'], ['map', Map, 'Harita']] as const).map(([id, Icon, label]) => (
-              <button
-                key={id}
-                onClick={() => setTab(id)}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-colors',
-                  tab === id
-                    ? 'bg-(--color-blush) dark:bg-(--color-coral)/12 text-(--color-coral) dark:bg-(--color-coral)/12'
-                    : 'text-(--color-text-tertiary) hover:text-(--color-text-primary)',
-                )}
-              >
-                <Icon className="w-3 h-3" />{label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <p className="text-xs text-(--color-text-tertiary) mt-0.5">Fediverse bağlantı durumun</p>
-      </header>
+      <PageHeader tab={tab} setTab={setTab} />
 
-      {/* Stats row */}
-      <div className="grid grid-cols-3 divide-x divide-(--color-border) border-b border-(--color-border)">
-        <div className="px-4 py-4 text-center">
-          <p className="text-2xl font-bold text-(--color-coral)" style={{ fontFamily: 'var(--font-outfit)' }}>
+      {/* Stat cards */}
+      <div className="grid grid-cols-3 gap-2 mx-4 mt-4 mb-2">
+        <div className="bg-(--color-background-secondary) rounded-xl px-3 py-4 text-center">
+          <p className="text-2xl font-bold text-(--color-coral) tabular-nums" style={{ fontFamily: 'var(--font-outfit)' }}>
             {data.connections.length}
           </p>
-          <p className="text-xs text-(--color-text-tertiary) mt-0.5">Bağlı Sunucu</p>
+          <p className="text-[11px] text-(--color-text-tertiary) mt-0.5 leading-tight">Bağlı Sunucu</p>
         </div>
-        <div className="px-4 py-4 text-center">
-          <p className="text-2xl font-bold text-(--color-coral)" style={{ fontFamily: 'var(--font-outfit)' }}>
+        <div className="bg-(--color-background-secondary) rounded-xl px-3 py-4 text-center">
+          <p className="text-2xl font-bold text-(--color-coral) tabular-nums" style={{ fontFamily: 'var(--font-outfit)' }}>
             {data.globalStats.remoteActors}
           </p>
-          <p className="text-xs text-(--color-text-tertiary) mt-0.5">Uzak Kullanıcı</p>
+          <p className="text-[11px] text-(--color-text-tertiary) mt-0.5 leading-tight">Uzak Kullanıcı</p>
         </div>
-        <div className="px-4 py-4 text-center">
-          <p className={cn('text-2xl font-bold', successRate >= 95 ? 'text-green-500' : successRate >= 80 ? 'text-amber-500' : 'text-red-500')} style={{ fontFamily: 'var(--font-outfit)' }}>
+        <div className="bg-(--color-background-secondary) rounded-xl px-3 py-4 text-center">
+          <p className={cn('text-2xl font-bold tabular-nums', successColor)} style={{ fontFamily: 'var(--font-outfit)' }}>
             {successRate}%
           </p>
-          <p className="text-xs text-(--color-text-tertiary) mt-0.5">Başarı Oranı</p>
+          <p className="text-[11px] text-(--color-text-tertiary) mt-0.5 leading-tight">Başarı Oranı</p>
         </div>
       </div>
 
       {tab === 'map' ? (
-        /* ── Connection Map ── */
         data.connections.length === 0 ? (
-          <div className="px-4 py-16 text-center">
-            <Globe className="w-8 h-8 text-(--color-text-tertiary) mx-auto mb-2" />
-            <p className="text-sm text-(--color-text-tertiary)">Henüz uzak bağlantı yok.</p>
+          <div className="flex flex-col items-center gap-2 py-20 text-center px-6">
+            <Globe className="w-8 h-8 text-(--color-text-tertiary)" />
+            <p className="text-sm text-(--color-text-secondary) mt-1">Henüz uzak bağlantı yok.</p>
+            <p className="text-xs text-(--color-text-tertiary)">Mastodon gibi federe sunuculardan birini takip et.</p>
           </div>
         ) : (
           <div className="px-2 py-4">
@@ -188,42 +181,44 @@ export default function PulsePage() {
           </div>
         )
       ) : (
-        /* ── Stats tab ── */
         <>
-          {/* Delivery stats */}
-          <div className="px-4 py-3 border-b border-(--color-border) bg-(--color-background-secondary)">
-            <p className="text-xs font-semibold text-(--color-text-tertiary) uppercase tracking-wider mb-2">Aktivite Teslimatı</p>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-2 rounded-full bg-(--color-background-tertiary) overflow-hidden flex">
-                {total > 0 && (
-                  <>
-                    <div className="bg-green-500 h-full" style={{ width: `${(done / total) * 100}%` }} />
-                    <div className="bg-amber-400 h-full" style={{ width: `${(pending / total) * 100}%` }} />
-                    <div className="bg-red-500 h-full" style={{ width: `${(failed / total) * 100}%` }} />
-                  </>
-                )}
-              </div>
-              <div className="flex items-center gap-3 text-xs text-(--color-text-tertiary) flex-shrink-0">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" />{done}</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" />{pending}</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" />{failed}</span>
-              </div>
+          {/* Delivery bar */}
+          <SectionLabel>Aktivite Teslimatı</SectionLabel>
+          <div className="mx-4 flex items-center gap-3">
+            <div className="flex-1 h-1.5 rounded-full bg-(--color-background-tertiary) overflow-hidden flex">
+              {total > 0 ? (
+                <>
+                  <div className="bg-green-500 h-full transition-all" style={{ width: `${(done / total) * 100}%` }} />
+                  <div className="bg-amber-400 h-full transition-all" style={{ width: `${(pending / total) * 100}%` }} />
+                  <div className="bg-red-500 h-full transition-all" style={{ width: `${(failed / total) * 100}%` }} />
+                </>
+              ) : (
+                <div className="bg-(--color-background-tertiary) h-full w-full" />
+              )}
+            </div>
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <span className="flex items-center gap-1.5 text-[11px] text-(--color-text-tertiary)">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />{done}
+              </span>
+              <span className="flex items-center gap-1.5 text-[11px] text-(--color-text-tertiary)">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />{pending}
+              </span>
+              <span className="flex items-center gap-1.5 text-[11px] text-(--color-text-tertiary)">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500" />{failed}
+              </span>
             </div>
           </div>
 
-          {/* Connections list */}
-          <div className="px-4 py-2.5 flex items-center gap-3 border-b border-(--color-border-secondary)">
-            <p className="text-[11px] font-semibold text-(--color-text-tertiary) uppercase tracking-widest whitespace-nowrap">Bağlı Sunucular</p>
-            <div className="flex-1 h-px bg-(--color-border-secondary)" />
-          </div>
+          {/* Connected servers */}
+          <SectionLabel>Bağlı Sunucular</SectionLabel>
           {data.connections.length === 0 ? (
-            <div className="px-4 py-8 text-center">
-              <Globe className="w-8 h-8 text-(--color-text-tertiary) mx-auto mb-2" />
-              <p className="text-sm text-(--color-text-tertiary)">Henüz uzak bağlantı yok.</p>
-              <p className="text-xs text-(--color-text-tertiary) mt-1">Mastodon gibi federe sunuculardan birini takip et.</p>
+            <div className="flex flex-col items-center gap-2 py-12 text-center px-6">
+              <Globe className="w-8 h-8 text-(--color-text-tertiary)" />
+              <p className="text-sm text-(--color-text-secondary) mt-1">Henüz uzak bağlantı yok.</p>
+              <p className="text-xs text-(--color-text-tertiary)">Mastodon gibi federe sunuculardan birini takip et.</p>
             </div>
           ) : (
-            <div className="px-4">
+            <div className="mb-2">
               {data.connections.map((c) => (
                 <ConnectionBar key={c.domain} {...c} max={maxConnections} />
               ))}
@@ -233,21 +228,18 @@ export default function PulsePage() {
           {/* Recent activity */}
           {data.recentActivity.length > 0 && (
             <>
-              <div className="px-4 py-2.5 flex items-center gap-3 border-y border-(--color-border-secondary) mt-3">
-                <p className="text-[11px] font-semibold text-(--color-text-tertiary) uppercase tracking-widest whitespace-nowrap">Son Aktiviteler</p>
-                <div className="flex-1 h-px bg-(--color-border-secondary)" />
-              </div>
-              <div className="divide-y divide-(--color-border-secondary)">
+              <SectionLabel>Son Aktiviteler</SectionLabel>
+              <div className="mb-4">
                 {data.recentActivity.map((a) => (
-                  <div key={a.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <div key={a.id} className="flex items-center gap-3 mx-2 px-3 py-2.5 rounded-xl hover:bg-(--color-background-secondary) transition-colors">
                     <StatusIcon status={a.status} />
                     <div className="flex-1 min-w-0">
-                      <span className="text-xs font-medium text-(--color-text-primary)">{a.type}</span>
+                      <span className="text-[13px] font-medium text-(--color-text-primary)">{a.type}</span>
                       {a.targetDomain && (
-                        <span className="text-xs text-(--color-text-tertiary) ml-1.5">→ {a.targetDomain}</span>
+                        <span className="text-[13px] text-(--color-text-tertiary) ml-1.5">→ {a.targetDomain}</span>
                       )}
                     </div>
-                    <span className="text-xs text-(--color-text-tertiary) flex-shrink-0">
+                    <span className="text-[11px] text-(--color-text-tertiary) tabular-nums flex-shrink-0">
                       {new Date(a.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
