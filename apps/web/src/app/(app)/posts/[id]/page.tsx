@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { ArrowLeft, Heart, Repeat2, MessageCircle, Bookmark, Loader2, Trash2, Languages, Quote, MoreHorizontal, Share2, Copy, Check, X, Globe, Eye, Users, Lock, UserCheck, Clock } from 'lucide-react'
 import { api, type Post, type ThreadContext, type QuotedPost, type Actor } from '@/lib/api'
 import { PostCard, InlineVideoPlayer, YouTubeCard, MusicCard, VideoEmbedCard, LocationCard, extractYouTubeId, detectPlatformFromUrl, detectVideoEmbed, MATH_RE, renderMathPart } from '@/components/posts/post-card'
+import { htmlToText } from '@/lib/html'
 import { PostComposer } from '@/components/posts/post-composer'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog'
@@ -20,9 +21,11 @@ import { cn } from '@/lib/utils'
 // ── Content renderer ───────────────────────────────────────────────────────────
 const TOKEN_RE = /(#[a-zA-ZğüşıöçĞÜŞİÖÇ0-9_]+|@[a-zA-Z0-9._-]+)/g
 
-function renderContent(text: string) {
+function renderContent(text: string, isRemote = false) {
+  // Remote (ActivityPub) content is HTML — convert to text first.
+  const src = isRemote ? htmlToText(text) : text
   // Math first, then hashtag/mention tokenisation on the remaining text
-  return text.split(MATH_RE).map((mp, mi) => {
+  return src.split(MATH_RE).map((mp, mi) => {
     const math = mi % 2 === 1 ? renderMathPart(mp, `m-${mi}`) : null
     if (math) return math
     return mp.split(TOKEN_RE).map((part, i) => {
@@ -338,7 +341,7 @@ function FocusedPost({ post, handle, displayName, avatarUrl, hasAncestors, onRep
         {post.content && (
           <div className="px-4 pb-3">
             <p className="text-base leading-[1.7] text-(--color-text-primary) whitespace-pre-wrap break-words">
-              {renderContent(post.content)}
+              {renderContent(post.content, post.isLocal === false)}
             </p>
           </div>
         )}

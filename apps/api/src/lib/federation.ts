@@ -232,6 +232,19 @@ export async function acceptRelayFollow(relayActorUrl: string) {
 // Remote actor cache TTL — re-fetch profile (avatar/bio/name) after this window.
 const ACTOR_REFRESH_MS = 24 * 60 * 60 * 1000
 
+// Read an AP collection's `totalItems` (followers/following/outbox counts).
+async function fetchCollectionCount(url?: string): Promise<number | null> {
+  if (!url) return null
+  try {
+    const res = await signedApFetch(url)
+    if (!res.ok) return null
+    const data = await res.json() as { totalItems?: number }
+    return typeof data.totalItems === 'number' ? data.totalItems : null
+  } catch {
+    return null
+  }
+}
+
 export async function fetchRemoteActor(actorUrl: string) {
   const existing = await db.query.actors.findFirst({
     where: eq(actors.apId, actorUrl),
@@ -267,6 +280,14 @@ export async function fetchRemoteActor(actorUrl: string) {
 
   const domain = new URL(actorUrl).hostname
 
+  // Pull follower/following/post counts from each collection's totalItems so
+  // remote profiles show real numbers (these live behind the collection URLs).
+  const [followersCount, followingCount, postsCount] = await Promise.all([
+    fetchCollectionCount(data.followers),
+    fetchCollectionCount(data.following),
+    fetchCollectionCount(data.outbox),
+  ])
+
   // Extract ed25519 public key from assertionMethod (FEP-8b32 / Multikey)
   const ed25519Key = data.assertionMethod
     ?.find((k) => k.type === 'Multikey' && k.publicKeyMultibase?.startsWith('z'))
@@ -299,6 +320,9 @@ export async function fetchRemoteActor(actorUrl: string) {
     noIndex: data.indexable === false,
     ed25519PublicKey: ed25519Key,
     profileFields: profileFields?.length ? profileFields : null,
+    followersCount: followersCount ?? undefined,
+    followingCount: followingCount ?? undefined,
+    postsCount: postsCount ?? undefined,
     lastFetchedAt: new Date(),
   }
 
