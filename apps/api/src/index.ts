@@ -66,6 +66,20 @@ const loggerOptions =
 
 const app = Fastify({ logger: loggerOptions })
 
+// ActivityPub delivers activities with Content-Type application/activity+json
+// (and application/ld+json). Fastify only parses application/json out of the box,
+// so without these parsers every inbox POST is rejected with 415 and no inbound
+// federation (Follow/Accept/Create/Like/Delete…) is ever processed.
+for (const ct of ['application/activity+json', 'application/ld+json']) {
+  app.addContentTypeParser(ct, { parseAs: 'string' }, (_req, body, done) => {
+    try {
+      done(null, JSON.parse(body as string))
+    } catch (err) {
+      done(err as Error, undefined)
+    }
+  })
+}
+
 await app.register(helmet, {
   contentSecurityPolicy: {
     directives: {
