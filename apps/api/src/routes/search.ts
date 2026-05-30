@@ -4,6 +4,11 @@ import { db } from '../db/client.js'
 import { actors, posts, mediaAttachments } from '../db/schema.js'
 import { getSession } from '../lib/session.js'
 import { enrichPosts } from '../lib/enrichPosts.js'
+import { fetchRemoteActor } from '../lib/federation.js'
+import { env } from '../lib/env.js'
+
+// A full fediverse handle: `@user@instance.tld` or `user@instance.tld`.
+const REMOTE_HANDLE_RE = /^@?([^@\s]+)@([^@\s]+\.[^@\s]+)$/
 
 // Extract `operator:value` tokens from a query string and return the clean text + extracted values
 function parseSearchOperators(raw: string) {
@@ -76,8 +81,16 @@ export async function searchRoutes(app: FastifyInstance) {
 
     if ((type === 'actors' || type === 'all') && term) {
       // Use FTS with GIN index; fall back to ILIKE for very short terms (< 2 chars)
-      if (term.length >= 2) {
-        const tsq = term.split(/\s+/).filter(Boolean).map((w) => `${w}:*`).join(' & ')
+      // Sanitize for to_tsquery: split on whitespace AND handle punctuation (@ .),
+      // strip any chars tsquery treats as operators. Avoids "syntax error in tsquery"
+      // for inputs like "@user@instance.tld".
+      const tsq = term
+        .split(/[\s@.]+/)
+        .map((w) => w.replace(/[^\p{L}\p{N}_]/gu, ''))
+        .filter(Boolean)
+        .map((w) => `${w}:*`)
+        .join(' & ')
+      if (term.length >= 2 && tsq) {
         const rawRows = await db.execute(
           sql`SELECT * FROM actors
               WHERE is_local = true
@@ -127,6 +140,28 @@ export async function searchRoutes(app: FastifyInstance) {
           limit,
         })
       }
+    }
+
+    // Remote fediverse lookup: if the query is a full `@user@instance.tld` handle,
+    // resolve it over WebFinger + ActivityPub and surface it (so it can be followed),
+    // unless it's our own domain (those are covered by the local search above).
+    const remoteMatch = (type === 'actors' || type === 'all') ? rawQ.match(REMOTE_HANDLE_RE) : null
+    if (remoteMatch && remoteMatch[2] !== env.APP_DOMAIN) {
+      const [, username, instance] = remoteMatch
+      try {
+        const wfRes = await fetch(
+          `https://${instance}/.well-known/webfinger?resource=acct:${username}@${instance}`,
+          { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(8000) },
+        )
+        if (wfRes.ok) {
+          const wf = await wfRes.json() as { links?: Array<{ rel: string; type?: string; href?: string }> }
+          const apUrl = wf.links?.find((l) => l.rel === 'self' && (l.type?.includes('activity+json') ?? false))?.href
+          if (apUrl) {
+            const remote = await fetchRemoteActor(apUrl)
+            if (remote && !actorRows.some((a) => a.id === remote.id)) actorRows.unshift(remote)
+          }
+        }
+      } catch { /* remote unreachable — just return local results */ }
     }
 
     if (type === 'posts' || type === 'all') {
