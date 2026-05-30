@@ -52,7 +52,8 @@ function ChartContainer({
         style={{ ...styleVars, ...style } as React.CSSProperties}
       >
         <RechartsPrimitive.ResponsiveContainer width="100%" height="100%">
-          {children as React.ReactElement}
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          {children as any /* recharts' bundled React types differ from React 19's → ReactElement identity mismatch */}
         </RechartsPrimitive.ResponsiveContainer>
       </div>
     </ChartContext.Provider>
@@ -63,6 +64,18 @@ function ChartContainer({
 
 const ChartTooltip = RechartsPrimitive.Tooltip
 
+// Standalone props (don't extend Recharts' TooltipProps — its payload/label
+// shape and labelFormatter intersection type clash with React 19's types).
+// Recharts injects active/payload/label at runtime when used as Tooltip content.
+interface ChartTooltipContentProps {
+  active?: boolean
+  payload?: Array<{ dataKey?: string | number; value?: number; color?: string; name?: string }>
+  label?: React.ReactNode
+  labelFormatter?: (label: string) => React.ReactNode
+  formatter?: (value: number, name: string) => React.ReactNode
+  hideLabel?: boolean
+}
+
 function ChartTooltipContent({
   active,
   payload,
@@ -70,11 +83,7 @@ function ChartTooltipContent({
   labelFormatter,
   formatter,
   hideLabel = false,
-}: RechartsPrimitive.TooltipProps<number, string> & {
-  labelFormatter?: (label: string) => React.ReactNode
-  formatter?: (value: number, name: string) => React.ReactNode
-  hideLabel?: boolean
-}) {
+}: ChartTooltipContentProps) {
   const { config } = useChart()
   if (!active || !payload?.length) return null
 
@@ -82,12 +91,12 @@ function ChartTooltipContent({
     <div className="rounded-xl border border-(--color-border) bg-(--color-background) px-3 py-2 shadow-lg shadow-black/10 text-xs">
       {!hideLabel && (
         <p className="text-(--color-text-tertiary) mb-1.5 font-medium">
-          {labelFormatter ? labelFormatter(label) : label}
+          {labelFormatter ? labelFormatter(String(label ?? '')) : label}
         </p>
       )}
       <div className="space-y-1">
         {payload.map((item) => {
-          const key = item.dataKey as string
+          const key = String(item.dataKey ?? '')
           const cfg = config[key]
           return (
             <div key={key} className="flex items-center gap-2">
@@ -97,7 +106,7 @@ function ChartTooltipContent({
               />
               <span className="text-(--color-text-tertiary)">{cfg?.label ?? key}</span>
               <span className="ml-auto font-semibold text-(--color-text-primary) tabular-nums">
-                {formatter ? formatter(item.value as number, key) : item.value?.toLocaleString('tr-TR')}
+                {formatter ? formatter(item.value ?? 0, key) : (item.value ?? 0).toLocaleString('tr-TR')}
               </span>
             </div>
           )

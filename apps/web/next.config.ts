@@ -73,9 +73,6 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   ...(process.env.BUILD_STANDALONE === 'true' && { output: 'standalone' as const }),
   poweredByHeader: false,
-  // Type checking runs in CI (typecheck job). The production build shouldn't fail
-  // on third-party type friction (recharts tooltip generics).
-  typescript: { ignoreBuildErrors: true },
   transpilePackages: ['@floq/ui', '@floq/types', '@floq/config'],
   images: {
     remotePatterns: [

@@ -1138,7 +1138,7 @@ function postCardReducer(state: PostCardState, action: PostCardAction): PostCard
   }
 }
 
-function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filterResult, pinned, onPinChange, hideActions, detail, threadLine, communityPin }: PostCardProps) {
+function PostCardImpl({ post, onDelete, onReply, onEdit, currentActorHandle, filterResult, pinned, onPinChange, hideActions, detail, threadLine, communityPin }: PostCardProps) {
   const router = useRouter()
   const { nsfwMode } = useUserPrefs()
   const isNsfwBlurred = post.sensitive && nsfwMode === 'blur'
@@ -1206,6 +1206,10 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
   const [collections, setCollections] = useState<PostCollection[]>([])
   const [collectionsLoading, setCollectionsLoading] = useState(false)
   const [addingToCollection, setAddingToCollection] = useState<string | null>(null)
+  // Heart long-press (must be declared before any early return — rules of hooks)
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pressStartTime = useRef<number>(0)
+  const [heartHolding, setHeartHolding] = useState(false)
 
   // Sync repliesCount when parent prop changes (e.g. after reply deleted from post detail)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1327,10 +1331,7 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
     }
   }
 
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pressStartTime = useRef<number>(0)
   const LONG_PRESS_MS = 450
-  const [heartHolding, setHeartHolding] = useState(false)
 
   function cancelLongPress() {
     setHeartHolding(false)
@@ -2602,7 +2603,7 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
   )
 }
 
-export const PostCard = memo(_PostCard)
+export const PostCard = memo(PostCardImpl)
 
 function ActionBtn({
   icon,
