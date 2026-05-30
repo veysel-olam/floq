@@ -22,7 +22,7 @@ export async function actorsRoutes(app: FastifyInstance) {
     }
 
     const actor = await db.query.actors.findFirst({
-      where: and(eq(actors.handle, req.params.handle), eq(actors.isLocal, true)),
+      where: eq(actors.handle, req.params.handle),
     })
     if (!actor) return reply.code(404).send({ error: 'Not found' })
 
@@ -89,7 +89,7 @@ export async function actorsRoutes(app: FastifyInstance) {
     }
 
     const actor = await db.query.actors.findFirst({
-      where: and(eq(actors.handle, req.params.handle), eq(actors.isLocal, true)),
+      where: eq(actors.handle, req.params.handle),
     })
     if (!actor) return reply.code(404).send({ error: 'Not found' })
 
@@ -225,7 +225,7 @@ export async function actorsRoutes(app: FastifyInstance) {
     }
 
     const actor = await db.query.actors.findFirst({
-      where: and(eq(actors.handle, req.params.handle), eq(actors.isLocal, true)),
+      where: eq(actors.handle, req.params.handle),
     })
     if (!actor) return reply.code(404).send({ error: 'Not found' })
 
@@ -263,7 +263,7 @@ export async function actorsRoutes(app: FastifyInstance) {
   }>('/api/actors/:handle/followers', async (req, reply) => {
     const session = await getSession(req)
     const actor = await db.query.actors.findFirst({
-      where: and(eq(actors.handle, req.params.handle), eq(actors.isLocal, true)),
+      where: eq(actors.handle, req.params.handle),
     })
     if (!actor) return reply.code(404).send({ error: 'Not found' })
 
@@ -327,7 +327,7 @@ export async function actorsRoutes(app: FastifyInstance) {
   }>('/api/actors/:handle/following', async (req, reply) => {
     const session = await getSession(req)
     const actor = await db.query.actors.findFirst({
-      where: and(eq(actors.handle, req.params.handle), eq(actors.isLocal, true)),
+      where: eq(actors.handle, req.params.handle),
     })
     if (!actor) return reply.code(404).send({ error: 'Not found' })
 
@@ -901,7 +901,7 @@ export async function actorsRoutes(app: FastifyInstance) {
   // GET /api/actors/:handle/activity — 52 haftalık gönderi aktivitesi
   app.get<{ Params: { handle: string } }>('/api/actors/:handle/activity', async (req, reply) => {
     const actor = await db.query.actors.findFirst({
-      where: and(eq(actors.handle, req.params.handle), eq(actors.isLocal, true)),
+      where: eq(actors.handle, req.params.handle),
     })
     if (!actor) return reply.code(404).send({ error: 'Not found' })
 
