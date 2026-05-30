@@ -20,7 +20,7 @@ import {
 } from '../lib/activityPub.js'
 import { verifySignature } from '../lib/httpSignatures.js'
 import { deliverToFollowers, deliverToInbox, fetchRemoteActor, isSuspendedDomain, getInstanceActor, acceptRelayFollow } from '../lib/federation.js'
-import { ingestRemoteNote } from '../lib/ingest.js'
+import { ingestRemoteNote, attachRemoteMediaAndPreview } from '../lib/ingest.js'
 import { verifyObjectProof, issueVerifiableCredential } from '../lib/objectIntegrity.js'
 import { didKeyFromMultibase } from '../lib/keys.js'
 import { notifyFollow, notifyLike, notifyBoost, notifyReply } from '../lib/notify.js'
@@ -818,6 +818,13 @@ export async function activityPubRoutes(app: FastifyInstance) {
             .where(eq(posts.id, replyToId))
 
           void notifyReply(senderActor.id, created.id, replyToId)
+        }
+
+        // Store media attachments + generate a link-preview card so federated
+        // posts render with images/cards like local ones (best-effort).
+        if (created) {
+          void attachRemoteMediaAndPreview(created.id, note as { attachment?: { type?: string; mediaType?: string; url?: string; name?: string; width?: number; height?: number; blurhash?: string }[]; content?: string | null })
+            .catch(() => {})
         }
 
         // If this is a Question, create the local poll record

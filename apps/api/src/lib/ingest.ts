@@ -3,6 +3,7 @@ import { and, eq, sql } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { posts, mediaAttachments, actors } from '../db/schema.js'
 import { fetchRemoteActor, signedApFetch } from './federation.js'
+import { extractFirstUrl, fetchLinkPreview } from './linkPreview.js'
 
 // ── AP shapes (loosely typed — remote servers vary) ────────────────────────────
 interface APAttachment {
@@ -36,6 +37,58 @@ function resolveVisibility(to: string[], cc: string[]): 'public' | 'unlisted' | 
   if (cc.includes(PUBLIC)) return 'unlisted'
   if (to.some((t) => t.endsWith('/followers'))) return 'followers'
   return 'direct'
+}
+
+// Strip HTML to text (remote content is HTML) so URL/preview extraction doesn't
+// trip over mention/hashtag anchors. Mentions become "@user", real links keep
+// their URL text.
+function stripHtml(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .trim()
+}
+
+/**
+ * Store a remote note's media attachments and generate a link-preview card
+ * (the same way local posts get one). Shared by ingestRemoteNote and the live
+ * inbox Create handler so federated posts render with images + preview cards.
+ */
+export async function attachRemoteMediaAndPreview(
+  postId: string,
+  note: { attachment?: APAttachment[]; content?: string | null },
+): Promise<void> {
+  // Media (images/video/audio)
+  const media = (note.attachment ?? []).filter((a) => a.url && (a.mediaType || a.type))
+  if (media.length > 0) {
+    await db.insert(mediaAttachments).values(
+      media.map((a) => ({
+        postId,
+        url: a.url!,
+        remoteUrl: a.url!,
+        mimeType: a.mediaType ?? 'image/jpeg',
+        altText: a.name ?? null,
+        width: a.width ?? null,
+        height: a.height ?? null,
+        blurhash: a.blurhash ?? null,
+      })),
+    ).onConflictDoNothing()
+  }
+
+  // Link preview — only if the post has no media (mirror local behavior: a card
+  // for a shared URL). Extract from the text form so we skip mention/tag anchors.
+  if (media.length === 0 && note.content) {
+    const url = extractFirstUrl(stripHtml(note.content))
+    if (url) {
+      try {
+        const preview = await fetchLinkPreview(url)
+        if (preview) await db.update(posts).set({ linkPreview: preview }).where(eq(posts.id, postId))
+      } catch { /* preview is best-effort */ }
+    }
+  }
 }
 
 async function fetchObject(url: string): Promise<APNote | null> {
@@ -124,22 +177,7 @@ export async function ingestRemoteNote(
       .where(eq(posts.id, replyToId))
   }
 
-  // Media attachments (images/video/audio).
-  const media = (note.attachment ?? []).filter((a) => a.url && (a.mediaType || a.type))
-  if (media.length > 0) {
-    await db.insert(mediaAttachments).values(
-      media.map((a) => ({
-        postId: created.id,
-        url: a.url!,
-        remoteUrl: a.url!,
-        mimeType: a.mediaType ?? 'image/jpeg',
-        altText: a.name ?? null,
-        width: a.width ?? null,
-        height: a.height ?? null,
-        blurhash: a.blurhash ?? null,
-      })),
-    ).onConflictDoNothing()
-  }
+  await attachRemoteMediaAndPreview(created.id, note)
 
   return created.id
 }
