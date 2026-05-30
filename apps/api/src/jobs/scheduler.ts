@@ -10,7 +10,7 @@ import { notifyReply } from '../lib/notify.js'
 
 function redisConnection() {
   const url = new URL(env.REDIS_URL)
-  return { host: url.hostname, port: parseInt(url.port || '6379', 10), maxRetriesPerRequest: null }
+  return { host: url.hostname, port: parseInt(url.port || '6379', 10), password: url.password || undefined, maxRetriesPerRequest: null }
 }
 
 export const schedulerQueue = new Queue('scheduler', { connection: redisConnection() })
