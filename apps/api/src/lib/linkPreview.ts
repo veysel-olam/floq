@@ -226,8 +226,10 @@ export async function fetchLinkPreview(rawUrl: string): Promise<LinkPreview | nu
     const res = await fetch(url.href, {
       signal: controller.signal,
       headers: {
-        // Twitterbot is whitelisted by most news sites for Twitter Cards
-        'User-Agent': 'Twitterbot/1.0',
+        // A browser UA — many news sites (CNN, WaPo…) 403 known crawler UAs
+        // (Twitterbot/facebookexternalhit) from datacenter IPs but still serve
+        // OG/Twitter-card meta tags in their normal HTML to browsers.
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         Accept: 'text/html,application/xhtml+xml',
         'Accept-Language': 'tr,en;q=0.9',
       },
