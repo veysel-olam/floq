@@ -68,7 +68,12 @@ const schema = z.object({
 export type Env = z.infer<typeof schema>
 
 function parseEnv(): Env {
-  const result = schema.safeParse(process.env)
+  // docker-compose passes unset optional vars as empty strings ("${VAR:-}").
+  // Treat "" as undefined so schema defaults/optionals apply instead of failing .url()/.min().
+  const cleaned = Object.fromEntries(
+    Object.entries(process.env).map(([k, v]) => [k, v === '' ? undefined : v]),
+  )
+  const result = schema.safeParse(cleaned)
   if (!result.success) {
     console.error('Invalid environment variables:')
     console.error(result.error.flatten().fieldErrors)
