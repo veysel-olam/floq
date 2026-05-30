@@ -9,6 +9,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Loader2, Check, Camera, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { triggerHaptic } from '@/hooks/use-haptics'
+import { FloqLogo } from '@/components/floq-logo'
+import { instanceDomain } from '@/lib/instance'
 
 type Step = 'welcome' | 'photo' | 'profile' | 'follow' | 'fediverse' | 'interests' | 'done'
 const STEPS: Step[] = ['welcome', 'photo', 'profile', 'follow', 'fediverse', 'interests', 'done']
@@ -65,11 +67,9 @@ export default function OnboardingPage() {
 
       <div className="min-h-screen flex flex-col bg-(--color-background)">
 
-        {/* Logo */}
+        {/* Logo — site geneliyle aynı (ikon + "floq") */}
         <div className="flex justify-center pt-8">
-          <span className="text-base font-bold text-(--color-text-primary)" style={{ fontFamily: 'var(--font-outfit)' }}>
-            fl<span style={{ color: '#E8593C' }}>o</span>q
-          </span>
+          <FloqLogo size="sm" />
         </div>
 
         {/* İçerik */}
@@ -126,7 +126,7 @@ function WelcomeStep({ session, onNext }: {
           floq'a hoş geldin. Seni birkaç adımda hazırlayalım.
         </p>
         {handle && (
-          <p className="text-xs text-(--color-text-tertiary) font-mono">@{handle}@floq.com</p>
+          <p className="text-xs text-(--color-text-tertiary) font-mono">@{handle}@{instanceDomain()}</p>
         )}
       </div>
       <button

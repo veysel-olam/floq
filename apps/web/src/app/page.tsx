@@ -290,8 +290,10 @@ export default function Page() {
   const [posts, setPosts] = useState<Post[]>(FALLBACK_POSTS)
 
   useEffect(() => {
+    // Show real posts whenever any exist; mock posts are only a last-resort
+    // fallback for a brand-new instance with zero posts.
     api.timeline.explore()
-      .then(data => { if (data.posts.length >= 3) setPosts(data.posts.slice(0, 8)) })
+      .then(data => { if (data.posts.length >= 1) setPosts(data.posts.slice(0, 8)) })
       .catch(() => {})
   }, [])
 
