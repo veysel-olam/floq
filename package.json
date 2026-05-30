@@ -18,5 +18,11 @@
     "@types/node": "^22.13.5",
     "prettier": "^3.4.2",
     "eslint": "^9.20.1"
+  },
+  "pnpm": {
+    "overrides": {
+      "@types/react": "^19.2.0",
+      "@types/react-dom": "^19.2.0"
+    }
   }
 }
