@@ -42,11 +42,17 @@ const PUBLIC_READ_POLICY = JSON.stringify({
 })
 
 export async function initS3Bucket() {
+  // Non-fatal: if object storage is unreachable (not yet configured), the API still
+  // boots — only media uploads will fail until S3/R2 is set up.
   try {
-    await s3.send(new HeadBucketCommand({ Bucket: env.S3_BUCKET }))
-  } catch {
-    await s3.send(new CreateBucketCommand({ Bucket: env.S3_BUCKET }))
+    try {
+      await s3.send(new HeadBucketCommand({ Bucket: env.S3_BUCKET }))
+    } catch {
+      await s3.send(new CreateBucketCommand({ Bucket: env.S3_BUCKET }))
+    }
+    // Always ensure public-read policy (idempotent)
+    await s3.send(new PutBucketPolicyCommand({ Bucket: env.S3_BUCKET, Policy: PUBLIC_READ_POLICY }))
+  } catch (err) {
+    console.warn('[s3] Bucket init atlandı — depolama erişilemez. Medya yüklemeleri S3/R2 ayarlanana kadar çalışmayacak.', (err as Error).message)
   }
-  // Always ensure public-read policy (idempotent)
-  await s3.send(new PutBucketPolicyCommand({ Bucket: env.S3_BUCKET, Policy: PUBLIC_READ_POLICY }))
 }
