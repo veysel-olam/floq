@@ -14,8 +14,13 @@ import { mediaAttachments } from '../db/schema.js'
 import { requireActor } from '../lib/session.js'
 import { uploadToS3 } from '../lib/s3.js'
 
-if (ffmpegPath) ffmpegFn.setFfmpegPath(ffmpegPath as unknown as string)
-if (ffprobeStatic?.path) ffmpegFn.setFfprobePath(ffprobeStatic.path)
+// Prefer system ffmpeg/ffprobe (FFMPEG_PATH / FFPROBE_PATH — e.g. apk-installed in the
+// prod image) over the *-static binaries, whose postinstall download is skipped by pnpm
+// in the production build. Falls back to the static binaries for local dev.
+const ffmpegBin = process.env.FFMPEG_PATH || (ffmpegPath as unknown as string | null)
+const ffprobeBin = process.env.FFPROBE_PATH || ffprobeStatic?.path
+if (ffmpegBin) ffmpegFn.setFfmpegPath(ffmpegBin)
+if (ffprobeBin) ffmpegFn.setFfprobePath(ffprobeBin)
 
 const MAX_FILE_SIZE = 8 * 1024 * 1024    // 8 MB — images
 const MAX_AUDIO_SIZE = 10 * 1024 * 1024  // 10 MB — audio

@@ -15,6 +15,12 @@ RUN pnpm --filter @floq/api deploy --prod --legacy /deploy
 FROM base AS runner
 WORKDIR /app
 
+# System ffmpeg/ffprobe for video transcoding (ffmpeg-static's binary download is
+# skipped by pnpm in the build). The app reads these via FFMPEG_PATH / FFPROBE_PATH.
+RUN apk add --no-cache ffmpeg
+ENV FFMPEG_PATH=/usr/bin/ffmpeg
+ENV FFPROBE_PATH=/usr/bin/ffprobe
+
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 floq
 
