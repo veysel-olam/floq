@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, use } from 'react'
 import Link from 'next/link'
 import { useSession } from '@/lib/auth-client'
 import { api, type Actor, type Post, type ActorCommunityBadge } from '@/lib/api'
+import { htmlToText } from '@/lib/html'
 import { PostCard } from '@/components/posts/post-card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -706,7 +707,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
         </div>
 
         {actor.bio && (
-          <p className="text-sm text-(--color-text-secondary) leading-relaxed">{renderBio(actor.bio)}</p>
+          <p className="text-sm text-(--color-text-secondary) leading-relaxed whitespace-pre-wrap">{renderBio(actor.isLocal ? actor.bio : htmlToText(actor.bio))}</p>
         )}
 
         <div className="flex items-center gap-4 text-sm">
@@ -784,24 +785,32 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
           )}
           {actor.profileFields && actor.profileFields.length > 0 && (
             <div className="flex flex-wrap gap-x-4 gap-y-1 mt-0.5">
-              {actor.profileFields.map((field, i) => (
-                <span key={i} className="flex items-center gap-1 text-xs">
-                  <span className="text-(--color-text-tertiary) font-medium">{field.name}</span>
-                  {field.value.startsWith('http') ? (
-                    <a
-                      href={field.value}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={cn('flex items-center gap-0.5 hover:underline', field.verifiedAt ? 'text-emerald-500' : 'text-(--color-coral)')}
-                    >
-                      {field.value.replace(/^https?:\/\//, '').split('/')[0]}
-                      <Link2 className="w-2.5 h-2.5" />
-                    </a>
-                  ) : (
-                    <span className="text-(--color-text-secondary)">{field.value}</span>
-                  )}
-                </span>
-              ))}
+              {actor.profileFields.map((field, i) => {
+                // Remote fields are HTML (Mastodon PropertyValue): pull out the href
+                // and show clean text instead of raw <a>/<span> markup.
+                const text = htmlToText(field.value)
+                const url = field.value.startsWith('http')
+                  ? field.value
+                  : (field.value.match(/href="([^"]+)"/i)?.[1] ?? (text.startsWith('http') ? text : undefined))
+                return (
+                  <span key={i} className="flex items-center gap-1 text-xs">
+                    <span className="text-(--color-text-tertiary) font-medium">{htmlToText(field.name)}</span>
+                    {url ? (
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={cn('flex items-center gap-0.5 hover:underline', field.verifiedAt ? 'text-emerald-500' : 'text-(--color-coral)')}
+                      >
+                        {(text || url).replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                        <Link2 className="w-2.5 h-2.5" />
+                      </a>
+                    ) : (
+                      <span className="text-(--color-text-secondary)">{text}</span>
+                    )}
+                  </span>
+                )
+              })}
             </div>
           )}
           {actor.blueskyHandle && (

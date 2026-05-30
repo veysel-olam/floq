@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
+import { htmlToText } from '@/lib/html'
 import { api, type Post, type Poll, type Actor, type PostCollection, proxyMediaUrl } from '@/lib/api'
 import type { FilterResult } from '@/lib/keyword-filters'
 import { ReportModal } from '@/components/report-modal'
@@ -1851,9 +1852,11 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
                 <div className={cn('relative', isNsfwBlurred && !nsfwRevealed && 'select-none')}>
                   <div className={cn(detail ? 'text-base' : 'text-sm', 'text-(--color-text-primary) leading-relaxed whitespace-pre-wrap break-words', isNsfwBlurred && !nsfwRevealed && 'blur-sm pointer-events-none')}>
                     {renderRichContent(
-                      post.linkPreview
-                        ? currentContent.replace(post.linkPreview.url, '').trim()
-                        : currentContent
+                      post.isLocal === false
+                        ? htmlToText(currentContent)
+                        : post.linkPreview
+                          ? currentContent.replace(post.linkPreview.url, '').trim()
+                          : currentContent
                     )}
                   </div>
                   {isNsfwBlurred && !nsfwRevealed && (

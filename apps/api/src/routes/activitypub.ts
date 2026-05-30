@@ -35,11 +35,13 @@ async function requireApSignature(
 ): Promise<boolean> {
   if (env.NODE_ENV !== 'production') return true
 
+  // Actor documents and public collections must be publicly fetchable: remote
+  // servers (e.g. Mastodon without authorized-fetch) fetch our actor UNSIGNED to
+  // get our public key and verify our Follow/activities. Requiring a signature
+  // here ("secure mode") breaks that handshake. So allow unsigned reads; only
+  // validate a signature when the caller actually provides one.
   const sigHeader = req.headers['signature']
-  if (!sigHeader) {
-    reply.code(401).send({ error: 'Unauthorized: HTTP Signature required' })
-    return false
-  }
+  if (!sigHeader) return true
 
   // Parse keyId from Signature header to fetch the actor's public key
   const keyIdMatch = (Array.isArray(sigHeader) ? sigHeader[0]! : sigHeader).match(/keyId="([^"]+)"/)
