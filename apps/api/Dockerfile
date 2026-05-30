@@ -8,8 +8,9 @@ WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @floq/api build
-# pnpm deploy creates a self-contained folder with flat node_modules (no workspace symlinks)
-RUN pnpm --filter @floq/api deploy --prod /deploy
+# pnpm deploy creates a self-contained folder with flat node_modules (no workspace symlinks).
+# --legacy: pnpm v10 needs inject-workspace-packages otherwise; legacy avoids that.
+RUN pnpm --filter @floq/api deploy --prod --legacy /deploy
 
 FROM base AS runner
 WORKDIR /app
