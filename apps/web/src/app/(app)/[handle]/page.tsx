@@ -1152,9 +1152,16 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
               <DialogTitle style={{ fontFamily: 'var(--font-outfit)' }}>
                 {followModal === 'followers' ? 'Takipçiler' : 'Takip Edilenler'}
               </DialogTitle>
-              {!modalLoading && modalTotal !== null && (
-                <p className="text-xs text-(--color-text-tertiary) mt-0.5">{modalTotal} kişi</p>
-              )}
+              {!modalLoading && (() => {
+                // For remote actors the real count lives on the origin server
+                // (modalTotal only reflects locally-known relationships).
+                const cnt = actor.isLocal
+                  ? modalTotal
+                  : (followModal === 'followers' ? actor.followersCount : actor.followingCount)
+                if (cnt === null || cnt === undefined) return null
+                const label = cnt >= 1000 ? `${(cnt / 1000).toFixed(1)}K` : `${cnt}`
+                return <p className="text-xs text-(--color-text-tertiary) mt-0.5">{label} kişi</p>
+              })()}
             </div>
             <DialogClose asChild>
               <button className="p-1.5 rounded-full hover:bg-(--color-background-secondary) text-(--color-text-tertiary) transition-colors">
@@ -1183,10 +1190,23 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                 ? modalList.filter((a) => (a.displayName ?? a.handle).toLowerCase().includes(q) || a.handle.toLowerCase().includes(q))
                 : modalList
               return visible.length === 0 ? (
-                <div className="py-12 text-center">
-                  <p className="text-sm text-(--color-text-tertiary)">
-                    {modalSearch ? 'Sonuç bulunamadı.' : followModal === 'followers' ? 'Henüz takipçi yok.' : 'Henüz kimse takip edilmiyor.'}
-                  </p>
+                <div className="py-12 text-center px-6">
+                  {!actor.isLocal && !modalSearch ? (
+                    <div className="space-y-2">
+                      <p className="text-sm text-(--color-text-tertiary) leading-relaxed">
+                        Bu liste <span className="font-medium">{actor.handle.split('@')[1] ?? 'kaynak sunucu'}</span> üzerinde tutuluyor ve federasyonda buradan listelenemiyor. Yalnızca bu sunucudaki ilişkiler görünür.
+                      </p>
+                      {actor.profileUrl && (
+                        <a href={actor.profileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-(--color-coral) hover:underline">
+                          Orijinalinde gör <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-(--color-text-tertiary)">
+                      {modalSearch ? 'Sonuç bulunamadı.' : followModal === 'followers' ? 'Henüz takipçi yok.' : 'Henüz kimse takip edilmiyor.'}
+                    </p>
+                  )}
                 </div>
               ) : (
                 <>
