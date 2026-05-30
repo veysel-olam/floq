@@ -3,6 +3,10 @@
 }
 
 {$APP_DOMAIN} {
+	# ActivityPub/federation endpoints live on the apex domain (AP ids use APP_URL=https://{domain}).
+	# Route them to the API; everything else is the Next.js web app.
+	@federation path /.well-known/webfinger /.well-known/nodeinfo /.well-known/host-meta /.well-known/floq-verification /nodeinfo/* /users/* /actor /actor/inbox /inbox /tags/*
+	reverse_proxy @federation api:3001
 	reverse_proxy web:3000
 }
 
