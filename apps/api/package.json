@@ -8,6 +8,8 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "db:push": "drizzle-kit push",
+    "db:extras": "psql \"$DATABASE_URL\" -f ./drizzle/extras.sql",
+    "db:setup": "pnpm db:push && pnpm db:extras",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "db:generate": "drizzle-kit generate",
