@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { QRCodeSVG } from 'qrcode.react'
 import { useSession, authClient } from '@/lib/auth-client'
 import { api, type Actor, type MutedActor, type KeywordFilter, type SessionInfo, type FeedRule, type FeedRulesConfig, type ListInfo, type ActorPreferences, type NotificationPrefs } from '@/lib/api'
+import { instanceDomain } from '@/lib/instance'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -1630,7 +1631,7 @@ function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'
                   <span>
                     Dosyanın içeriği tam olarak şu olsun:{' '}
                     <span className="font-mono bg-(--color-background) px-1.5 py-0.5 rounded border border-(--color-border)">
-                      @{handle}@floq.com
+                      @{handle}@{instanceDomain()}
                     </span>
                   </span>
                 </li>

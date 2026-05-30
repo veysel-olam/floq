@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     template: '%s · floq',
   },
   description: 'Flow together, own your data.',
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'https://floq.com'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'https://flq.social'),
   applicationName: 'floq',
   manifest: '/manifest.json',
   icons: {

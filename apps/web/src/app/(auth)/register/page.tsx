@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { signUp } from '@/lib/auth-client'
 import { api } from '@/lib/api'
+import { instanceDomain } from '@/lib/instance'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -170,7 +171,7 @@ function RegisterForm() {
             {!errors.handle && watch('handle') && (
               <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-(--color-background-secondary) border border-(--color-border)">
                 <Globe className="w-3 h-3 text-(--color-coral) flex-shrink-0" />
-                <p className="text-[11px] text-(--color-text-secondary) font-mono">@{watch('handle')}@floq.com</p>
+                <p className="text-[11px] text-(--color-text-secondary) font-mono">@{watch('handle')}@{instanceDomain()}</p>
                 <span className="text-[10px] text-(--color-text-tertiary) ml-auto">fediverse adresin</span>
               </div>
             )}
