@@ -7,11 +7,7 @@
 }
 
 api.{$APP_DOMAIN} {
+	# CORS is handled by the API (@fastify/cors) — adding it here too would emit a
+	# second Access-Control-Allow-Origin header and break credentialed requests.
 	reverse_proxy api:3001
-
-	header {
-		Access-Control-Allow-Origin *
-		Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-		Access-Control-Allow-Headers "Authorization, Content-Type"
-	}
 }
