@@ -564,9 +564,11 @@ export async function activityPubRoutes(app: FastifyInstance) {
           ])
           void notifyFollow(senderActor.id, target.id)
 
-          // Send Accept back
-          const followActivity = buildFollow(senderActor.handle, targetActorId, follow.id)
-          const accept = buildAccept(target.handle, followActivity)
+          // Send Accept back — echo the EXACT Follow we received (its original id
+          // and actor) so the remote can match it to its pending request. A
+          // reconstructed Follow has the wrong id/actor → the Accept is ignored →
+          // the follow never completes → our posts never reach the follower's feed.
+          const accept = buildAccept(target.handle, activity as Parameters<typeof buildAccept>[1])
           void deliverToInbox(target.handle, senderActor.inboxUrl, accept)
         }
         break
