@@ -11,3 +11,8 @@ api.{$APP_DOMAIN} {
 	# second Access-Control-Allow-Origin header and break credentialed requests.
 	reverse_proxy api:3001
 }
+
+# Media — public object storage (MinIO). Objects live at /{bucket}/{key}.
+media.{$APP_DOMAIN} {
+	reverse_proxy minio:9000
+}
