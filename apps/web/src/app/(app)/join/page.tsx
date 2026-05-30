@@ -7,6 +7,9 @@ import { api } from '@/lib/api'
 import { FloqLogo } from '@/components/floq-logo'
 import { toast } from 'sonner'
 
+// Invite page reads ?invite= from the URL — render dynamically, not statically prerendered
+export const dynamic = 'force-dynamic'
+
 export default function JoinPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
