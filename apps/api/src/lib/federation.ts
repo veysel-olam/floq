@@ -252,10 +252,10 @@ export async function fetchRemoteActor(actorUrl: string) {
     summary?: string
     icon?: { url?: string }
     image?: { url?: string }
-    inbox: string
-    outbox: string
-    followers: string
-    following: string
+    inbox?: string
+    outbox?: string
+    followers?: string
+    following?: string
     endpoints?: { sharedInbox?: string; dmPublicKey?: string }
     publicKey?: { publicKeyPem?: string }
     manuallyApprovesFollowers?: boolean
@@ -284,10 +284,12 @@ export async function fetchRemoteActor(actorUrl: string) {
     bio: data.summary ?? null,
     avatarUrl: data.icon?.url ?? null,
     headerUrl: data.image?.url ?? null,
-    inboxUrl: data.inbox,
-    outboxUrl: data.outbox,
-    followersUrl: data.followers,
-    followingUrl: data.following,
+    // Instance/Application actors (e.g. mastodon.social/actor) often omit these
+    // collections — fall back so NOT NULL columns don't blow up the insert.
+    inboxUrl: data.inbox ?? data.id,
+    outboxUrl: data.outbox ?? data.id,
+    followersUrl: data.followers ?? data.id,
+    followingUrl: data.following ?? data.id,
     sharedInboxUrl: data.endpoints?.sharedInbox ?? null,
     profileUrl: data.url ?? data.id,
     publicKey: data.publicKey?.publicKeyPem ?? '',

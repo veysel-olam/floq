@@ -29,43 +29,15 @@ import { sql } from 'drizzle-orm'
 // Verify HTTP Signature on AP GET requests (Authorized Fetch).
 // Returns false and sends 401 if the request is unsigned or signature is invalid.
 // Only enforced in production; skipped in development for local testing ease.
+// Actor documents and public collections (actor, outbox, individual posts) are
+// PUBLIC AP objects — like Mastodon's defaults. They must be servable to anyone,
+// including a remote server's SIGNED actor-fetch while it verifies our Follow.
+// Requiring/verifying a signature here ("authorized fetch" / secure mode) breaks
+// the handshake (and crashed on instance actors), so these endpoints are public.
 async function requireApSignature(
-  req: { method: string; url: string; headers: Record<string, string | string[] | undefined> },
-  reply: { code: (n: number) => { send: (b: unknown) => void } },
+  _req: { method: string; url: string; headers: Record<string, string | string[] | undefined> },
+  _reply: { code: (n: number) => { send: (b: unknown) => void } },
 ): Promise<boolean> {
-  if (env.NODE_ENV !== 'production') return true
-
-  // Actor documents and public collections must be publicly fetchable: remote
-  // servers (e.g. Mastodon without authorized-fetch) fetch our actor UNSIGNED to
-  // get our public key and verify our Follow/activities. Requiring a signature
-  // here ("secure mode") breaks that handshake. So allow unsigned reads; only
-  // validate a signature when the caller actually provides one.
-  const sigHeader = req.headers['signature']
-  if (!sigHeader) return true
-
-  // Parse keyId from Signature header to fetch the actor's public key
-  const keyIdMatch = (Array.isArray(sigHeader) ? sigHeader[0]! : sigHeader).match(/keyId="([^"]+)"/)
-  if (!keyIdMatch) {
-    reply.code(401).send({ error: 'Unauthorized: keyId missing' })
-    return false
-  }
-
-  const keyId = keyIdMatch[1]!
-  const actorId = keyId.replace(/#[^#]*$/, '')
-
-  const senderActor = await fetchRemoteActor(actorId)
-  if (!senderActor?.publicKey) {
-    reply.code(401).send({ error: 'Unauthorized: could not fetch actor' })
-    return false
-  }
-
-  const path = new URL(req.url, env.APP_URL).pathname
-  const valid = verifySignature({ method: req.method, path, headers: req.headers, publicKeyPem: senderActor.publicKey })
-  if (!valid) {
-    reply.code(401).send({ error: 'Unauthorized: invalid signature' })
-    return false
-  }
-
   return true
 }
 
