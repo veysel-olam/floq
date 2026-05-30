@@ -6,6 +6,7 @@ import { getSession, requireActor } from '../lib/session.js'
 import { notifyFollow, notifyFollowRequest } from '../lib/notify.js'
 import { buildFollow, buildUndo, buildAccept, actorUrl } from '../lib/activityPub.js'
 import { deliverToInbox } from '../lib/federation.js'
+import { backfillOutbox } from '../lib/ingest.js'
 import { enrichPosts } from '../lib/enrichPosts.js'
 
 export async function actorsRoutes(app: FastifyInstance) {
@@ -25,6 +26,13 @@ export async function actorsRoutes(app: FastifyInstance) {
       where: eq(actors.handle, req.params.handle),
     })
     if (!actor) return reply.code(404).send({ error: 'Not found' })
+
+    // Remote actor with nothing stored yet → pull their outbox in the background
+    // so the profile fills in (fire-and-forget; visible on next load).
+    if (!actor.isLocal) {
+      const known = await db.query.posts.findFirst({ where: eq(posts.authorId, actor.id), columns: { id: true } })
+      if (!known) void backfillOutbox(actor.id).catch(() => {})
+    }
 
     let viewerFollowStatus: 'none' | 'pending' | 'accepted' = 'none'
     let viewerNotifyOnActivity = true
@@ -430,6 +438,8 @@ export async function actorsRoutes(app: FastifyInstance) {
     if (!target.isLocal && follow) {
       const followActivity = buildFollow(ctx.actor.handle, target.apId, follow.id)
       void deliverToInbox(ctx.actor.handle, target.inboxUrl, followActivity)
+      // Backfill their recent posts so the feed isn't empty until new ones arrive.
+      void backfillOutbox(target.id).catch(() => {})
     }
 
     return reply.code(201).send({ status: follow?.status })

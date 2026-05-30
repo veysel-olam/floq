@@ -156,7 +156,7 @@ export async function getInstanceActor(): Promise<typeof actors.$inferSelect> {
   return _instanceActor!
 }
 
-async function signedApFetch(url: string): Promise<Response> {
+export async function signedApFetch(url: string): Promise<Response> {
   const instanceActor = await getInstanceActor()
   if (!instanceActor.privateKeyEncrypted) {
     return federationFetch(url, { headers: { Accept: 'application/activity+json' }, signal: AbortSignal.timeout(10_000) })
@@ -229,14 +229,21 @@ export async function acceptRelayFollow(relayActorUrl: string) {
   await db.update(relays).set({ status: 'accepted' }).where(eq(relays.actorUrl, relayActorUrl))
 }
 
+// Remote actor cache TTL — re-fetch profile (avatar/bio/name) after this window.
+const ACTOR_REFRESH_MS = 24 * 60 * 60 * 1000
+
 export async function fetchRemoteActor(actorUrl: string) {
   const existing = await db.query.actors.findFirst({
     where: eq(actors.apId, actorUrl),
   })
-  if (existing) return existing
+  // Serve from cache unless stale (so avatars/bios stay current over time).
+  if (existing) {
+    const age = existing.lastFetchedAt ? Date.now() - existing.lastFetchedAt.getTime() : Infinity
+    if (age < ACTOR_REFRESH_MS) return existing
+  }
 
   const res = await signedApFetch(actorUrl)
-  if (!res.ok) return null
+  if (!res.ok) return existing ?? null
 
   const data = (await res.json()) as {
     id: string
@@ -270,30 +277,41 @@ export async function fetchRemoteActor(actorUrl: string) {
     ?.filter((a) => a.type === 'PropertyValue' && a.name && a.value)
     .map((a) => ({ name: a.name!, value: a.value!, verifiedAt: null })) ?? null
 
+  const values = {
+    apId: data.id,
+    handle: `${data.preferredUsername}@${domain}`,
+    displayName: data.name ?? data.preferredUsername,
+    bio: data.summary ?? null,
+    avatarUrl: data.icon?.url ?? null,
+    headerUrl: data.image?.url ?? null,
+    inboxUrl: data.inbox,
+    outboxUrl: data.outbox,
+    followersUrl: data.followers,
+    followingUrl: data.following,
+    sharedInboxUrl: data.endpoints?.sharedInbox ?? null,
+    profileUrl: data.url ?? data.id,
+    publicKey: data.publicKey?.publicKeyPem ?? '',
+    dmPublicKey: data.endpoints?.dmPublicKey ?? null,
+    isLocal: false,
+    isLocked: data.manuallyApprovesFollowers ?? false,
+    noIndex: data.indexable === false,
+    ed25519PublicKey: ed25519Key,
+    profileFields: profileFields?.length ? profileFields : null,
+    lastFetchedAt: new Date(),
+  }
+
+  // Refresh in place if we already knew this actor; otherwise insert.
+  if (existing) {
+    const [updated] = await db.update(actors)
+      .set({ ...values, updatedAt: new Date() })
+      .where(eq(actors.id, existing.id))
+      .returning()
+    return updated ?? existing
+  }
+
   const [created] = await db
     .insert(actors)
-    .values({
-      apId: data.id,
-      handle: `${data.preferredUsername}@${domain}`,
-      displayName: data.name ?? data.preferredUsername,
-      bio: data.summary ?? null,
-      avatarUrl: data.icon?.url ?? null,
-      headerUrl: data.image?.url ?? null,
-      inboxUrl: data.inbox,
-      outboxUrl: data.outbox,
-      followersUrl: data.followers,
-      followingUrl: data.following,
-      sharedInboxUrl: data.endpoints?.sharedInbox ?? null,
-      profileUrl: data.url ?? data.id,
-      publicKey: data.publicKey?.publicKeyPem ?? '',
-      dmPublicKey: data.endpoints?.dmPublicKey ?? null,
-      isLocal: false,
-      isLocked: data.manuallyApprovesFollowers ?? false,
-      noIndex: data.indexable === false,
-      ed25519PublicKey: ed25519Key,
-      profileFields: profileFields?.length ? profileFields : null,
-      lastFetchedAt: new Date(),
-    })
+    .values(values)
     .onConflictDoNothing()
     .returning()
 

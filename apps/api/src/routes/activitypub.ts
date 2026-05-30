@@ -20,6 +20,7 @@ import {
 } from '../lib/activityPub.js'
 import { verifySignature } from '../lib/httpSignatures.js'
 import { deliverToFollowers, deliverToInbox, fetchRemoteActor, isSuspendedDomain, getInstanceActor, acceptRelayFollow } from '../lib/federation.js'
+import { ingestRemoteNote } from '../lib/ingest.js'
 import { verifyObjectProof, issueVerifiableCredential } from '../lib/objectIntegrity.js'
 import { didKeyFromMultibase } from '../lib/keys.js'
 import { notifyFollow, notifyLike, notifyBoost, notifyReply } from '../lib/notify.js'
@@ -749,9 +750,15 @@ export async function activityPubRoutes(app: FastifyInstance) {
         let rootId: string | undefined
 
         if (note.inReplyTo) {
-          const parent = await db.query.posts.findFirst({
+          let parent = await db.query.posts.findFirst({
             where: eq(posts.apId, note.inReplyTo),
           })
+          // Don't have the parent? Fetch the remote ancestor chain so the
+          // conversation connects instead of arriving as an orphan reply.
+          if (!parent) {
+            const parentId = await ingestRemoteNote(note.inReplyTo, { resolveParentsDepth: 8 })
+            if (parentId) parent = await db.query.posts.findFirst({ where: eq(posts.id, parentId) })
+          }
           if (parent) {
             replyToId = parent.id
             rootId = parent.rootId ?? parent.id

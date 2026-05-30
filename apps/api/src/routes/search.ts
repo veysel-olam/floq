@@ -5,6 +5,7 @@ import { actors, posts, mediaAttachments } from '../db/schema.js'
 import { getSession } from '../lib/session.js'
 import { enrichPosts } from '../lib/enrichPosts.js'
 import { fetchRemoteActor } from '../lib/federation.js'
+import { ingestRemoteNote } from '../lib/ingest.js'
 import { env } from '../lib/env.js'
 
 // A full fediverse handle: `@user@instance.tld` or `user@instance.tld`.
@@ -78,6 +79,20 @@ export async function searchRoutes(app: FastifyInstance) {
 
     let actorRows: (typeof actors.$inferSelect)[] = []
     let enrichedPosts: Awaited<ReturnType<typeof enrichPosts>> = []
+
+    // Paste-to-resolve: a fediverse URL is either a post or an actor. Try to
+    // ingest it as a remote Note first; if that fails, resolve it as an actor.
+    if (/^https?:\/\//i.test(rawQ)) {
+      const postId = await ingestRemoteNote(rawQ).catch(() => null)
+      if (postId) {
+        const p = await db.query.posts.findFirst({ where: eq(posts.id, postId) })
+        if (p) enrichedPosts = await enrichPosts([p], viewerActorId)
+      } else {
+        const remote = await fetchRemoteActor(rawQ).catch(() => null)
+        if (remote) actorRows = [remote]
+      }
+      return reply.send({ actors: actorRows, posts: enrichedPosts })
+    }
 
     if ((type === 'actors' || type === 'all') && term) {
       // Use FTS with GIN index; fall back to ILIKE for very short terms (< 2 chars)

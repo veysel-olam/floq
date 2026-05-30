@@ -9,6 +9,7 @@ import { env } from '../lib/env.js'
 import { notifyLike, notifyBoost, notifyReply, notifyThreadParticipants } from '../lib/notify.js'
 import { buildNote, buildQuestion, buildCreate, buildDelete, buildUpdateNote } from '../lib/activityPub.js'
 import { deliverToFollowers } from '../lib/federation.js'
+import { resolveRemoteThread } from '../lib/ingest.js'
 import { publish } from '../lib/pubsub.js'
 import { enrichPosts } from '../lib/enrichPosts.js'
 import { schedulePostPublish, schedulerQueue } from '../jobs/scheduler.js'
@@ -424,10 +425,26 @@ export async function postsRoutes(app: FastifyInstance) {
         actorId = viewer?.id
       }
 
-      const post = await db.query.posts.findFirst({
+      let post = await db.query.posts.findFirst({
         where: and(eq(posts.id, req.params.id), eq(posts.isDeleted, false)),
       })
       if (!post) return reply.code(404).send({ error: 'Not found' })
+
+      // Federated reply whose ancestors we haven't ingested → fetch the remote
+      // thread so the conversation is complete, then link this post to its parent.
+      if (!post.isLocal && !post.replyToId && post.apInReplyTo) {
+        try {
+          await resolveRemoteThread(post.apInReplyTo)
+          const parent = await db.query.posts.findFirst({ where: eq(posts.apId, post.apInReplyTo) })
+          if (parent) {
+            const [relinked] = await db.update(posts)
+              .set({ replyToId: parent.id, rootId: parent.rootId ?? parent.id })
+              .where(eq(posts.id, post.id))
+              .returning()
+            if (relinked) post = relinked
+          }
+        } catch { /* best-effort */ }
+      }
 
       // Walk up to ancestors (max 10 levels)
       const ancestorList: typeof posts.$inferSelect[] = []
