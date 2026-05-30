@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { api, type Post, type Actor } from '@/lib/api'
+import { htmlToText } from '@/lib/html'
 import { PostCard } from '@/components/posts/post-card'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -769,7 +770,7 @@ function ActorRow({ actor, query = '' }: { actor: Actor; query?: string }) {
           </Button>
         </div>
         {actor.bio && (
-          <p className="text-xs text-(--color-text-secondary) mt-1 line-clamp-2 leading-relaxed">{actor.bio}</p>
+          <p className="text-xs text-(--color-text-secondary) mt-1 line-clamp-2 leading-relaxed">{actor.isLocal ? actor.bio : htmlToText(actor.bio)}</p>
         )}
         <div className="flex items-center gap-3 mt-1.5">
           <span className="text-[11px] text-(--color-text-tertiary)">
