@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
-import { Loader2, CalendarDays, MoreHorizontal, ShieldOff, BellOff, Bell, MessageSquare, Pencil, Star, Images, BarChart2, X, Lock, Globe, Shield, MessageCircle, Heart, Film, FileText, Link2, Share2, Check, Copy, FolderOpen, Plus, Trash2, UserPlus, UserMinus, MapPin } from 'lucide-react'
+import { Loader2, CalendarDays, MoreHorizontal, ShieldOff, BellOff, Bell, MessageSquare, Pencil, Star, Images, BarChart2, X, Lock, Globe, Shield, MessageCircle, Heart, Film, FileText, Link2, Share2, Check, Copy, FolderOpen, Plus, Trash2, UserPlus, UserMinus, MapPin, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TimelineSkeleton } from '@/components/ui/skeleton'
 import { NotFoundContent } from '@/components/not-found-content'
@@ -686,9 +686,21 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
               </span>
             )}
             {!actor.isLocal && (
-              <span className="flex items-center gap-1 text-[11px] font-medium text-(--color-teal) bg-(--color-teal)/8 px-1.5 py-0.5 rounded-full">
-                <Globe className="w-3 h-3" /> Federe
-              </span>
+              actor.profileUrl ? (
+                <a
+                  href={actor.profileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-[11px] font-medium text-(--color-teal) bg-(--color-teal)/8 px-1.5 py-0.5 rounded-full hover:bg-(--color-teal)/15 transition-colors"
+                  title="Orijinal profili kaynak sunucuda aç"
+                >
+                  <Globe className="w-3 h-3" /> Federe <ExternalLink className="w-2.5 h-2.5" />
+                </a>
+              ) : (
+                <span className="flex items-center gap-1 text-[11px] font-medium text-(--color-teal) bg-(--color-teal)/8 px-1.5 py-0.5 rounded-full">
+                  <Globe className="w-3 h-3" /> Federe
+                </span>
+              )
             )}
           </div>
         </div>

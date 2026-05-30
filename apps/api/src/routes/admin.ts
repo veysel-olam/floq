@@ -4,10 +4,11 @@ import { z } from 'zod'
 import { db } from '../db/client.js'
 import {
   instances, actors, reports, posts, apActivities, adminAuditLogs,
-  instanceSettings, instanceRules, pendingRegistrations, mediaAttachments,
+  instanceSettings, instanceRules, pendingRegistrations, mediaAttachments, relays,
 } from '../db/schema.js'
 import { getSession } from '../lib/session.js'
 import { notifySuspension } from '../lib/notify.js'
+import { followRelay, unfollowRelay, fetchRemoteActor } from '../lib/federation.js'
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
 
@@ -91,6 +92,48 @@ export async function adminRoutes(app: FastifyInstance) {
     await logAction(actor.id, 'instance.unsuspend', 'instance', req.params.domain)
 
     return reply.send({ ok: true, domain: req.params.domain, suspended: false })
+  })
+
+  // ─── Relay Management (session-based admin) ───────────────────────────────
+
+  // GET /api/admin/relays — list subscribed relays
+  app.get('/api/admin/relays', async (req, reply) => {
+    const actor = await requireAdmin(req, reply)
+    if (!actor) return
+    const rows = await db.query.relays.findMany({ orderBy: [desc(relays.createdAt)] })
+    return reply.send({ relays: rows })
+  })
+
+  // POST /api/admin/relays — subscribe to a relay by its inbox URL
+  app.post('/api/admin/relays', async (req, reply) => {
+    const actor = await requireAdmin(req, reply)
+    if (!actor) return
+    const body = z.object({ inboxUrl: z.string().url() }).safeParse(req.body)
+    if (!body.success) return reply.code(422).send({ error: 'inboxUrl gerekli' })
+
+    const inboxUrl = body.data.inboxUrl
+    // Most relays expose their actor at /actor (sibling of /inbox); confirm if reachable.
+    let actorUrl = inboxUrl.replace(/\/inbox$/, '/actor')
+    try {
+      const remote = await fetchRemoteActor(actorUrl)
+      if (remote) actorUrl = remote.apId
+    } catch { /* fall back to derived actor url */ }
+
+    await followRelay(inboxUrl, actorUrl)
+    await logAction(actor.id, 'relay.subscribe', 'relay', inboxUrl)
+    const relay = await db.query.relays.findFirst({ where: eq(relays.inboxUrl, inboxUrl) })
+    return reply.send({ relay })
+  })
+
+  // DELETE /api/admin/relays/:id — unsubscribe
+  app.delete<{ Params: { id: string } }>('/api/admin/relays/:id', async (req, reply) => {
+    const actor = await requireAdmin(req, reply)
+    if (!actor) return
+    const relay = await db.query.relays.findFirst({ where: eq(relays.id, req.params.id) })
+    if (!relay) return reply.code(404).send({ error: 'Bulunamadı' })
+    await unfollowRelay(relay.inboxUrl, relay.actorUrl)
+    await logAction(actor.id, 'relay.unsubscribe', 'relay', relay.inboxUrl)
+    return reply.send({ ok: true })
   })
 
   // ─── Report Management ────────────────────────────────────────────────────

@@ -1736,6 +1736,17 @@ function _PostCard({ post, onDelete, onReply, onEdit, currentActorHandle, filter
                       >
                         <Code2 className="w-3.5 h-3.5 text-(--color-text-tertiary)" /> Göm
                       </button>
+                      {post.author && !post.author.isLocal && (post.apUrl || post.apId) && (
+                        <a
+                          href={post.apUrl || post.apId}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => dispatch({ type: 'MENU_CLOSE' })}
+                          className="w-full flex items-center gap-2 px-3.5 py-2 text-[13px] text-(--color-text-primary) hover:bg-(--color-background-secondary) transition-colors"
+                        >
+                          <Globe className="w-3.5 h-3.5 text-(--color-text-tertiary)" /> Orijinalinde Gör
+                        </a>
+                      )}
                       {communityPin && (
                         <>
                           <div className="my-1 border-t border-(--color-border-secondary)" />

@@ -6,7 +6,8 @@ import { api, type AdminReport, type FederationHealth, type AuditLog } from '@/l
 import { useSession } from '@/lib/auth-client'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import { Loader2, Shield, Flag, Check, X, Trash2, Share2, Globe, ClipboardList, Users, ChevronDown, ShieldOff } from 'lucide-react'
+import { Loader2, Shield, Flag, Check, X, Trash2, Share2, Globe, ClipboardList, Users, ChevronDown, ShieldOff, Rss, Plus, Ban } from 'lucide-react'
+import type { Relay } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -38,13 +39,48 @@ function StatCard({ label, value, sub, color = 'text-(--color-text-primary)' }: 
 function FederationTab() {
   const [data, setData] = useState<FederationHealth | null>(null)
   const [loading, setLoading] = useState(true)
+  const [relays, setRelays] = useState<Relay[]>([])
+  const [relayUrl, setRelayUrl] = useState('')
+  const [relayBusy, setRelayBusy] = useState(false)
+  const [modBusy, setModBusy] = useState<string | null>(null)
 
   useEffect(() => {
     api.admin.federation()
       .then(setData)
       .catch(() => {})
       .finally(() => setLoading(false))
+    api.admin.relays().then((r) => setRelays(r.relays)).catch(() => {})
   }, [])
+
+  async function toggleSuspend(domain: string, suspended: boolean) {
+    setModBusy(domain)
+    try {
+      if (suspended) await api.admin.unsuspendInstance(domain)
+      else await api.admin.suspendInstance(domain)
+      setData((prev) => prev && {
+        ...prev,
+        instances: prev.instances.map((i) => i.domain === domain ? { ...i, isSuspended: !suspended } : i),
+      })
+    } catch { /* ignore */ } finally { setModBusy(null) }
+  }
+
+  async function addRelay() {
+    const url = relayUrl.trim()
+    if (!url || relayBusy) return
+    setRelayBusy(true)
+    try {
+      const { relay } = await api.admin.addRelay(url)
+      if (relay) setRelays((prev) => [relay, ...prev])
+      setRelayUrl('')
+    } catch { /* ignore */ } finally { setRelayBusy(false) }
+  }
+
+  async function removeRelay(id: string) {
+    try {
+      await api.admin.removeRelay(id)
+      setRelays((prev) => prev.filter((r) => r.id !== id))
+    } catch { /* ignore */ }
+  }
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-(--color-coral)" /></div>
   if (!data) return <div className="py-12 text-center text-sm text-(--color-text-tertiary)">Veri yüklenemedi.</div>
@@ -159,9 +195,71 @@ function FederationTab() {
                       )}
                     </div>
                   </div>
+
+                  {/* Domain moderation */}
+                  <button
+                    onClick={() => toggleSuspend(inst.domain, inst.isSuspended)}
+                    disabled={modBusy === inst.domain}
+                    title={inst.isSuspended ? 'Askıyı kaldır' : 'Sunucuyu askıya al'}
+                    className={cn(
+                      'flex-shrink-0 p-1.5 rounded-lg transition-colors disabled:opacity-50',
+                      inst.isSuspended
+                        ? 'text-green-500 hover:bg-green-500/10'
+                        : 'text-(--color-text-tertiary) hover:text-red-500 hover:bg-red-500/10',
+                    )}
+                  >
+                    {modBusy === inst.domain ? <Loader2 className="w-4 h-4 animate-spin" /> : inst.isSuspended ? <Check className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
+                  </button>
                 </div>
               )
             })}
+          </div>
+        )}
+      </div>
+
+      {/* Relays */}
+      <div>
+        <p className="text-xs font-semibold text-(--color-text-tertiary) uppercase tracking-wide mb-1 flex items-center gap-1.5">
+          <Rss className="w-3.5 h-3.5" /> Relay'ler ({relays.length})
+        </p>
+        <p className="text-[11px] text-(--color-text-tertiary) mb-3">
+          Relay'e abone olunca birçok sunucunun herkese açık gönderileri keşfet akışına düşer — kimseyi tek tek takip etmeden federasyon içeriğini zenginleştirir.
+        </p>
+        <div className="flex gap-2 mb-3">
+          <input
+            value={relayUrl}
+            onChange={(e) => setRelayUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') void addRelay() }}
+            placeholder="https://relay.example/inbox"
+            className="flex-1 text-sm px-3 py-2 rounded-lg border border-(--color-border) bg-(--color-background) focus:outline-none focus:border-(--color-coral)"
+          />
+          <Button size="sm" onClick={() => void addRelay()} disabled={relayBusy || !relayUrl.trim()} className="bg-(--color-coral) hover:bg-(--color-coral-hover) text-white border-0">
+            {relayBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+          </Button>
+        </div>
+        {relays.length === 0 ? (
+          <div className="rounded-xl border border-(--color-border) py-8 text-center text-xs text-(--color-text-tertiary)">
+            Henüz relay aboneliği yok.
+          </div>
+        ) : (
+          <div className="rounded-xl border border-(--color-border) overflow-hidden divide-y divide-(--color-border)">
+            {relays.map((r) => (
+              <div key={r.id} className="px-4 py-3 flex items-center gap-3 bg-(--color-background)">
+                <div className={cn(
+                  'w-2 h-2 rounded-full flex-shrink-0',
+                  r.status === 'accepted' ? 'bg-green-500' : r.status === 'pending' ? 'bg-amber-500' : 'bg-red-500',
+                )} title={r.status} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-(--color-text-primary) truncate">{r.inboxUrl}</p>
+                  <p className="text-[11px] text-(--color-text-tertiary)">
+                    {r.status === 'accepted' ? 'Bağlı' : r.status === 'pending' ? 'Onay bekleniyor' : 'Reddedildi'}
+                  </p>
+                </div>
+                <button onClick={() => void removeRelay(r.id)} title="Aboneliği kaldır" className="flex-shrink-0 p-1.5 rounded-lg text-(--color-text-tertiary) hover:text-red-500 hover:bg-red-500/10 transition-colors">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
           </div>
         )}
       </div>

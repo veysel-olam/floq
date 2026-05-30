@@ -453,12 +453,16 @@ export function PostComposer({ handle, displayName, avatarUrl, onPost, replyToId
       const ch = text[i]
       if (ch === ' ' || ch === '\n') { setAcContext(null); return }
       if (ch === '@' || ch === '#') {
-        if (i === 0 || text[i - 1] === ' ' || text[i - 1] === '\n') {
+        const atBoundary = i === 0 || text[i - 1] === ' ' || text[i - 1] === '\n'
+        if (atBoundary) {
           setAcContext({ type: ch === '@' ? 'mention' : 'hashtag', query: text.slice(i + 1, cursorPos), triggerIdx: i })
           setAcSelectedIdx(0)
-        } else {
-          setAcContext(null)
+          return
         }
+        // An internal '@' is the domain separator of a fediverse handle
+        // (@user@instance.tld) — don't cancel, keep scanning for the boundary '@'.
+        if (ch === '@') { i--; continue }
+        setAcContext(null)
         return
       }
       if (ch === ':') {

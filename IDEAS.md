@@ -4,6 +4,22 @@ Burası "şimdi yapma ama unutma" listesi. Öncelik sırası yok, tartışılara
 
 ---
 
+## Federasyon Zenginleştirme ✅ (2026-05-30 tamamlandı)
+| Özellik | Durum |
+|---|---|
+| Outbox backfill | Takip edince / boş uzak profil açılınca son ~20 gönderi `lib/ingest.ts` ile çekiliyor |
+| Actor refresh TTL | `fetchRemoteActor` 24s'de bir stale actor'ı yeniden çekip günceller (avatar/bio bayatlamaz) |
+| Uzak thread bağlam çözümleme | inbox Create + post detay: eksik uzak atalar recursive çekilip thread bağlanır |
+| Paste-to-resolve | Aramaya fediverse URL yapıştır → gönderi veya actor olarak çöz |
+| Relay aboneliği UI | Admin paneli FederationTab: relay ekle/kaldır (keşfet akışını zenginleştirir) |
+| Domain moderasyon UI | FederationTab'de sunucu başına askıya al/kaldır |
+| "Orijinalinde gör" | Uzak profil (Federe rozeti link) + uzak gönderi menüsü → kaynak sunucu |
+| Mention autocomplete (uzak) | Composer'da `@user@instance` çözülüp önerilir (içteki @ trigger fix) |
+
+İleride: oEmbed dış gönderi kartı, data-saver toggle, FASP keşif sağlayıcıları.
+
+---
+
 ## Eksik Özellikler (audit sonucu)
 
 ### Kesinlikle yok

@@ -29,6 +29,7 @@ export interface Actor {
   likesCount: number
   isLocal: boolean
   isLocked: boolean
+  profileUrl?: string | null
   location: string | null
   website: string | null
   profileFields?: Array<{ name: string; value: string; verifiedAt: string | null }> | null
@@ -85,6 +86,8 @@ export interface Poll {
 export interface Post {
   id: string
   apId: string
+  apUrl?: string | null
+  isLocal?: boolean
   content: string
   encryptedContent?: string | null
   encryptionIv?: string | null
@@ -500,6 +503,14 @@ export interface FederationInstance {
   actorsCount: number
   remoteFollowers: number
   remoteFollowing: number
+}
+
+export interface Relay {
+  id: string
+  inboxUrl: string
+  actorUrl: string
+  status: 'pending' | 'accepted' | 'rejected'
+  createdAt: string
 }
 
 export interface FederationHealth {
@@ -1191,6 +1202,18 @@ export const api = {
       apiFetch<{ ok: boolean }>(`/api/admin/users/${handle}/suspend`, { method: 'POST' }),
     unsuspend: (handle: string) =>
       apiFetch<{ ok: boolean }>(`/api/admin/users/${handle}/suspend`, { method: 'DELETE' }),
+    // Domain moderation
+    suspendInstance: (domain: string) =>
+      apiFetch<{ ok: boolean }>(`/api/admin/instances/${encodeURIComponent(domain)}/suspend`, { method: 'POST' }),
+    unsuspendInstance: (domain: string) =>
+      apiFetch<{ ok: boolean }>(`/api/admin/instances/${encodeURIComponent(domain)}/suspend`, { method: 'DELETE' }),
+    // Relays
+    relays: () =>
+      apiFetch<{ relays: Relay[] }>('/api/admin/relays'),
+    addRelay: (inboxUrl: string) =>
+      apiFetch<{ relay: Relay }>('/api/admin/relays', { method: 'POST', body: JSON.stringify({ inboxUrl }) }),
+    removeRelay: (id: string) =>
+      apiFetch<{ ok: boolean }>(`/api/admin/relays/${id}`, { method: 'DELETE' }),
   },
 
   communities: {
