@@ -124,16 +124,49 @@ Docker image'ları GitHub Container Registry üzerinden dağıtılır.
 | `E2E_EMAIL` | E2E test kullanıcısı email |
 | `E2E_PASSWORD` | E2E test kullanıcısı şifre |
 
-### Sunucuda
+### Domain & DNS
+
+Caddy iki domaini yönetir (otomatik Let's Encrypt TLS):
+
+| Kayıt | Tip | Değer |
+|---|---|---|
+| `flq.social` | A | `<sunucu_IP>` → web |
+| `api.flq.social` | A | `<sunucu_IP>` → api |
+| `www.flq.social` | CNAME | `flq.social` (opsiyonel) |
+
+Medya prod'da harici S3/Cloudflare R2'de tutulur (`S3_PUBLIC_URL`); medya subdomaini sunucuda değil R2 tarafında ayarlanır.
+
+### Sunucuda (ilk kurulum)
 
 ```bash
-# İlk kurulum
 mkdir -p /opt/floq && cd /opt/floq
-# docker-compose.prod.yml ve .env.prod'u sunucuya kopyala
+# docker-compose.prod.yml ve Caddyfile'ı buraya kopyala
 
-# Başlat
+# Ortam değişkenleri — dosya adı MUTLAKA .env olmalı (aşağıdaki uyarı)
+cp .env.prod.example .env && nano .env   # ACME_EMAIL, şifreler, S3, KLIPY_API_KEY...
+
+# Başlat — Caddy DNS doğruysa TLS sertifikalarını otomatik alır
 docker compose -f docker-compose.prod.yml up -d
 ```
+
+> ⚠️ **Env dosya adı:** Deploy `docker compose ... up`'ı `--env-file` olmadan çalıştırır,
+> yani Compose varsayılan **`.env`** dosyasını okur. Sunucuda dosyayı `.env.prod`
+> olarak bırakırsan değişkenler container'a geçmez — `.env` olarak kaydet.
+
+### İlk DB kurulumu
+
+`migrate()` baz şemayı kurar; sonraki şema değişiklikleri `drizzle-kit push` / direkt SQL
+ile yönetilir. Örn. composer taslak senkronu tablosu:
+
+```bash
+docker compose -f docker-compose.prod.yml exec postgres \
+  psql -U floq -d floq -c "CREATE TABLE IF NOT EXISTS composer_drafts (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), actor_id uuid NOT NULL REFERENCES actors(id) ON DELETE CASCADE, content text NOT NULL DEFAULT '', content_warning varchar(500), updated_at timestamp NOT NULL DEFAULT now()); CREATE UNIQUE INDEX IF NOT EXISTS composer_drafts_actor_unique ON composer_drafts(actor_id);"
+```
+
+### Sonraki deploy'lar
+
+`main`'e push → GitHub Actions image build + SSH ile `docker compose pull && up -d`.
+Sunucuya elle dokunmaya gerek yok (env değişikliği hariç).
 
 ---
 
