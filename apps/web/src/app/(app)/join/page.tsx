@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2, Users, AlertTriangle } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -10,7 +10,7 @@ import { toast } from 'sonner'
 // Invite page reads ?invite= from the URL — render dynamically, not statically prerendered
 export const dynamic = 'force-dynamic'
 
-export default function JoinPage() {
+function JoinPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const token = searchParams.get('invite')
@@ -82,5 +82,17 @@ export default function JoinPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function JoinPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-(--color-coral)" />
+      </div>
+    }>
+      <JoinPageInner />
+    </Suspense>
   )
 }
