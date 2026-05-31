@@ -7,8 +7,8 @@ import { posts, actors, likes, boosts, bookmarks, bookmarkCollections, closeFrie
 import { requireActor, getSession } from '../lib/session.js'
 import { env } from '../lib/env.js'
 import { notifyLike, notifyBoost, notifyReply, notifyThreadParticipants } from '../lib/notify.js'
-import { buildNote, buildQuestion, buildCreate, buildDelete, buildUpdateNote } from '../lib/activityPub.js'
-import { deliverToFollowers } from '../lib/federation.js'
+import { buildNote, buildQuestion, buildCreate, buildDelete, buildUpdateNote, buildEmojiReact, buildUndo } from '../lib/activityPub.js'
+import { deliverToFollowers, deliverToInbox } from '../lib/federation.js'
 import { crosspostToBluesky } from '../lib/bluesky.js'
 import { crosspostToNostr } from '../lib/nostr.js'
 import { resolveRemoteThread } from '../lib/ingest.js'
@@ -851,10 +851,20 @@ export async function postsRoutes(app: FastifyInstance) {
       })
       if (!post) return reply.code(404).send({ error: 'Not found' })
 
-      await db
+      const [insertedReaction] = await db
         .insert(reactions)
         .values({ actorId: ctx.actor.id, postId: post.id, emoji })
         .onConflictDoNothing()
+        .returning()
+
+      // Federate an EmojiReact to the remote author (only for a new reaction).
+      if (insertedReaction && !post.isLocal && post.apId) {
+        const author = await db.query.actors.findFirst({ where: eq(actors.id, post.authorId) })
+        if (author && !author.isLocal && author.inboxUrl) {
+          const react = buildEmojiReact(ctx.actor.handle, post.apId, insertedReaction.id, emoji)
+          void deliverToInbox(ctx.actor.handle, author.inboxUrl, react)
+        }
+      }
 
       return reply.code(204).send()
     },
@@ -882,15 +892,29 @@ export async function postsRoutes(app: FastifyInstance) {
       const ctx = await requireActor(req, reply)
       if (!ctx) return
 
-      await db
+      const emoji = decodeURIComponent(req.params.emoji)
+      const [removed] = await db
         .delete(reactions)
         .where(
           and(
             eq(reactions.actorId, ctx.actor.id),
             eq(reactions.postId, req.params.id),
-            eq(reactions.emoji, decodeURIComponent(req.params.emoji)),
+            eq(reactions.emoji, emoji),
           ),
         )
+        .returning()
+
+      // Federate an Undo(EmojiReact) to the remote author.
+      if (removed) {
+        const post = await db.query.posts.findFirst({ where: eq(posts.id, req.params.id) })
+        if (post && !post.isLocal && post.apId) {
+          const author = await db.query.actors.findFirst({ where: eq(actors.id, post.authorId) })
+          if (author && !author.isLocal && author.inboxUrl) {
+            const react = buildEmojiReact(ctx.actor.handle, post.apId, removed.id, emoji)
+            void deliverToInbox(ctx.actor.handle, author.inboxUrl, buildUndo(ctx.actor.handle, react))
+          }
+        }
+      }
 
       return reply.code(204).send()
     },

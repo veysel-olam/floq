@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { createHash, randomUUID } from 'node:crypto'
 import { eq, and, desc, lt, inArray } from 'drizzle-orm'
 import { db } from '../db/client.js'
-import { actors, posts, follows, apActivities, polls, pollOptions, pollVotes, customEmojis, postEdits, boosts, likes } from '../db/schema.js'
+import { actors, posts, follows, apActivities, polls, pollOptions, pollVotes, customEmojis, postEdits, boosts, likes, reactions } from '../db/schema.js'
 import { env } from '../lib/env.js'
 import {
   buildActor,
@@ -645,6 +645,19 @@ export async function activityPubRoutes(app: FastifyInstance) {
                 .where(eq(posts.id, post.id))
             }
           }
+        } else if (innerObj.type === 'EmojiReact') {
+          const inner = innerObj as { type?: string; object?: string | { id?: string }; content?: string }
+          const targetId = typeof inner.object === 'string' ? inner.object : inner.object?.id
+          const emoji = inner.content?.trim()
+          if (!targetId || !emoji) return
+          const post = await db.query.posts.findFirst({ where: eq(posts.apId, targetId), columns: { id: true } })
+          if (post) {
+            await db.delete(reactions).where(and(
+              eq(reactions.actorId, senderActor.id),
+              eq(reactions.postId, post.id),
+              eq(reactions.emoji, emoji),
+            ))
+          }
         }
         break
       }
@@ -923,6 +936,19 @@ export async function activityPubRoutes(app: FastifyInstance) {
             .where(eq(posts.id, post.id))
           void notifyLike(senderActor.id, post.id)
         }
+        break
+      }
+
+      // Misskey/Pleroma emoji reaction → reactions table.
+      case 'EmojiReact': {
+        const reactedId = typeof obj === 'string' ? obj : obj?.id
+        const emoji = (activity as { content?: string }).content?.trim()
+        if (!reactedId || !emoji || emoji.length > 16) return
+        const post = await db.query.posts.findFirst({ where: eq(posts.apId, reactedId), columns: { id: true } })
+        if (!post) return
+        await db.insert(reactions)
+          .values({ actorId: senderActor.id, postId: post.id, emoji })
+          .onConflictDoNothing()
         break
       }
 

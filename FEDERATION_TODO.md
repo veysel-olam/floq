@@ -22,7 +22,7 @@ uzak actor sayıları + refresh TTL · thread/yanıt çözümleme · boost timel
 
 ### Yüksek değer
 - [x] **Uzak Like kayıtları** — Gelen `Like` artık `likes` tablosuna kayıt ekliyor (idempotent) → uzak beğeniler "kim beğendi" listesinde görünüyor; `Undo→Like` kaydı silip sayacı düşürüyor. (2026-05-31)
-- [ ] **Reaksiyon (emoji) federasyonu** — Yerel reaksiyonlar var; `EmojiReact` (Misskey/Pleroma) gelen/giden federe edilmiyor.
+- [x] **Reaksiyon (emoji) federasyonu** — `buildEmojiReact` + giden EmojiReact/Undo (uzak gönderiye reaksiyon) + gelen `EmojiReact`/`Undo→EmojiReact` (reactions tablosuna). Misskey/Pleroma ile interop. (2026-05-31)
 - [ ] **Quote/alıntı federasyonu** — Quote post FEP'i (`quoteUrl` / FEP-e232) tam değil; uzak alıntılar düzgün bağlanmıyor olabilir.
 - [ ] **Uzak medya proxy/cache** — Uzak görseller origin sunucudan yükleniyor (gizlilik/kırık-link riski). `proxyMediaUrl` benzeri bir önbellek + R2/MinIO'ya kopyalama.
 
