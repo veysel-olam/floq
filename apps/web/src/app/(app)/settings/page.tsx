@@ -45,6 +45,7 @@ import {
   GitBranch,
   FileText,
   Lock,
+  Unlock,
   ShieldCheck,
   RefreshCw,
   Clock,
@@ -1628,10 +1629,30 @@ function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'
           ) : (
             <div className="space-y-2">
               <p className="text-xs text-(--color-text-tertiary)">
-                Gönderilerini Bluesky'ye de yaymak için bağlan. Şifren değil, bir{' '}
-                <a href="https://bsky.app/settings/app-passwords" target="_blank" rel="noopener noreferrer" className="text-(--color-coral) hover:underline">App Password</a>{' '}
-                kullan (Bluesky → Ayarlar → App Passwords).
+                Gönderilerini Bluesky'ye de yaymak için bağlan.
               </p>
+
+              <details className="group rounded-lg border border-(--color-border) bg-(--color-background-secondary)/50">
+                <summary className="flex items-center gap-1.5 cursor-pointer list-none px-3 py-2 text-xs font-medium text-(--color-text-secondary)">
+                  <ChevronRight className="w-3.5 h-3.5 transition-transform group-open:rotate-90" />
+                  Nasıl bağlanır?
+                </summary>
+                <div className="px-3 pb-3 pt-1 space-y-2 text-xs text-(--color-text-tertiary) leading-relaxed">
+                  <ol className="list-decimal list-inside space-y-1">
+                    <li>Bluesky → <span className="font-medium">Settings → App Passwords</span> → <span className="font-medium">Add App Password</span></li>
+                    <li>Bir isim ver, oluştur, çıkan <span className="font-mono">xxxx-xxxx-xxxx-xxxx</span> kodu kopyala</li>
+                    <li>Handle'ını (<span className="font-mono">kullanici.bsky.social</span>) ve bu kodu aşağıya yapıştır</li>
+                  </ol>
+                  <p className="flex items-start gap-1.5 text-amber-600 dark:text-amber-400">
+                    <Unlock className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                    <span>Gerçek şifreni <strong>değil</strong>, App Password kullan. Cross-post edilen gönderiler Bluesky'de <strong>herkese açık</strong> görünür.</span>
+                  </p>
+                  <a href="https://bsky.app/settings/app-passwords" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-(--color-coral) hover:underline">
+                    App Passwords sayfasını aç <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </details>
+
               <Input value={bskyId} onChange={(e) => setBskyId(e.target.value)} placeholder="kullanici.bsky.social" className="font-mono text-sm" />
               <Input value={bskyPwd} onChange={(e) => setBskyPwd(e.target.value)} type="password" placeholder="xxxx-xxxx-xxxx-xxxx" className="font-mono text-sm" />
               {bskyError && <p className="text-xs text-red-500">{bskyError}</p>}
