@@ -160,7 +160,7 @@ function SkeletonCard() {
 const SUGGESTED_COMMUNITIES = [
   '@technology@lemmy.world',
   '@asklemmy@lemmy.ml',
-  '@linux@lemmy.ml',
+  '@linux@programming.dev',
   '@worldnews@lemmy.ml',
   '@programming@programming.dev',
   '@selfhosted@lemmy.world',
