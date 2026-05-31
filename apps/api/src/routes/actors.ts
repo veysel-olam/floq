@@ -1,13 +1,41 @@
 import type { FastifyInstance } from 'fastify'
 import { eq, and, desc, ne, notInArray, sql, lt, inArray, or, isNull, isNotNull } from 'drizzle-orm'
 import { db } from '../db/client.js'
-import { actors, posts, follows, likes, boosts, closeFriends, mediaAttachments, followEvents, blocks, mutes, userCommunityBadges, apGroups } from '../db/schema.js'
+import { actors, posts, follows, likes, boosts, closeFriends, mediaAttachments, followEvents, blocks, mutes, userCommunityBadges, apGroups, apActivities } from '../db/schema.js'
 import { getSession, requireActor } from '../lib/session.js'
 import { notifyFollow, notifyFollowRequest } from '../lib/notify.js'
 import { buildFollow, buildUndo, buildAccept, actorUrl } from '../lib/activityPub.js'
 import { deliverToInbox } from '../lib/federation.js'
 import { backfillOutbox } from '../lib/ingest.js'
 import { enrichPosts } from '../lib/enrichPosts.js'
+
+// Build an Accept for a remote follow request. Must echo the ORIGINAL Follow we
+// received (stored in ap_activities) so the remote can match it to its pending
+// request — a reconstructed Follow has the wrong id/actor and the follow stays
+// stuck 'pending' on their side (so our posts never reach the follower).
+async function buildRemoteFollowAccept(
+  localHandle: string,
+  follower: typeof actors.$inferSelect,
+  fallbackFollowId: string,
+) {
+  const ourActorUrl = actorUrl(localHandle)
+  const original = await db.query.apActivities.findFirst({
+    where: and(
+      eq(apActivities.direction, 'inbound'),
+      eq(apActivities.type, 'Follow'),
+      eq(apActivities.actorApId, follower.apId),
+      eq(apActivities.objectApId, ourActorUrl),
+    ),
+    orderBy: [desc(apActivities.createdAt)],
+  })
+  const followObject = (original?.rawJson as Record<string, unknown> | undefined) ?? {
+    type: 'Follow',
+    actor: follower.apId,
+    object: ourActorUrl,
+    id: `${follower.apId}#follow-${fallbackFollowId}`,
+  }
+  return buildAccept(localHandle, followObject as unknown as Parameters<typeof buildAccept>[1])
+}
 
 export async function actorsRoutes(app: FastifyInstance) {
   // GET /api/actors/:handle — profil
@@ -521,8 +549,7 @@ export async function actorsRoutes(app: FastifyInstance) {
 
     // Federate Accept to remote follower if needed
     if (!follow.follower.isLocal) {
-      const followActivity = buildFollow(follow.follower.handle, actorUrl(ctx.actor.handle), follow.id)
-      const accept = buildAccept(ctx.actor.handle, followActivity)
+      const accept = await buildRemoteFollowAccept(ctx.actor.handle, follow.follower, follow.id)
       void deliverToInbox(ctx.actor.handle, follow.follower.inboxUrl, accept)
     }
 
@@ -566,8 +593,7 @@ export async function actorsRoutes(app: FastifyInstance) {
     ])
 
     if (!follow.follower.isLocal) {
-      const followActivity = buildFollow(follow.follower.handle, actorUrl(ctx.actor.handle), follow.id)
-      const accept = buildAccept(ctx.actor.handle, followActivity)
+      const accept = await buildRemoteFollowAccept(ctx.actor.handle, follow.follower, follow.id)
       void deliverToInbox(ctx.actor.handle, follow.follower.inboxUrl, accept)
     }
 
