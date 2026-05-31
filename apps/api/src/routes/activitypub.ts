@@ -821,6 +821,20 @@ export async function activityPubRoutes(app: FastifyInstance) {
         }
         const recipientId = dmRecipient?.id
 
+        // Quote (FEP-e232): resolve the quoted note (fetch if unknown) and link it.
+        let quotedPostId: string | undefined
+        const nq = note as { quoteUri?: string; quoteUrl?: string; _misskey_quote?: string }
+        const quoteRef = nq.quoteUri ?? nq.quoteUrl ?? nq._misskey_quote
+          ?? (note.tag ?? []).find((t) => t.type === 'Link' && typeof t.href === 'string')?.href
+        if (quoteRef && typeof quoteRef === 'string') {
+          let quoted = await db.query.posts.findFirst({ where: eq(posts.apId, quoteRef), columns: { id: true } })
+          if (!quoted) {
+            const qid = await ingestRemoteNote(quoteRef)
+            if (qid) quoted = { id: qid }
+          }
+          if (quoted) quotedPostId = quoted.id
+        }
+
         const [created] = await db.insert(posts).values({
           apId: noteId,
           apUrl: note.url ?? noteId,
@@ -834,10 +848,17 @@ export async function activityPubRoutes(app: FastifyInstance) {
           replyToId: replyToId ?? null,
           rootId: rootId ?? null,
           recipientId: recipientId ?? null,
+          quotedPostId: quotedPostId ?? null,
           isLocal: false,
           tags: remoteTags,
           createdAt: note.published ? new Date(note.published) : new Date(),
         }).onConflictDoNothing().returning()
+
+        if (created && quotedPostId) {
+          await db.update(posts)
+            .set({ quotesCount: sql`${posts.quotesCount} + 1` })
+            .where(eq(posts.id, quotedPostId))
+        }
 
         if (created && replyToId) {
           await db.update(posts)

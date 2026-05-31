@@ -59,7 +59,11 @@ export interface APNote {
   sensitive: boolean
   summary?: string
   inReplyTo?: string
-  tag?: Array<{ type: 'Hashtag' | 'Mention' | 'Emoji'; href?: string; name: string }>
+  tag?: Array<{ type: 'Hashtag' | 'Mention' | 'Emoji' | 'Link'; href?: string; name?: string; mediaType?: string; rel?: string }>
+  // Quote (FEP-e232 + Misskey/Mastodon de-facto fields — all point to the quoted AP id)
+  quoteUri?: string
+  quoteUrl?: string
+  _misskey_quote?: string
 }
 
 export interface APQuestion {
@@ -208,6 +212,7 @@ export function buildNote(post: {
   tags?: string[] | null
   author: { handle: string }
   customEmojis?: CustomEmojiTag[]
+  quotedApId?: string | null
 }): APNote {
   const authorId = actorUrl(post.author.handle)
   const noteId = postUrl(post.author.handle, post.id)
@@ -261,6 +266,21 @@ export function buildNote(post: {
       })
     }
   }
+  // Quote (FEP-e232): expose the quoted AP id via the de-facto fields + a Link
+  // tag so Misskey/Mastodon/Pleroma all recognize the quote.
+  if (post.quotedApId) {
+    note.quoteUri = post.quotedApId
+    note.quoteUrl = post.quotedApId
+    note._misskey_quote = post.quotedApId
+    tagArr.push({
+      type: 'Link',
+      mediaType: 'application/activity+json',
+      href: post.quotedApId,
+      rel: 'https://misskey-hub.net/ns#_misskey_quote',
+      name: `RE: ${post.quotedApId}`,
+    })
+  }
+
   if (tagArr.length) note.tag = tagArr
 
   return note

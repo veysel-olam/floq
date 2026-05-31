@@ -275,6 +275,9 @@ export async function postsRoutes(app: FastifyInstance) {
         apInReplyTo: replyToId
           ? (await db.query.posts.findFirst({ where: eq(posts.id, replyToId) }))?.apId ?? null
           : null,
+        quotedApId: quotedPostId
+          ? (await db.query.posts.findFirst({ where: eq(posts.id, quotedPostId), columns: { apId: true } }))?.apId ?? null
+          : null,
         author: actor,
         customEmojis: await resolveLocalEmojis(content),
       }
