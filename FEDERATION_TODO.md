@@ -51,6 +51,15 @@ uzak actor sayıları + refresh TTL · thread/yanıt çözümleme · boost timel
 
 ---
 
+## 🌉 Köprüler (Bluesky / Nostr / AT Protocol)
+
+- [x] **Bluesky cross-post** — `crosspostToBluesky` ana web post akışına bağlandı (önceden yalnızca Mastodon-API yolundaydı). Bağlı + `crosspostEnabled` ise orijinal public/unlisted gönderiler Bluesky'ye gidiyor. (2026-05-31)
+- [ ] **Bluesky inbound** — Bluesky'den floq'a içerik akışı? Şu an AT Protocol köprüsü (`atprotocol.ts`: `did.json` + XRPC) floq içeriğini Bluesky okuyucularına **okutuyor**; Bluesky→floq (yanıt/beğeni geri akışı) doğrulanmadı.
+- [ ] **Nostr cross-post YOK** — `nostr.ts` yalnızca NIP-05 kimlik (`/.well-known/nostr.json`). Gönderiyi Nostr relay'lerine yayınlayan `crosspostToNostr` yok → eklenebilir (NIP-01 event imzalama + relay publish).
+- [ ] **Bluesky cross-post medya** — Şu an yalnızca metin (300 char) + hashtag facet; görsel/medya Bluesky'ye yüklenmiyor.
+- [ ] **Köprü cross-post job'a alınmalı** — Şu an `void crosspostToBluesky(...)` fire-and-forget; başarısızlıkta retry yok. BullMQ job'a taşınmalı (federation gibi).
+- [ ] **Cross-post geri-besleme döngüsü koruması** — Bluesky'den okunan içerik tekrar Bluesky'ye yazılmamalı (loop guard).
+
 ## 🧪 Test & Gözlemlenebilirlik
 
 - [ ] **AP conformance testleri CI'da** — `apps/e2e` advisory (continue-on-error); gerçek bir test Mastodon/Lemmy'ye karşı otomatik suite yok.
