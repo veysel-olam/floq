@@ -9,6 +9,7 @@ import { env } from '../lib/env.js'
 import { notifyLike, notifyBoost, notifyReply, notifyThreadParticipants } from '../lib/notify.js'
 import { buildNote, buildQuestion, buildCreate, buildDelete, buildUpdateNote } from '../lib/activityPub.js'
 import { deliverToFollowers } from '../lib/federation.js'
+import { crosspostToBluesky } from '../lib/bluesky.js'
 import { resolveRemoteThread } from '../lib/ingest.js'
 import { publish } from '../lib/pubsub.js'
 import { enrichPosts } from '../lib/enrichPosts.js'
@@ -294,6 +295,12 @@ export async function postsRoutes(app: FastifyInstance) {
       // followers-only: send to each actor's personal inbox so remote servers can verify
       const perActorInbox = vis === 'followers'
       void deliverToFollowers(actor.handle, actor.id, buildCreate(apObject, actor.handle), { perActorInbox })
+
+      // Cross-post original public/unlisted posts to a connected Bluesky bridge.
+      // No-ops if the user hasn't connected Bluesky or disabled crossposting.
+      if ((vis === 'public' || vis === 'unlisted') && !replyToId && actor.userId) {
+        void crosspostToBluesky(actor.userId, content, post!.tags ?? []).catch(() => {})
+      }
     }
 
     const [enriched] = await enrichPosts([{ ...post!, apId }], ctx.actor.id)
