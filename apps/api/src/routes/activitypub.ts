@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { createHash, randomUUID } from 'node:crypto'
-import { eq, and, desc, lt } from 'drizzle-orm'
+import { eq, and, desc, lt, inArray } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { actors, posts, follows, apActivities, polls, pollOptions, pollVotes, customEmojis, postEdits, boosts } from '../db/schema.js'
 import { env } from '../lib/env.js'
@@ -785,6 +785,20 @@ export async function activityPubRoutes(app: FastifyInstance) {
         }
 
         const visibility = resolveVisibility(note.to ?? [], note.cc ?? [])
+
+        // Direct message: link it to the local recipient so it shows in the DM
+        // thread (DMs are visibility='direct' posts keyed by recipientId).
+        let recipientId: string | undefined
+        if (visibility === 'direct') {
+          const addressed = [...(note.to ?? []), ...(note.cc ?? [])]
+          if (addressed.length > 0) {
+            const localRecipient = await db.query.actors.findFirst({
+              where: and(inArray(actors.apId, addressed), eq(actors.isLocal, true)),
+            })
+            recipientId = localRecipient?.id
+          }
+        }
+
         const [created] = await db.insert(posts).values({
           apId: noteId,
           apUrl: note.url ?? noteId,
@@ -797,6 +811,7 @@ export async function activityPubRoutes(app: FastifyInstance) {
           apInReplyTo: note.inReplyTo ?? null,
           replyToId: replyToId ?? null,
           rootId: rootId ?? null,
+          recipientId: recipientId ?? null,
           isLocal: false,
           tags: remoteTags,
           createdAt: note.published ? new Date(note.published) : new Date(),

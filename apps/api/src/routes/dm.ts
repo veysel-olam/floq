@@ -281,6 +281,22 @@ export async function dmRoutes(app: FastifyInstance) {
         }
       }
 
+      // Federate to a remote recipient (e.g. a Mastodon user). Plain text only —
+      // remote DMs can't be E2E-encrypted, so only deliver when we have plaintext.
+      if (!partner.isLocal && partner.inboxUrl && plainContent) {
+        const { buildDirectNote, buildCreate } = await import('../lib/activityPub.js')
+        const { deliverToInbox } = await import('../lib/federation.js')
+        const note = buildDirectNote({
+          postId: post!.id,
+          content: plainContent,
+          authorHandle: actor.handle,
+          recipientApId: partner.apId,
+          recipientHandle: partner.handle,
+          createdAt: post!.createdAt,
+        })
+        void deliverToInbox(actor.handle, partner.inboxUrl, buildCreate(note, actor.handle))
+      }
+
       const [enriched] = await (await import('../lib/enrichPosts.js')).enrichPosts([post!], actor.id)
       const response = { ...enriched, apId }
 

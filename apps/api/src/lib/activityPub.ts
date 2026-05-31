@@ -265,6 +265,33 @@ export function buildNote(post: {
   return note
 }
 
+// Direct message as an AP Note: addressed only to the recipient (no Public/
+// followers), with a Mention tag. Content is plain text — cross-server DMs can't
+// be E2E-encrypted (the remote, e.g. Mastodon, can't decrypt), so this is NOT
+// private the way local floq↔floq DMs are.
+export function buildDirectNote(opts: {
+  postId: string
+  content: string
+  authorHandle: string
+  recipientApId: string
+  recipientHandle: string
+  createdAt: Date
+}): APNote {
+  return {
+    '@context': AP_CONTEXT,
+    id: postUrl(opts.authorHandle, opts.postId),
+    type: 'Note',
+    attributedTo: actorUrl(opts.authorHandle),
+    content: opts.content,
+    url: postUrl(opts.authorHandle, opts.postId),
+    to: [opts.recipientApId],
+    cc: [],
+    published: opts.createdAt.toISOString(),
+    sensitive: false,
+    tag: [{ type: 'Mention', href: opts.recipientApId, name: `@${opts.recipientHandle}` }],
+  }
+}
+
 export function buildQuestion(post: {
   id: string
   content: string
