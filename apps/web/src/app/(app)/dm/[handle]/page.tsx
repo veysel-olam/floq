@@ -6,7 +6,7 @@ import Link from 'next/link'
 import {
   ArrowLeft, Loader2, Send, Lock, ShieldCheck, Mic, MicOff, Play, Pause,
   Square, Trash2, Users, ImagePlus, ExternalLink, Pencil, Check, X,
-  CornerUpLeft, Search, BellOff, Bell, Archive, Smile, CheckCheck, ChevronDown,
+  CornerUpLeft, Search, BellOff, Bell, Archive, Smile, CheckCheck, ChevronDown, Unlock,
 } from 'lucide-react'
 import { useSession } from '@/lib/auth-client'
 import { api, type Post, type Actor, type MediaAttachment, type GifResult } from '@/lib/api'
@@ -1198,6 +1198,13 @@ export default function DmThreadPage({ params }: { params: Promise<{ handle: str
               <button onClick={() => setReplyingTo(null)} className="p-1 rounded-full hover:bg-(--color-background-secondary) text-(--color-text-tertiary) flex-shrink-0">
                 <X className="w-3.5 h-3.5" />
               </button>
+            </div>
+          )}
+
+          {partner && !partner.isLocal && (
+            <div className="mx-3 mb-1.5 flex items-center gap-1.5 rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+              <Unlock className="w-3 h-3 flex-shrink-0" />
+              <span>Bu sohbet <strong>şifresiz</strong> — uzak sunucudaki ({partner.handle.split('@')[1]}) bir kullanıcıya açık metin olarak iletilir.</span>
             </div>
           )}
 

@@ -24,6 +24,8 @@ import { ingestRemoteNote, attachRemoteMediaAndPreview } from '../lib/ingest.js'
 import { verifyObjectProof, issueVerifiableCredential } from '../lib/objectIntegrity.js'
 import { didKeyFromMultibase } from '../lib/keys.js'
 import { notifyFollow, notifyLike, notifyBoost, notifyReply } from '../lib/notify.js'
+import { publish } from '../lib/pubsub.js'
+import { enrichPosts } from '../lib/enrichPosts.js'
 import { sql } from 'drizzle-orm'
 
 // Verify HTTP Signature on AP GET requests (Authorized Fetch).
@@ -788,16 +790,18 @@ export async function activityPubRoutes(app: FastifyInstance) {
 
         // Direct message: link it to the local recipient so it shows in the DM
         // thread (DMs are visibility='direct' posts keyed by recipientId).
-        let recipientId: string | undefined
+        let dmRecipient: { id: string; userId: string | null } | undefined
         if (visibility === 'direct') {
           const addressed = [...(note.to ?? []), ...(note.cc ?? [])]
           if (addressed.length > 0) {
-            const localRecipient = await db.query.actors.findFirst({
+            const r = await db.query.actors.findFirst({
               where: and(inArray(actors.apId, addressed), eq(actors.isLocal, true)),
+              columns: { id: true, userId: true },
             })
-            recipientId = localRecipient?.id
+            if (r) dmRecipient = r
           }
         }
+        const recipientId = dmRecipient?.id
 
         const [created] = await db.insert(posts).values({
           apId: noteId,
@@ -830,6 +834,14 @@ export async function activityPubRoutes(app: FastifyInstance) {
         if (created) {
           void attachRemoteMediaAndPreview(created.id, note as { attachment?: { type?: string; mediaType?: string; url?: string; name?: string; width?: number; height?: number; blurhash?: string }[]; content?: string | null })
             .catch(() => {})
+        }
+
+        // Live push for an incoming federated DM, mirroring local DM delivery.
+        if (created && dmRecipient?.userId) {
+          void (async () => {
+            const [enrichedDm] = await enrichPosts([created], dmRecipient!.id)
+            publish(dmRecipient!.userId!, { event: 'dm', payload: { from: senderActor.handle, post: enrichedDm } })
+          })().catch(() => {})
         }
 
         // If this is a Question, create the local poll record
