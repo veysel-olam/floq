@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { createHash, randomUUID } from 'node:crypto'
 import { eq, and, desc, lt, inArray } from 'drizzle-orm'
 import { db } from '../db/client.js'
-import { actors, posts, follows, apActivities, polls, pollOptions, pollVotes, customEmojis, postEdits, boosts } from '../db/schema.js'
+import { actors, posts, follows, apActivities, polls, pollOptions, pollVotes, customEmojis, postEdits, boosts, likes } from '../db/schema.js'
 import { env } from '../lib/env.js'
 import {
   buildActor,
@@ -620,9 +620,14 @@ export async function activityPubRoutes(app: FastifyInstance) {
           if (!targetId) return
           const post = await db.query.posts.findFirst({ where: eq(posts.apId, targetId) })
           if (post) {
-            await db.update(posts)
-              .set({ likesCount: sql`GREATEST(${posts.likesCount} - 1, 0)` })
-              .where(eq(posts.id, post.id))
+            const removed = await db.delete(likes)
+              .where(and(eq(likes.actorId, senderActor.id), eq(likes.postId, post.id)))
+              .returning()
+            if (removed.length > 0) {
+              await db.update(posts)
+                .set({ likesCount: sql`GREATEST(${posts.likesCount} - 1, 0)` })
+                .where(eq(posts.id, post.id))
+            }
           }
         } else if (innerObj.type === 'Announce') {
           const inner = innerObj as { type?: string; object?: string | { id?: string } }
@@ -906,12 +911,18 @@ export async function activityPubRoutes(app: FastifyInstance) {
         const post = await db.query.posts.findFirst({ where: eq(posts.apId, likedId) })
         if (!post) return
 
-        // Idempotent: just bump count if not already liked (no likes table entry for remote)
-        await db.update(posts)
-          .set({ likesCount: sql`${posts.likesCount} + 1` })
-          .where(eq(posts.id, post.id))
-
-        void notifyLike(senderActor.id, post.id)
+        // Record the like so it shows in "who liked" (timeline/likers list), then
+        // bump the count + notify only for a new like (idempotent on re-delivery).
+        const [insertedLike] = await db.insert(likes)
+          .values({ actorId: senderActor.id, postId: post.id })
+          .onConflictDoNothing()
+          .returning()
+        if (insertedLike) {
+          await db.update(posts)
+            .set({ likesCount: sql`${posts.likesCount} + 1` })
+            .where(eq(posts.id, post.id))
+          void notifyLike(senderActor.id, post.id)
+        }
         break
       }
 

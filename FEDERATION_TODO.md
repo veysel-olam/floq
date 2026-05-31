@@ -21,8 +21,7 @@ uzak actor sayıları + refresh TTL · thread/yanıt çözümleme · boost timel
 ## 🔶 Eksik / Zayıf — Özellik tarafı
 
 ### Yüksek değer
-- [ ] **Uzak Like kayıtları** — Gelen `Like` yalnızca sayacı artırıyor, `likes` tablosuna kayıt eklemiyor → uzak gönderide "kim beğendi" listesi eksik. (krş. boost fix: Announce artık `boosts` tablosuna yazıyor — Like de aynı olmalı)
-  - Yer: `apps/api/src/routes/activitypub.ts` → `case 'Like'` + `Undo→Like`
+- [x] **Uzak Like kayıtları** — Gelen `Like` artık `likes` tablosuna kayıt ekliyor (idempotent) → uzak beğeniler "kim beğendi" listesinde görünüyor; `Undo→Like` kaydı silip sayacı düşürüyor. (2026-05-31)
 - [ ] **Reaksiyon (emoji) federasyonu** — Yerel reaksiyonlar var; `EmojiReact` (Misskey/Pleroma) gelen/giden federe edilmiyor.
 - [ ] **Quote/alıntı federasyonu** — Quote post FEP'i (`quoteUrl` / FEP-e232) tam değil; uzak alıntılar düzgün bağlanmıyor olabilir.
 - [ ] **Uzak medya proxy/cache** — Uzak görseller origin sunucudan yükleniyor (gizlilik/kırık-link riski). `proxyMediaUrl` benzeri bir önbellek + R2/MinIO'ya kopyalama.
