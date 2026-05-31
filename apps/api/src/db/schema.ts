@@ -278,6 +278,7 @@ export const actors = pgTable(
     // Nostr identity (NIP-05 bridge)
     nostrPublicKey: varchar('nostr_public_key', { length: 64 }),  // hex secp256k1 pubkey
     nostrPrivateKeyEncrypted: text('nostr_private_key_encrypted'), // encrypted hex seckey
+    nostrCrosspostEnabled: boolean('nostr_crosspost_enabled').notNull().default(false),
 
     // Flags
     isLocal: boolean('is_local').default(false).notNull(),

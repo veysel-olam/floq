@@ -869,6 +869,19 @@ export const api = {
       apiFetch<void>('/api/bluesky/connection', { method: 'PATCH', body: JSON.stringify(body) }),
     disconnect: () => apiFetch<void>('/api/bluesky/connection', { method: 'DELETE' }),
   },
+  nostr: {
+    identity: () =>
+      apiFetch<{ enabled: boolean; pubkey?: string; npub?: string; identifier?: string; crosspost_enabled?: boolean }>(
+        '/api/nostr/identity',
+      ),
+    enable: () =>
+      apiFetch<{ enabled: boolean; pubkey: string; npub: string; identifier: string }>('/api/nostr/identity', {
+        method: 'POST',
+      }),
+    setCrosspost: (enabled: boolean) =>
+      apiFetch<{ crosspost_enabled: boolean }>('/api/nostr/crosspost', { method: 'PATCH', body: JSON.stringify({ enabled }) }),
+    disconnect: () => apiFetch<{ enabled: boolean }>('/api/nostr/identity', { method: 'DELETE' }),
+  },
   media: {
     upload: async (file: File): Promise<MediaAttachment> => {
       const form = new FormData()

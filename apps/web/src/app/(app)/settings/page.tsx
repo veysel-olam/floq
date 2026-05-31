@@ -1187,6 +1187,9 @@ function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'
   const [bskyPwd, setBskyPwd] = useState('')
   const [bskyConnecting, setBskyConnecting] = useState(false)
   const [bskyError, setBskyError] = useState<string | null>(null)
+  // Nostr identity + crosspost
+  const [nostr, setNostr] = useState<{ enabled: boolean; npub?: string; identifier?: string; crosspost_enabled?: boolean } | null>(null)
+  const [nostrBusy, setNostrBusy] = useState(false)
 
   // Domain handle
   const [customHandle, setCustomHandle] = useState('')
@@ -1219,6 +1222,20 @@ function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'
   }, [handle, session])
 
   useEffect(() => { api.bluesky.connection().then(setBskyConn).catch(() => {}) }, [])
+  useEffect(() => { api.nostr.identity().then(setNostr).catch(() => {}) }, [])
+
+  async function enableNostr() {
+    setNostrBusy(true)
+    try { setNostr(await api.nostr.enable()) } catch {} finally { setNostrBusy(false) }
+  }
+  async function disconnectNostr() {
+    await api.nostr.disconnect().catch(() => {})
+    setNostr({ enabled: false })
+  }
+  async function toggleNostrCrosspost(v: boolean) {
+    setNostr((n) => n ? { ...n, crosspost_enabled: v } : n)
+    await api.nostr.setCrosspost(v).catch(() => {})
+  }
 
   async function connectBsky() {
     if (!bskyId.trim() || !bskyPwd.trim()) return
@@ -1658,6 +1675,55 @@ function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'
               {bskyError && <p className="text-xs text-red-500">{bskyError}</p>}
               <Button onClick={() => void connectBsky()} disabled={bskyConnecting || !bskyId.trim() || !bskyPwd.trim()} variant="outline">
                 {bskyConnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Bluesky'ye bağlan"}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Nostr köprüsü */}
+        <div className="border-t border-(--color-border) pt-5 space-y-2">
+          <p className="text-xs font-medium text-(--color-text-secondary)">Nostr</p>
+          {nostr?.enabled ? (
+            <div className="space-y-2.5">
+              <p className="text-xs text-(--color-text-tertiary)">
+                NIP-05: <span className="font-mono text-(--color-text-secondary)">{nostr.identifier}</span>
+              </p>
+              <p className="text-xs text-(--color-text-tertiary) break-all">
+                <span className="font-mono">{nostr.npub}</span>
+              </p>
+              <label className="flex items-center gap-2 text-sm text-(--color-text-primary) cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={nostr.crosspost_enabled ?? false}
+                  onChange={(e) => void toggleNostrCrosspost(e.target.checked)}
+                  className="accent-(--color-coral)"
+                />
+                Yeni public gönderilerimi Nostr relay'lerine de yay
+              </label>
+              <button onClick={() => void disconnectNostr()} className="text-xs text-(--color-text-tertiary) hover:text-red-500 transition-colors">
+                Nostr kimliğini kaldır
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-(--color-text-tertiary)">
+                Nostr kimliği oluştur — floq, NIP-05 doğrulaman olur ve gönderilerini Nostr relay'lerine yayabilirsin.
+              </p>
+              <details className="group rounded-lg border border-(--color-border) bg-(--color-background-secondary)/50">
+                <summary className="flex items-center gap-1.5 cursor-pointer list-none px-3 py-2 text-xs font-medium text-(--color-text-secondary)">
+                  <ChevronRight className="w-3.5 h-3.5 transition-transform group-open:rotate-90" />
+                  Nostr nedir?
+                </summary>
+                <div className="px-3 pb-3 pt-1 space-y-2 text-xs text-(--color-text-tertiary) leading-relaxed">
+                  <p>Nostr, sunucudan bağımsız bir sosyal protokol. floq senin için bir <strong>anahtar çifti</strong> üretir; <span className="font-mono">npub</span> herkese açık kimliğindir.</p>
+                  <p className="flex items-start gap-1.5 text-amber-600 dark:text-amber-400">
+                    <Unlock className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                    <span>Özel anahtar floq'ta <strong>şifreli</strong> saklanır. Nostr'a yayılan gönderiler <strong>herkese açıktır</strong>.</span>
+                  </p>
+                </div>
+              </details>
+              <Button onClick={() => void enableNostr()} disabled={nostrBusy} variant="outline">
+                {nostrBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Nostr kimliği oluştur'}
               </Button>
             </div>
           )}

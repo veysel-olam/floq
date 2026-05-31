@@ -1,25 +1,10 @@
 import type { FastifyInstance } from 'fastify'
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { actors } from '../db/schema.js'
 import { requireMastodonUser } from '../lib/mastodonAuth.js'
-import { generateNostrKeypair, toNpub } from '../lib/nostr.js'
+import { generateNostrKeypair, toNpub, encryptNostrKey } from '../lib/nostr.js'
 import { env } from '../lib/env.js'
-
-export function encryptNostrKey(hex: string): string {
-  const key = Buffer.from(env.ENCRYPTION_KEY, 'hex')
-  const iv = randomBytes(16)
-  const cipher = createCipheriv('aes-256-cbc', key, iv)
-  return Buffer.concat([iv, cipher.update(hex, 'utf8'), cipher.final()]).toString('base64')
-}
-
-export function decryptNostrKey(encrypted: string): string {
-  const key = Buffer.from(env.ENCRYPTION_KEY, 'hex')
-  const data = Buffer.from(encrypted, 'base64')
-  const decipher = createDecipheriv('aes-256-cbc', key, data.subarray(0, 16))
-  return Buffer.concat([decipher.update(data.subarray(16)), decipher.final()]).toString('utf8')
-}
 
 export async function nostrRoutes(app: FastifyInstance) {
   // ── NIP-05: /.well-known/nostr.json?name=user ─────────────────────────────
@@ -77,7 +62,19 @@ export async function nostrRoutes(app: FastifyInstance) {
       pubkey: ctx.actor.nostrPublicKey,
       npub: toNpub(ctx.actor.nostrPublicKey),
       identifier: `${ctx.actor.handle.split('@')[0]}@${env.APP_DOMAIN}`,
+      crosspost_enabled: ctx.actor.nostrCrosspostEnabled,
     })
+  })
+
+  // ── PATCH /api/nostr/crosspost — toggle auto-crossposting to Nostr ─────────
+  app.patch('/api/nostr/crosspost', async (req, reply) => {
+    const ctx = await requireMastodonUser(req, reply)
+    if (!ctx) return
+    const enabled = !!(req.body as { enabled?: boolean })?.enabled
+    await db.update(actors)
+      .set({ nostrCrosspostEnabled: enabled })
+      .where(eq(actors.id, ctx.actor.id))
+    return reply.send({ crosspost_enabled: enabled })
   })
 
   // ── POST /api/nostr/identity — generate or regenerate Nostr keypair ───────

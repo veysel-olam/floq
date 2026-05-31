@@ -1,7 +1,23 @@
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 import { generateSecretKey, getPublicKey, finalizeEvent, nip19 } from 'nostr-tools'
 import { SimplePool } from 'nostr-tools/pool'
-import { decryptPrivateKey } from './keys.js'
 import { env } from './env.js'
+
+// Nostr secret-key crypto (AES-256-CBC, iv prepended, base64). Single source so
+// encrypt/decrypt always match — the secret key is stored as encrypted hex.
+export function encryptNostrKey(hex: string): string {
+  const key = Buffer.from(env.ENCRYPTION_KEY, 'hex')
+  const iv = randomBytes(16)
+  const cipher = createCipheriv('aes-256-cbc', key, iv)
+  return Buffer.concat([iv, cipher.update(hex, 'utf8'), cipher.final()]).toString('base64')
+}
+
+export function decryptNostrKey(encrypted: string): string {
+  const key = Buffer.from(env.ENCRYPTION_KEY, 'hex')
+  const data = Buffer.from(encrypted, 'base64')
+  const decipher = createDecipheriv('aes-256-cbc', key, data.subarray(0, 16))
+  return Buffer.concat([decipher.update(data.subarray(16)), decipher.final()]).toString('utf8')
+}
 
 // Relays to publish to — can be overridden via NOSTR_RELAYS env var (comma-separated)
 function getRelays(): string[] {
@@ -36,7 +52,7 @@ export async function publishNote(
 ): Promise<void> {
   let privateKeyHex: string
   try {
-    privateKeyHex = decryptPrivateKey(privateKeyEncrypted)
+    privateKeyHex = decryptNostrKey(privateKeyEncrypted)
   } catch {
     return
   }
@@ -60,4 +76,20 @@ export async function publishNote(
   } finally {
     pool.close(relays)
   }
+}
+
+// Cross-post a floq post to Nostr (kind:1). Strips HTML, maps hashtags to `t`
+// tags. Best-effort — never throws into the caller's request path.
+export async function crosspostToNostr(
+  privateKeyEncrypted: string,
+  content: string,
+  hashtags: string[] = [],
+): Promise<void> {
+  const text = content.replace(/<[^>]+>/g, '').trim()
+  if (!text) return
+  const tags = hashtags
+    .map((t) => t.replace(/^#/, '').trim().toLowerCase())
+    .filter(Boolean)
+    .map((t) => ['t', t])
+  await publishNote(text, privateKeyEncrypted, tags)
 }
