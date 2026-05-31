@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify'
 import { createHash, randomUUID } from 'node:crypto'
-import { eq, and, desc, lt, inArray } from 'drizzle-orm'
+import { eq, and, or, desc, lt, inArray } from 'drizzle-orm'
 import { db } from '../db/client.js'
-import { actors, posts, follows, apActivities, polls, pollOptions, pollVotes, customEmojis, postEdits, boosts, likes, reactions } from '../db/schema.js'
+import { actors, posts, follows, apActivities, polls, pollOptions, pollVotes, customEmojis, postEdits, boosts, likes, reactions, reports } from '../db/schema.js'
 import { env } from '../lib/env.js'
 import {
   buildActor,
@@ -1176,6 +1176,42 @@ export async function activityPubRoutes(app: FastifyInstance) {
               .where(eq(actors.id, senderActor.id)),
           ])
         }
+        break
+      }
+
+      // A remote actor blocks one of our users → sever the follow relationship.
+      case 'Block': {
+        const blockedId = typeof obj === 'string' ? obj : obj?.id
+        if (!blockedId) return
+        const target = await db.query.actors.findFirst({
+          where: and(eq(actors.apId, blockedId), eq(actors.isLocal, true)),
+          columns: { id: true },
+        })
+        if (!target) return
+        await db.delete(follows).where(or(
+          and(eq(follows.followerId, senderActor.id), eq(follows.followingId, target.id)),
+          and(eq(follows.followerId, target.id), eq(follows.followingId, senderActor.id)),
+        ))
+        break
+      }
+
+      // A remote server forwards a report about our content/user → store it.
+      case 'Flag': {
+        const raw = activity.object
+        const uris = (Array.isArray(raw) ? raw : [raw]).filter((o): o is string => typeof o === 'string')
+        if (uris.length === 0) return
+        const [reportedActor, reportedPost] = await Promise.all([
+          db.query.actors.findFirst({ where: and(inArray(actors.apId, uris), eq(actors.isLocal, true)), columns: { id: true } }),
+          db.query.posts.findFirst({ where: and(inArray(posts.apId, uris), eq(posts.isLocal, true)), columns: { id: true, authorId: true } }),
+        ])
+        if (!reportedActor && !reportedPost) return
+        await db.insert(reports).values({
+          reporterId: senderActor.id,
+          reportedActorId: reportedActor?.id ?? reportedPost?.authorId ?? null,
+          postId: reportedPost?.id ?? null,
+          reason: 'other',
+          details: (activity as { content?: string }).content ?? null,
+        })
         break
       }
 

@@ -521,6 +521,20 @@ export function buildLike(
   }
 }
 
+export function buildBlock(
+  actorHandle: string,
+  targetApId: string,
+  blockId: string,
+): APActivity {
+  return {
+    '@context': AP_CONTEXT,
+    id: activityUrl(actorHandle, 'block', blockId),
+    type: 'Block',
+    actor: actorUrl(actorHandle),
+    object: targetApId,
+  }
+}
+
 // Emoji reaction (FEP / Misskey-Pleroma `EmojiReact`). `content` is the emoji.
 export function buildEmojiReact(
   actorHandle: string,

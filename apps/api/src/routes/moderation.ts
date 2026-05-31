@@ -1,9 +1,11 @@
 import type { FastifyInstance } from 'fastify'
-import { eq, and, desc, sql } from 'drizzle-orm'
+import { eq, and, or, desc, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../db/client.js'
-import { actors, blocks, mutes, reports, posts } from '../db/schema.js'
+import { actors, blocks, mutes, reports, posts, follows } from '../db/schema.js'
 import { requireActor } from '../lib/session.js'
+import { buildBlock, buildUndo } from '../lib/activityPub.js'
+import { deliverToInbox } from '../lib/federation.js'
 
 export async function moderationRoutes(app: FastifyInstance) {
   // ─── Blocks ────────────────────────────────────────────────────────────────
@@ -28,13 +30,31 @@ export async function moderationRoutes(app: FastifyInstance) {
     const ctx = await requireActor(req, reply)
     if (!ctx) return
 
-    const target = await db.query.actors.findFirst({
-      where: and(eq(actors.handle, req.params.handle), eq(actors.isLocal, true)),
-    })
+    // No isLocal filter — remote actors must be blockable too.
+    const target = await db.query.actors.findFirst({ where: eq(actors.handle, req.params.handle) })
     if (!target) return reply.code(404).send({ error: 'Not found' })
     if (target.id === ctx.actor.id) return reply.code(400).send({ error: 'Cannot block yourself' })
 
-    await db.insert(blocks).values({ blockerId: ctx.actor.id, blockedId: target.id }).onConflictDoNothing()
+    const [block] = await db.insert(blocks)
+      .values({ blockerId: ctx.actor.id, blockedId: target.id })
+      .onConflictDoNothing()
+      .returning()
+
+    if (block) {
+      // Blocking severs any follow relationship both ways.
+      const severed = await db.delete(follows).where(or(
+        and(eq(follows.followerId, ctx.actor.id), eq(follows.followingId, target.id)),
+        and(eq(follows.followerId, target.id), eq(follows.followingId, ctx.actor.id)),
+      )).returning()
+      for (const f of severed.filter((s) => s.status === 'accepted')) {
+        await db.update(actors).set({ followingCount: sql`GREATEST(${actors.followingCount} - 1, 0)` }).where(eq(actors.id, f.followerId))
+        await db.update(actors).set({ followersCount: sql`GREATEST(${actors.followersCount} - 1, 0)` }).where(eq(actors.id, f.followingId))
+      }
+      // Federate the Block to a remote target.
+      if (!target.isLocal && target.inboxUrl && target.apId) {
+        void deliverToInbox(ctx.actor.handle, target.inboxUrl, buildBlock(ctx.actor.handle, target.apId, block.id))
+      }
+    }
 
     return reply.send({ ok: true })
   })
@@ -44,12 +64,18 @@ export async function moderationRoutes(app: FastifyInstance) {
     const ctx = await requireActor(req, reply)
     if (!ctx) return
 
-    const target = await db.query.actors.findFirst({
-      where: and(eq(actors.handle, req.params.handle), eq(actors.isLocal, true)),
-    })
+    const target = await db.query.actors.findFirst({ where: eq(actors.handle, req.params.handle) })
     if (!target) return reply.code(404).send({ error: 'Not found' })
 
-    await db.delete(blocks).where(and(eq(blocks.blockerId, ctx.actor.id), eq(blocks.blockedId, target.id)))
+    const [removed] = await db.delete(blocks)
+      .where(and(eq(blocks.blockerId, ctx.actor.id), eq(blocks.blockedId, target.id)))
+      .returning()
+
+    // Federate Undo(Block) to a remote target.
+    if (removed && !target.isLocal && target.inboxUrl && target.apId) {
+      const block = buildBlock(ctx.actor.handle, target.apId, removed.id)
+      void deliverToInbox(ctx.actor.handle, target.inboxUrl, buildUndo(ctx.actor.handle, block))
+    }
 
     return reply.send({ ok: true })
   })
