@@ -1519,7 +1519,8 @@ export async function groupRoutes(app: FastifyInstance) {
       const followActivity = buildFollow(ctx.actor.handle, remoteActor.apId!, follow!.id)
 
       if (remoteActor.inboxUrl) {
-        await deliverToInbox(remoteActor.inboxUrl, ctx.actor.handle, followActivity)
+        // deliverToInbox(senderHandle, targetInboxUrl, activity) — args were swapped
+        await deliverToInbox(ctx.actor.handle, remoteActor.inboxUrl, followActivity)
       }
 
       return reply.send({ status: 'pending' })
