@@ -6,7 +6,7 @@ import { getSession, requireActor } from '../lib/session.js'
 import { notifyFollow, notifyFollowRequest } from '../lib/notify.js'
 import { buildFollow, buildUndo, buildAccept, actorUrl } from '../lib/activityPub.js'
 import { deliverToInbox } from '../lib/federation.js'
-import { backfillOutbox } from '../lib/ingest.js'
+import { backfillOutbox, fetchRemoteCollectionActors } from '../lib/ingest.js'
 import { enrichPosts } from '../lib/enrichPosts.js'
 
 // Build an Accept for a remote follow request. Must echo the ORIGINAL Follow we
@@ -316,7 +316,16 @@ export async function actorsRoutes(app: FastifyInstance) {
     })
 
     const hasMore = followerRows.length > limit
-    const items = followerRows.slice(0, limit).map((f) => f.follower)
+    let items = followerRows.slice(0, limit).map((f) => f.follower)
+
+    // Remote actor: best-effort pull of their real followers (origin collection).
+    if (!actor.isLocal && offset === 0 && actor.followersUrl) {
+      try {
+        const remote = await fetchRemoteCollectionActors(actor.followersUrl)
+        const seen = new Set(items.map((a) => a.id))
+        items = [...items, ...remote.filter((a) => !seen.has(a.id))]
+      } catch { /* hidden/unreachable → local relationships only */ }
+    }
 
     const [countRow] = await db
       .select({ total: sql<number>`COUNT(*)::int` })
@@ -381,7 +390,16 @@ export async function actorsRoutes(app: FastifyInstance) {
     })
 
     const hasMore = followingRows.length > limit
-    const items = followingRows.slice(0, limit).map((f) => f.following)
+    let items = followingRows.slice(0, limit).map((f) => f.following)
+
+    // Remote actor: best-effort pull of who they actually follow (origin collection).
+    if (!actor.isLocal && offset === 0 && actor.followingUrl) {
+      try {
+        const remote = await fetchRemoteCollectionActors(actor.followingUrl)
+        const seen = new Set(items.map((a) => a.id))
+        items = [...items, ...remote.filter((a) => !seen.has(a.id))]
+      } catch { /* hidden/unreachable → local relationships only */ }
+    }
 
     const [countRow] = await db
       .select({ total: sql<number>`COUNT(*)::int` })

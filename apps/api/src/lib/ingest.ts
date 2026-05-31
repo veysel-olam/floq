@@ -192,6 +192,28 @@ export async function resolveRemoteThread(noteUrl: string, maxDepth = 12): Promi
 }
 
 /**
+ * Resolve actors from a remote follow collection's first page (followers/
+ * following). Best-effort + bounded — many servers (Mastodon) hide these to
+ * remote requests, in which case it returns []. Capped to avoid slow fan-out.
+ */
+export async function fetchRemoteCollectionActors(collectionUrl: string, limit = 8) {
+  const coll = await fetchObject(collectionUrl) as unknown as
+    | { first?: string | { orderedItems?: unknown[]; items?: unknown[] }; orderedItems?: unknown[]; items?: unknown[] }
+    | null
+  if (!coll) return []
+  let page: { orderedItems?: unknown[]; items?: unknown[] } | null = null
+  if (Array.isArray(coll.orderedItems) || Array.isArray(coll.items)) page = coll
+  else if (typeof coll.first === 'string') page = await fetchObject(coll.first) as unknown as { orderedItems?: unknown[]; items?: unknown[] } | null
+  else if (coll.first && typeof coll.first === 'object') page = coll.first
+
+  const uris = ((page?.orderedItems ?? page?.items ?? []) as unknown[])
+    .filter((u): u is string => typeof u === 'string')
+    .slice(0, limit)
+  const resolved = await Promise.allSettled(uris.map((u) => fetchRemoteActor(u)))
+  return resolved.flatMap((r) => (r.status === 'fulfilled' && r.value ? [r.value] : []))
+}
+
+/**
  * Backfill recent posts from a remote actor's outbox so their profile/feed isn't
  * empty right after we discover/follow them. Best-effort, bounded by `limit`.
  */
