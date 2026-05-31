@@ -20,6 +20,7 @@ import { feedRulesRoutes } from './routes/feedRules.js'
 import { listsRoutes } from './routes/lists.js'
 import { activityPubRoutes } from './routes/activitypub.js'
 import { startFederationWorker } from './jobs/federation.js'
+import { startCrosspostWorker } from './jobs/crosspost.js'
 import { captureException } from './lib/monitoring.js'
 import { momentsRoutes } from './routes/moments.js'
 import { flowsRoutes } from './routes/flows.js'
@@ -201,7 +202,8 @@ app.log.info('S3 bucket ready')
 startFederationWorker()
 startMomentsWorker()
 startSchedulerWorker()
-app.log.info('Federation + moments + scheduler workers started')
+startCrosspostWorker()
+app.log.info('Federation + moments + scheduler + crosspost workers started')
 
 try {
   await app.listen({ port: env.PORT, host: '0.0.0.0' })

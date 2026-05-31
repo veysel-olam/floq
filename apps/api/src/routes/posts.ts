@@ -9,8 +9,7 @@ import { env } from '../lib/env.js'
 import { notifyLike, notifyBoost, notifyReply, notifyThreadParticipants } from '../lib/notify.js'
 import { buildNote, buildQuestion, buildCreate, buildDelete, buildUpdateNote, buildEmojiReact, buildUndo } from '../lib/activityPub.js'
 import { deliverToFollowers, deliverToInbox } from '../lib/federation.js'
-import { crosspostToBluesky } from '../lib/bluesky.js'
-import { crosspostToNostr } from '../lib/nostr.js'
+import { enqueueBlueskyCrosspost, enqueueNostrCrosspost } from '../jobs/crosspost.js'
 import { resolveRemoteThread } from '../lib/ingest.js'
 import { publish } from '../lib/pubsub.js'
 import { enrichPosts } from '../lib/enrichPosts.js'
@@ -301,10 +300,10 @@ export async function postsRoutes(app: FastifyInstance) {
       // No-ops if the user hasn't connected / disabled crossposting.
       if ((vis === 'public' || vis === 'unlisted') && !replyToId) {
         if (actor.userId) {
-          void crosspostToBluesky(actor.userId, content, post!.tags ?? []).catch(() => {})
+          void enqueueBlueskyCrosspost(actor.userId, content, post!.tags ?? []).catch(() => {})
         }
         if (actor.nostrCrosspostEnabled && actor.nostrPrivateKeyEncrypted) {
-          void crosspostToNostr(actor.nostrPrivateKeyEncrypted, content, post!.tags ?? []).catch(() => {})
+          void enqueueNostrCrosspost(actor.nostrPrivateKeyEncrypted, content, post!.tags ?? []).catch(() => {})
         }
       }
     }
