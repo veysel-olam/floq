@@ -553,6 +553,7 @@ export async function activityPubRoutes(app: FastifyInstance) {
           .onConflictDoNothing()
           .returning()
 
+        // Counts + notification only for a brand-new follow row.
         if (follow?.status === 'accepted') {
           await Promise.all([
             db.update(actors)
@@ -563,11 +564,14 @@ export async function activityPubRoutes(app: FastifyInstance) {
               .where(eq(actors.id, target.id)),
           ])
           void notifyFollow(senderActor.id, target.id)
+        }
 
-          // Send Accept back — echo the EXACT Follow we received (its original id
-          // and actor) so the remote can match it to its pending request. A
-          // reconstructed Follow has the wrong id/actor → the Accept is ignored →
-          // the follow never completes → our posts never reach the follower's feed.
+        // Always (re-)send Accept for unlocked accounts — even on a re-follow where
+        // the row already existed (onConflictDoNothing left `follow` undefined). The
+        // remote keeps the follow "pending"/"requested" until it gets a matching
+        // Accept, so skipping it on re-follow leaves the follower stuck forever.
+        // Echo the EXACT Follow we received so the remote can match it.
+        if (!target.isLocked) {
           const accept = buildAccept(target.handle, activity as Parameters<typeof buildAccept>[1])
           void deliverToInbox(target.handle, senderActor.inboxUrl, accept)
         }
@@ -579,7 +583,13 @@ export async function activityPubRoutes(app: FastifyInstance) {
         if (!innerObj) return
 
         if (innerObj.type === 'Follow') {
-          const targetActorId = typeof innerObj.id === 'string' ? innerObj.id : undefined
+          // The unfollowed target is the Follow's `object` (NOT innerObj.id, which
+          // is the Follow activity's own id). Using .id looked up a nonexistent
+          // actor → the row was never deleted → re-follows hit onConflictDoNothing.
+          const innerFollow = innerObj as { object?: string | { id?: string } }
+          const targetActorId = typeof innerFollow.object === 'string'
+            ? innerFollow.object
+            : innerFollow.object?.id
           if (!targetActorId) return
 
           const target = await db.query.actors.findFirst({
