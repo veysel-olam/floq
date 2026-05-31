@@ -260,6 +260,7 @@ export async function fetchRemoteActor(actorUrl: string) {
 
   const data = (await res.json()) as {
     id: string
+    type?: string
     preferredUsername: string
     name?: string
     summary?: string
@@ -298,8 +299,15 @@ export async function fetchRemoteActor(actorUrl: string) {
     ?.filter((a) => a.type === 'PropertyValue' && a.name && a.value)
     .map((a) => ({ name: a.name!, value: a.value!, verifiedAt: null })) ?? null
 
+  // Map the AP actor type (Lemmy communities are Group, bots are Service/
+  // Application). Without this everything defaulted to Person → remote groups
+  // were rejected as "not a Group" by the communities resolver.
+  const ALLOWED_ACTOR_TYPES = ['Person', 'Group', 'Service', 'Application']
+  const actorType = ALLOWED_ACTOR_TYPES.includes(data.type ?? '') ? data.type! : 'Person'
+
   const values = {
     apId: data.id,
+    actorType,
     handle: `${data.preferredUsername}@${domain}`,
     displayName: data.name ?? data.preferredUsername,
     bio: data.summary ?? null,
