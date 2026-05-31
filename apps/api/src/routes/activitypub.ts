@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { createHash, randomUUID } from 'node:crypto'
 import { eq, and, desc, lt } from 'drizzle-orm'
 import { db } from '../db/client.js'
-import { actors, posts, follows, apActivities, polls, pollOptions, pollVotes, customEmojis, postEdits } from '../db/schema.js'
+import { actors, posts, follows, apActivities, polls, pollOptions, pollVotes, customEmojis, postEdits, boosts } from '../db/schema.js'
 import { env } from '../lib/env.js'
 import {
   buildActor,
@@ -618,9 +618,15 @@ export async function activityPubRoutes(app: FastifyInstance) {
           if (!targetId) return
           const post = await db.query.posts.findFirst({ where: eq(posts.apId, targetId) })
           if (post) {
-            await db.update(posts)
-              .set({ boostsCount: sql`GREATEST(${posts.boostsCount} - 1, 0)` })
-              .where(eq(posts.id, post.id))
+            // Remove the boost record (timeline) only if it existed, then decrement.
+            const removed = await db.delete(boosts)
+              .where(and(eq(boosts.actorId, senderActor.id), eq(boosts.postId, post.id)))
+              .returning()
+            if (removed.length > 0) {
+              await db.update(posts)
+                .set({ boostsCount: sql`GREATEST(${posts.boostsCount} - 1, 0)` })
+                .where(eq(posts.id, post.id))
+            }
           }
         }
         break
@@ -876,14 +882,27 @@ export async function activityPubRoutes(app: FastifyInstance) {
         const boostedId = typeof obj === 'string' ? obj : obj?.id
         if (!boostedId) return
 
-        const post = await db.query.posts.findFirst({ where: eq(posts.apId, boostedId) })
+        // Fetch the boosted note if we don't have it yet, so a boost from a
+        // followed remote user surfaces its content instead of being dropped.
+        let post = await db.query.posts.findFirst({ where: eq(posts.apId, boostedId) })
+        if (!post) {
+          const id = await ingestRemoteNote(boostedId, { resolveParentsDepth: 2 })
+          if (id) post = await db.query.posts.findFirst({ where: eq(posts.id, id) })
+        }
         if (!post) return
 
-        await db.update(posts)
-          .set({ boostsCount: sql`${posts.boostsCount} + 1` })
-          .where(eq(posts.id, post.id))
-
-        void notifyBoost(senderActor.id, post.id)
+        // Record the boost so it appears in the booster's followers' timelines
+        // (the home feed reads the boosts table), then bump the count + notify.
+        const [inserted] = await db.insert(boosts)
+          .values({ actorId: senderActor.id, postId: post.id })
+          .onConflictDoNothing()
+          .returning()
+        if (inserted) {
+          await db.update(posts)
+            .set({ boostsCount: sql`${posts.boostsCount} + 1` })
+            .where(eq(posts.id, post.id))
+          void notifyBoost(senderActor.id, post.id)
+        }
         break
       }
 
