@@ -855,6 +855,20 @@ export const api = {
       revokeAll: () => apiFetch<void>('/api/account/sessions', { method: 'DELETE' }),
     },
   },
+  bluesky: {
+    connection: () =>
+      apiFetch<{ connected: boolean; did?: string; handle?: string; crosspost_enabled?: boolean; import_enabled?: boolean }>(
+        '/api/bluesky/connection',
+      ),
+    connect: (identifier: string, appPassword: string) =>
+      apiFetch<{ connected: boolean; handle?: string; crosspost_enabled?: boolean }>('/api/bluesky/connect', {
+        method: 'POST',
+        body: JSON.stringify({ identifier, app_password: appPassword }),
+      }),
+    updateSettings: (body: { crosspost_enabled?: boolean; import_enabled?: boolean }) =>
+      apiFetch<void>('/api/bluesky/connection', { method: 'PATCH', body: JSON.stringify(body) }),
+    disconnect: () => apiFetch<void>('/api/bluesky/connection', { method: 'DELETE' }),
+  },
   media: {
     upload: async (file: File): Promise<MediaAttachment> => {
       const form = new FormData()

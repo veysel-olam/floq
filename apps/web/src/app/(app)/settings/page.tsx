@@ -1180,6 +1180,12 @@ function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'
   const [blueskyHandle, setBlueskyHandle] = useState('')
   const [savingBluesky, setSavingBluesky] = useState(false)
   const [savedBluesky, setSavedBluesky] = useState(false)
+  // Bluesky crosspost bridge (app-password connection)
+  const [bskyConn, setBskyConn] = useState<{ connected: boolean; handle?: string; crosspost_enabled?: boolean } | null>(null)
+  const [bskyId, setBskyId] = useState('')
+  const [bskyPwd, setBskyPwd] = useState('')
+  const [bskyConnecting, setBskyConnecting] = useState(false)
+  const [bskyError, setBskyError] = useState<string | null>(null)
 
   // Domain handle
   const [customHandle, setCustomHandle] = useState('')
@@ -1210,6 +1216,27 @@ function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'
       }).catch(() => {})
     }
   }, [handle, session])
+
+  useEffect(() => { api.bluesky.connection().then(setBskyConn).catch(() => {}) }, [])
+
+  async function connectBsky() {
+    if (!bskyId.trim() || !bskyPwd.trim()) return
+    setBskyConnecting(true); setBskyError(null)
+    try {
+      const res = await api.bluesky.connect(bskyId.replace(/^@/, '').trim(), bskyPwd.trim())
+      setBskyConn(res); setBskyPwd(''); setBskyId('')
+    } catch {
+      setBskyError("Bağlanılamadı. Handle ve App Password'ı kontrol et.")
+    } finally { setBskyConnecting(false) }
+  }
+  async function disconnectBsky() {
+    await api.bluesky.disconnect().catch(() => {})
+    setBskyConn({ connected: false })
+  }
+  async function toggleBskyCrosspost(v: boolean) {
+    setBskyConn((c) => c ? { ...c, crosspost_enabled: v } : c)
+    await api.bluesky.updateSettings({ crosspost_enabled: v }).catch(() => {})
+  }
 
   async function saveBluesky() {
     setSavingBluesky(true)
@@ -1574,6 +1601,44 @@ function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'
             >
               Bağlantıyı kaldır
             </button>
+          )}
+        </div>
+
+        {/* Bluesky'ye otomatik paylaş (cross-post — app password ile) */}
+        <div className="border-t border-(--color-border) pt-5 space-y-2">
+          <p className="text-xs font-medium text-(--color-text-secondary)">Bluesky'ye otomatik paylaş</p>
+          {bskyConn?.connected ? (
+            <div className="space-y-2.5">
+              <p className="text-xs text-(--color-text-tertiary)">
+                Bağlı: <span className="font-mono text-(--color-text-secondary)">@{bskyConn.handle}</span>
+              </p>
+              <label className="flex items-center gap-2 text-sm text-(--color-text-primary) cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={bskyConn.crosspost_enabled ?? false}
+                  onChange={(e) => void toggleBskyCrosspost(e.target.checked)}
+                  className="accent-(--color-coral)"
+                />
+                Yeni public gönderilerimi Bluesky'ye de paylaş
+              </label>
+              <button onClick={() => void disconnectBsky()} className="text-xs text-(--color-text-tertiary) hover:text-red-500 transition-colors">
+                Bluesky bağlantısını kes
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-(--color-text-tertiary)">
+                Gönderilerini Bluesky'ye de yaymak için bağlan. Şifren değil, bir{' '}
+                <a href="https://bsky.app/settings/app-passwords" target="_blank" rel="noopener noreferrer" className="text-(--color-coral) hover:underline">App Password</a>{' '}
+                kullan (Bluesky → Ayarlar → App Passwords).
+              </p>
+              <Input value={bskyId} onChange={(e) => setBskyId(e.target.value)} placeholder="kullanici.bsky.social" className="font-mono text-sm" />
+              <Input value={bskyPwd} onChange={(e) => setBskyPwd(e.target.value)} type="password" placeholder="xxxx-xxxx-xxxx-xxxx" className="font-mono text-sm" />
+              {bskyError && <p className="text-xs text-red-500">{bskyError}</p>}
+              <Button onClick={() => void connectBsky()} disabled={bskyConnecting || !bskyId.trim() || !bskyPwd.trim()} variant="outline">
+                {bskyConnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Bluesky'ye bağlan"}
+              </Button>
+            </div>
           )}
         </div>
 
