@@ -14,7 +14,12 @@
  * Defaults to localhost:3001 (dev server).
  */
 
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe as describeReal, it, expect, beforeAll } from 'vitest'
+
+// These hit a LIVE instance — only run when explicitly requested so the default
+// `pnpm test` (pure unit tests) stays green without a server. Run with:
+//   AP_CONFORMANCE=1 AP_BASE_URL=https://flq.social pnpm --filter @floq/api test
+const describe = process.env['AP_CONFORMANCE'] ? describeReal : describeReal.skip
 
 const BASE_URL = process.env['AP_BASE_URL'] ?? 'http://localhost:3001'
 const TEST_HANDLE = process.env['AP_TEST_HANDLE'] ?? 'testuser'

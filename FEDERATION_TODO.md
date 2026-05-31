@@ -61,7 +61,8 @@ uzak actor sayıları + refresh TTL · thread/yanıt çözümleme · boost timel
 
 ## 🧪 Test & Gözlemlenebilirlik
 
-- [ ] **AP conformance testleri CI'da** — `apps/e2e` advisory (continue-on-error); gerçek bir test Mastodon/Lemmy'ye karşı otomatik suite yok.
+- [x] **Federasyon builder conformance + CI test job** — `federation-builders.test.ts` (16 saf unit test: Note/Quote/DM/Create/Follow/Accept/Undo/Like/Announce/EmojiReact/Block/Delete AP şekilleri) + CI'da `Unit Tests` job. Canlı HTTP conformance suite `AP_CONFORMANCE=1` ile çalışır (server'sız `pnpm test` yeşil). (2026-05-31)
+- [ ] **Canlı conformance CI'da** — HTTP suite hâlâ canlı instance gerektiriyor; gerçek Mastodon/Lemmy'ye karşı otomatik e2e yok (e2e job advisory).
 - [ ] **Federasyon teşhis paneli** — Admin'de teslimat sağlığı (`instances.lastDeliverySuccess`) var; daha görünür bir "federasyon durumu" ekranı.
 - [ ] **Yapısal loglama** — Inbox/outbox aktivite akışını izlemek için (bu oturumda manuel SQL ile debug ettik).
 
