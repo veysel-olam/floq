@@ -155,6 +155,17 @@ function SkeletonCard() {
   )
 }
 
+// Popular public Lemmy communities (Group actors) as discovery starters —
+// the fediverse has no global directory, so users need handles to begin.
+const SUGGESTED_COMMUNITIES = [
+  '@technology@lemmy.world',
+  '@asklemmy@lemmy.ml',
+  '@linux@lemmy.ml',
+  '@worldnews@lemmy.ml',
+  '@programming@programming.dev',
+  '@selfhosted@lemmy.world',
+]
+
 function FederatedTab() {
   const [remoteHandle, setRemoteHandle] = useState('')
   const [resolving, setResolving] = useState(false)
@@ -171,13 +182,15 @@ function FederatedTab() {
       .finally(() => setListLoading(false))
   }, [])
 
-  async function resolve() {
-    if (!remoteHandle.trim()) return
+  async function resolve(handleArg?: string) {
+    const handle = (handleArg ?? remoteHandle).trim()
+    if (!handle) return
+    if (handleArg) setRemoteHandle(handleArg)
     setResolving(true)
     setPreview(null)
     setPreviewError('')
     try {
-      const result = await api.communities.resolveRemote(remoteHandle.trim())
+      const result = await api.communities.resolveRemote(handle)
       setPreview(result)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Topluluk bulunamadı'
@@ -228,13 +241,28 @@ function FederatedTab() {
             className="flex-1 text-sm bg-(--color-background-secondary) border border-(--color-border) rounded-xl px-3 py-2 text-(--color-text-primary) font-mono placeholder:text-(--color-text-tertiary) focus:outline-none focus:ring-2 focus:ring-(--color-coral)/20 focus:border-(--color-coral)/40"
           />
           <button
-            onClick={resolve}
+            onClick={() => void resolve()}
             disabled={resolving || !remoteHandle.trim()}
             className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-xl bg-(--color-coral) text-white font-semibold hover:bg-(--color-coral-hover) disabled:opacity-50 transition-colors"
           >
             {resolving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
             Ara
           </button>
+        </div>
+
+        {/* Önerilen popüler topluluklar — fediverse'te global dizin yok, handle ile keşfedilir */}
+        <div className="flex flex-wrap gap-1.5">
+          <span className="text-xs text-(--color-text-tertiary) self-center mr-0.5">Öneriler:</span>
+          {SUGGESTED_COMMUNITIES.map((h) => (
+            <button
+              key={h}
+              onClick={() => void resolve(h)}
+              disabled={resolving}
+              className="text-xs font-mono px-2.5 py-1 rounded-full border border-(--color-border) text-(--color-text-secondary) hover:border-(--color-coral)/40 hover:text-(--color-coral) disabled:opacity-50 transition-colors"
+            >
+              {h}
+            </button>
+          ))}
         </div>
 
         {previewError && (
