@@ -1,7 +1,29 @@
 import { BskyAgent } from '@atproto/api'
+import sharp from 'sharp'
 import { db } from '../db/client.js'
 import { blueskyConnections } from '../db/schema.js'
 import { eq } from 'drizzle-orm'
+
+export interface CrosspostMedia { url: string; alt?: string | null }
+
+// Fetch + downscale an image to Bluesky's ~1MB blob limit, then upload it.
+// Returns the blob ref or null (skip on any failure — media is best-effort).
+async function uploadImageToBluesky(agent: BskyAgent, url: string): Promise<unknown | null> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(10_000) })
+    if (!res.ok) return null
+    const input = Buffer.from(await res.arrayBuffer())
+    let out = await sharp(input).resize(1200, 1200, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer()
+    if (out.length > 976_000) {
+      out = await sharp(input).resize(1000, 1000, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 55 }).toBuffer()
+    }
+    if (out.length > 976_000) return null
+    const up = await agent.uploadBlob(out, { encoding: 'image/jpeg' })
+    return up.data.blob
+  } catch {
+    return null
+  }
+}
 
 export async function getBskyAgent(userId: string): Promise<BskyAgent | null> {
   const conn = await db.query.blueskyConnections.findFirst({
@@ -40,6 +62,7 @@ export async function crosspostToBluesky(
   userId: string,
   text: string,
   tags: string[],
+  media: CrosspostMedia[] = [],
 ): Promise<void> {
   const conn = await db.query.blueskyConnections.findFirst({
     where: eq(blueskyConnections.userId, userId),
@@ -72,10 +95,24 @@ export async function crosspostToBluesky(
     searchFrom = idx + tag.length
   }
 
-  await agent.post({
+  // Images embed (max 4, each downscaled to the blob limit).
+  let embed: Record<string, unknown> | undefined
+  const imgs = media.slice(0, 4)
+  if (imgs.length) {
+    const images: Array<{ image: unknown; alt: string }> = []
+    for (const m of imgs) {
+      const blob = await uploadImageToBluesky(agent, m.url)
+      if (blob) images.push({ image: blob, alt: m.alt ?? '' })
+    }
+    if (images.length) embed = { $type: 'app.bsky.embed.images', images }
+  }
+
+  const record: Parameters<typeof agent.post>[0] = {
     text: plainText,
-    ...(facets.length ? { facets } : {}),
     createdAt: new Date().toISOString(),
     langs: ['tr'],
-  })
+  }
+  if (facets.length) record.facets = facets as NonNullable<Parameters<typeof agent.post>[0]['facets']>
+  if (embed) record.embed = embed as NonNullable<Parameters<typeof agent.post>[0]['embed']>
+  await agent.post(record)
 }

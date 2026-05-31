@@ -1,6 +1,6 @@
 import { Queue, Worker, type Job } from 'bullmq'
 import { env } from '../lib/env.js'
-import { crosspostToBluesky } from '../lib/bluesky.js'
+import { crosspostToBluesky, type CrosspostMedia } from '../lib/bluesky.js'
 import { crosspostToNostr } from '../lib/nostr.js'
 
 // Bridge cross-posting (Bluesky / Nostr) runs in a job so it survives a process
@@ -12,6 +12,7 @@ export interface CrosspostJobData {
   tags: string[]
   userId?: string                // bluesky: resolves the stored connection
   privateKeyEncrypted?: string   // nostr: encrypted secret key
+  media?: CrosspostMedia[]        // bluesky: image attachments
 }
 
 function redisConnection() {
@@ -41,9 +42,9 @@ export function startCrosspostWorker() {
   return new Worker<CrosspostJobData>(
     'crosspost',
     async (job: Job<CrosspostJobData>) => {
-      const { target, content, tags, userId, privateKeyEncrypted } = job.data
+      const { target, content, tags, userId, privateKeyEncrypted, media } = job.data
       if (target === 'bluesky' && userId) {
-        await crosspostToBluesky(userId, content, tags)
+        await crosspostToBluesky(userId, content, tags, media ?? [])
       } else if (target === 'nostr' && privateKeyEncrypted) {
         await crosspostToNostr(privateKeyEncrypted, content, tags)
       }
@@ -53,8 +54,8 @@ export function startCrosspostWorker() {
 }
 
 // Enqueue helpers — keep the post route clean.
-export function enqueueBlueskyCrosspost(userId: string, content: string, tags: string[]) {
-  return crosspostQueue.add('bluesky', { target: 'bluesky', userId, content, tags })
+export function enqueueBlueskyCrosspost(userId: string, content: string, tags: string[], media: CrosspostMedia[] = []) {
+  return crosspostQueue.add('bluesky', { target: 'bluesky', userId, content, tags, media })
 }
 export function enqueueNostrCrosspost(privateKeyEncrypted: string, content: string, tags: string[]) {
   return crosspostQueue.add('nostr', { target: 'nostr', privateKeyEncrypted, content, tags })

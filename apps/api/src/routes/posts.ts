@@ -300,7 +300,13 @@ export async function postsRoutes(app: FastifyInstance) {
       // No-ops if the user hasn't connected / disabled crossposting.
       if ((vis === 'public' || vis === 'unlisted') && !replyToId) {
         if (actor.userId) {
-          void enqueueBlueskyCrosspost(actor.userId, content, post!.tags ?? []).catch(() => {})
+          const media = (await db.query.mediaAttachments.findMany({
+            where: eq(mediaAttachments.postId, post!.id),
+            columns: { url: true, altText: true, mimeType: true },
+          }))
+            .filter((m) => m.mimeType.startsWith('image/'))
+            .map((m) => ({ url: m.url, alt: m.altText }))
+          void enqueueBlueskyCrosspost(actor.userId, content, post!.tags ?? [], media).catch(() => {})
         }
         if (actor.nostrCrosspostEnabled && actor.nostrPrivateKeyEncrypted) {
           void enqueueNostrCrosspost(actor.nostrPrivateKeyEncrypted, content, post!.tags ?? []).catch(() => {})
