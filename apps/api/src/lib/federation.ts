@@ -249,7 +249,11 @@ export async function fetchRemoteActor(actorUrl: string) {
   const existing = await db.query.actors.findFirst({
     where: eq(actors.apId, actorUrl),
   })
-  // Serve from cache unless stale (so avatars/bios stay current over time).
+  // NEVER refetch/overwrite a LOCAL actor — they're managed by us, not by
+  // fetching their own AP document (doing so flips is_local=false and rewrites
+  // the handle to user@domain, breaking the account). Always serve as-is.
+  if (existing?.isLocal) return existing
+  // Serve remote actors from cache unless stale (so avatars/bios stay current).
   if (existing) {
     const age = existing.lastFetchedAt ? Date.now() - existing.lastFetchedAt.getTime() : Infinity
     if (age < ACTOR_REFRESH_MS) return existing
