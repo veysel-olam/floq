@@ -1215,6 +1215,10 @@ export const api = {
     submit: (body: { postId?: string; reportedActorHandle?: string; reason: string; details?: string }) =>
       apiFetch<{ id: string }>('/api/reports', { method: 'POST', body: JSON.stringify(body) }),
   },
+  transparency: () =>
+    apiFetch<{ months: Array<{ month: string; total: number; accepted: number; rejected: number; pending: number }> }>(
+      '/api/moderation/transparency',
+    ),
   admin: {
     reports: (status?: string) =>
       apiFetch<{ reports: AdminReport[] }>(`/api/admin/reports${status ? `?status=${status}` : ''}`),

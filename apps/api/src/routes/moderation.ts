@@ -195,4 +195,21 @@ export async function moderationRoutes(app: FastifyInstance) {
 
     return reply.code(201).send(report)
   })
+
+  // GET /api/moderation/transparency — public monthly moderation stats
+  // (one of the "legitimacy conditions": a transparent, public log).
+  app.get('/api/moderation/transparency', async (_req, reply) => {
+    const rows = await db.execute(sql`
+      SELECT to_char(date_trunc('month', created_at), 'YYYY-MM') AS month,
+             count(*)::int AS total,
+             count(*) FILTER (WHERE status = 'reviewed_accepted')::int AS accepted,
+             count(*) FILTER (WHERE status = 'reviewed_rejected')::int AS rejected,
+             count(*) FILTER (WHERE status = 'pending')::int AS pending
+      FROM reports
+      WHERE created_at > now() - interval '12 months'
+      GROUP BY 1 ORDER BY 1 DESC
+    `)
+    const months = (rows as unknown as { rows: Array<Record<string, number | string>> }).rows
+    return reply.send({ months })
+  })
 }
