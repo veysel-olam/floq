@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   Home, Compass, Bell, Bookmark, List, Settings, LogOut,
   Layers, Activity, Radio, MessageSquare, Share2, FileEdit,
-  ChevronDown, LayoutGrid, Users,
+  ChevronDown, LayoutGrid, Users, Shield,
 } from 'lucide-react'
 import { FloqLogo } from '@/components/floq-logo'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -110,10 +110,16 @@ export function Sidebar() {
   const handle = (session?.user as { handle?: string } | undefined)?.handle
   const name = session?.user.name ?? ''
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [role, setRole] = useState<'user' | 'moderator' | 'admin' | null>(null)
 
   useEffect(() => {
-    if (handle) api.actors.get(handle).then((a) => setAvatarUrl(a.avatarUrl)).catch(() => {})
+    if (handle) api.actors.get(handle).then((a) => {
+      setAvatarUrl(a.avatarUrl)
+      setRole((a as { role?: 'user' | 'moderator' | 'admin' }).role ?? null)
+    }).catch(() => {})
   }, [handle])
+
+  const isStaff = role === 'moderator' || role === 'admin'
 
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
@@ -197,6 +203,14 @@ export function Sidebar() {
                 active={pathname.startsWith(href)}
               />
             ))}
+            {isStaff && (
+              <NavItem
+                href="/admin"
+                icon={Shield}
+                label="Yönetim Paneli"
+                active={pathname.startsWith('/admin')}
+              />
+            )}
           </div>
         </div>
       </nav>
