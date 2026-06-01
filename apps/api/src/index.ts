@@ -65,7 +65,12 @@ const loggerOptions =
     ? { level: 'info', transport: { target: 'pino-pretty', options: { colorize: true } } }
     : { level: 'warn' }
 
-const app = Fastify({ logger: loggerOptions })
+// trustProxy: 1 — we run behind a single Caddy reverse proxy. Without this,
+// req.ip is Caddy's container IP for every request, so the per-IP rate limit
+// buckets ALL traffic together (throttling the whole app) and logs show the
+// wrong IP. Trusting exactly one hop reads the real client IP from
+// X-Forwarded-For without letting clients spoof it (Caddy appends the true peer).
+const app = Fastify({ logger: loggerOptions, trustProxy: 1 })
 
 // ActivityPub delivers activities with Content-Type application/activity+json
 // (and application/ld+json). Fastify only parses application/json out of the box,

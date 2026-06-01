@@ -405,11 +405,16 @@ export async function activityPubRoutes(app: FastifyInstance) {
   )
 
   // ─── Inbox (shared + per-actor) ────────────────────────────────────────────
-  app.post('/inbox', async (req, reply) => {
+  // Higher rate limit than the global web cap: a single busy remote instance can
+  // legitimately burst many activities from one IP (esp. on catch-up). Still
+  // capped to bound abuse; every activity is HTTP-signature verified anyway.
+  const inboxConfig = { config: { rateLimit: { max: 1200, timeWindow: '1 minute' } } }
+
+  app.post('/inbox', inboxConfig, async (req, reply) => {
     await handleInbox(req, reply, null)
   })
 
-  app.post<{ Params: { handle: string } }>('/users/:handle/inbox', async (req, reply) => {
+  app.post<{ Params: { handle: string } }>('/users/:handle/inbox', inboxConfig, async (req, reply) => {
     await handleInbox(req, reply, req.params.handle)
   })
 
