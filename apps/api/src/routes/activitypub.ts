@@ -435,9 +435,15 @@ export async function activityPubRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'Invalid activity' })
     }
 
-    // Reject activities from suspended instances
+    // Reject suspended instances + spoofed local actors. A legitimate inbound
+    // activity's actor is ALWAYS remote — if it claims to be on our own domain
+    // it's spoofed; reject before any fetch (defense in depth alongside the
+    // isLocal guard in fetchRemoteActor).
     try {
       const senderDomain = new URL(activity.actor).hostname
+      if (senderDomain === env.APP_DOMAIN) {
+        return reply.code(403).send({ error: 'Spoofed local actor' })
+      }
       if (await isSuspendedDomain(senderDomain)) {
         return reply.code(403).send({ error: 'Instance suspended' })
       }
