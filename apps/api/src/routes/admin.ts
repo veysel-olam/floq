@@ -148,7 +148,8 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const rows = await db.query.reports.findMany({
       where: eq(reports.status, status),
-      orderBy: [desc(reports.createdAt)],
+      // CSAM reports first (urgent), then most recent.
+      orderBy: [sql`CASE WHEN ${reports.reason} = 'csam' THEN 0 ELSE 1 END`, desc(reports.createdAt)],
       limit,
       with: {
         reporter: true,

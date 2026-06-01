@@ -19,6 +19,7 @@ const REASON_LABELS: Record<string, string> = {
   misinformation: 'Yanlış bilgi',
   nsfw: 'Uygunsuz içerik',
   violence: 'Şiddet',
+  csam: 'Çocuk istismarı (CSAM)',
   other: 'Diğer',
 }
 
@@ -543,6 +544,9 @@ function ReportsTab({ stats }: { stats: { pending: number; accepted: number; rej
               </div>
 
               <div className="flex items-center gap-2">
+                {report.reason === 'csam' && (
+                  <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-xs font-bold animate-pulse">ACİL</span>
+                )}
                 <span className="px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-medium">
                   {REASON_LABELS[report.reason] ?? report.reason}
                 </span>

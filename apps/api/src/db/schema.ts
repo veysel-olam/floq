@@ -422,6 +422,7 @@ export const reportReasonEnum = pgEnum('report_reason', [
   'misinformation',
   'nsfw',
   'violence',
+  'csam',
   'other',
 ])
 

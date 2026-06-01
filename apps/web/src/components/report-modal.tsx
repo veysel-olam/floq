@@ -13,6 +13,7 @@ const REASONS = [
   { value: 'misinformation', label: 'Yanlış bilgi' },
   { value: 'nsfw', label: 'Uygunsuz içerik' },
   { value: 'violence', label: 'Şiddet içeriği' },
+  { value: 'csam', label: 'Çocuk istismarı (CSAM)' },
   { value: 'other', label: 'Diğer' },
 ] as const
 

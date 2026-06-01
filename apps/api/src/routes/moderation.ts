@@ -148,7 +148,7 @@ export async function moderationRoutes(app: FastifyInstance) {
     const body = z.object({
       postId: z.string().uuid().optional(),
       reportedActorHandle: z.string().optional(),
-      reason: z.enum(['spam', 'harassment', 'hate_speech', 'misinformation', 'nsfw', 'violence', 'other']),
+      reason: z.enum(['spam', 'harassment', 'hate_speech', 'misinformation', 'nsfw', 'violence', 'csam', 'other']),
       details: z.string().max(500).optional(),
     }).refine(d => d.postId || d.reportedActorHandle, { message: 'Provide postId or reportedActorHandle' })
       .safeParse(req.body)
