@@ -481,25 +481,13 @@ export async function groupRoutes(app: FastifyInstance) {
       const hasMore = postRows.length > limit
       const slice = hasMore ? postRows.slice(0, limit) : postRows
 
-      const authorIds = [...new Set(slice.map((p) => p.authorId))]
-      const authorMap = authorIds.length
-        ? new Map((await db.query.actors.findMany({ where: inArray(actors.id, authorIds) })).map((a) => [a.id, a]))
-        : new Map()
-
-      const postIds = slice.map((p) => p.id)
-      const allMedia = postIds.length
-        ? await db.query.mediaAttachments.findMany({ where: inArray(mediaAttachments.postId, postIds) })
-        : []
-      const mediaByPost = new Map(postIds.map((id) => [id, allMedia.filter((m) => m.postId === id)]))
-
-      const serialized = slice.flatMap((p) => {
-        const author = authorMap.get(p.authorId)
-        if (!author) return []
-        return [toMastodonStatus(p, author, { mediaAttachments: mediaByPost.get(p.id) ?? [] })]
-      })
+      // Return floq Post format (the web renders these with <PostCard/>), not
+      // Mastodon statuses — fields differ (author/createdAt vs account/created_at).
+      const { enrichPosts } = await import('../lib/enrichPosts.js')
+      const enriched = await enrichPosts(slice, ctx?.actor.id)
 
       return reply.send({
-        posts: serialized,
+        posts: enriched,
         next_cursor: hasMore ? slice[slice.length - 1]!.createdAt.toISOString() : null,
       })
     },
