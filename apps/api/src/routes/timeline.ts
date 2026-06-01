@@ -304,12 +304,14 @@ export async function timelineRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const session = await getSession(req)
       let actorId: string | undefined
+      let viewerIsMinor = false
 
       if (session) {
         const actor = await db.query.actors.findFirst({
           where: eq(actors.userId, session.user.id),
         })
         actorId = actor?.id
+        viewerIsMinor = actor?.isMinor ?? false
       }
 
       const limit = Math.min(Number(req.query.limit ?? DEFAULT_LIMIT), MAX_LIMIT)
@@ -317,6 +319,8 @@ export async function timelineRoutes(app: FastifyInstance) {
       const feed = req.query.feed // 'local' | 'federated' | undefined
 
       const conditions = [eq(posts.visibility, 'public'), eq(posts.isDeleted, false), isNull(posts.scheduledAt)]
+      // Restricted mode: minors (13-17) don't see sensitive/NSFW content.
+      if (viewerIsMinor) conditions.push(eq(posts.sensitive, false))
       if (cursor) conditions.push(lt(posts.createdAt, cursor))
       if (feed === 'local') conditions.push(eq(posts.isLocal, true))
       if (feed === 'federated') conditions.push(eq(posts.isLocal, false))

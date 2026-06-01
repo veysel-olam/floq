@@ -23,6 +23,11 @@ const schema = z.object({
     .regex(/^[a-z0-9_]+$/, 'Sadece küçük harf, rakam ve alt çizgi'),
   email: z.string().email('Geçerli bir e-posta gir'),
   password: z.string().min(8, 'En az 8 karakter'),
+  birthYear: z.coerce.number()
+    .int()
+    .min(1900, 'Geçerli bir yıl gir')
+    .max(new Date().getFullYear(), 'Geçerli bir yıl gir')
+    .refine((y) => new Date().getFullYear() - y >= 13, '13 yaşından küçükler kayıt olamaz'),
   inviteCode: z.string().optional(),
   termsAccepted: z.boolean().refine((val) => val === true, 'Devam etmek için koşulları kabul etmelisin'),
 })
@@ -97,6 +102,7 @@ function RegisterForm() {
       name: data.name,
       // @ts-expect-error: better-auth additional fields
       handle: data.handle,
+      birthYear: data.birthYear,
     })
 
     if (result.error) { setError(result.error.message ?? 'Kayıt başarısız'); return }
@@ -200,6 +206,20 @@ function RegisterForm() {
             className="border-(--color-border) bg-(--color-background) focus-visible:ring-(--color-coral)"
           />
           {errors.password && <p className="text-xs text-red-500">{errors.password.message}</p>}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="birthYear" className="text-sm text-(--color-text-secondary)">Doğum yılı</Label>
+          <Input
+            id="birthYear"
+            type="number"
+            inputMode="numeric"
+            placeholder="örn. 2000"
+            {...register('birthYear')}
+            className="border-(--color-border) bg-(--color-background) focus-visible:ring-(--color-coral)"
+          />
+          {errors.birthYear && <p className="text-xs text-red-500">{errors.birthYear.message}</p>}
+          <p className="text-[11px] text-(--color-text-tertiary)">13 yaş ve üzeri kayıt olabilir. 13-17 yaş için bazı özellikler kısıtlıdır.</p>
         </div>
 
         <div className="space-y-1">

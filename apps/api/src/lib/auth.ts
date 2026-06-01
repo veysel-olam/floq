@@ -60,6 +60,11 @@ export const auth = betterAuth({
         required: true,
         input: true,
       },
+      birthYear: {
+        type: 'number',
+        required: false,
+        input: true,
+      },
     },
   },
 
@@ -72,11 +77,26 @@ export const auth = betterAuth({
   databaseHooks: {
     user: {
       create: {
+        // Child safety: reject under-13 signups (COPPA-style). Birth year is
+        // collected at signup; <13 is hard-rejected, 13-17 → restricted mode.
+        before: async (userData) => {
+          const by = (userData as { birthYear?: number }).birthYear
+          if (by) {
+            const age = new Date().getFullYear() - by
+            if (age < 13) {
+              throw new Error('13 yaşından küçükler kayıt olamaz.')
+            }
+          }
+        },
         after: async (createdUser) => {
           // Kayıt sonrası otomatik actor oluştur
           const domain = env.APP_DOMAIN
           const handle = (createdUser as typeof createdUser & { handle: string }).handle
           const apBase = `${env.APP_URL}/users/${handle}`
+
+          const birthYear = (createdUser as { birthYear?: number }).birthYear ?? null
+          const age = birthYear ? new Date().getFullYear() - birthYear : null
+          const isMinor = age !== null && age >= 13 && age <= 17
 
           const { publicKeyPem, privateKeyEncrypted } = await generateActorKeyPair()
           const { publicKeyMultibase, privateKeyEncrypted: ed25519PrivateKeyEncrypted } = generateEd25519KeyPair()
@@ -98,6 +118,10 @@ export const auth = betterAuth({
             ed25519PrivateKeyEncrypted,
             isLocal: true,
             instanceId: await getOrCreateLocalInstance(domain),
+            birthYear,
+            isMinor,
+            // Minors are hidden from discovery/search by default (restricted mode).
+            noIndex: isMinor,
           })
         },
       },

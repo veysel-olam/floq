@@ -99,6 +99,7 @@ export const user = pgTable(
     updatedAt: timestamp('updated_at').notNull(),
     // Floq-specific: kayıt sırasında seçilen benzersiz handle
     handle: text('handle').notNull(),
+    birthYear: integer('birth_year'), // child-safety: collected at signup (<13 rejected)
     twoFactorEnabled: boolean('two_factor_enabled').default(false).notNull(),
   },
   (t) => [
@@ -279,6 +280,8 @@ export const actors = pgTable(
     nostrPublicKey: varchar('nostr_public_key', { length: 64 }),  // hex secp256k1 pubkey
     nostrPrivateKeyEncrypted: text('nostr_private_key_encrypted'), // encrypted hex seckey
     nostrCrosspostEnabled: boolean('nostr_crosspost_enabled').notNull().default(false),
+    birthYear: integer('birth_year'),          // child-safety
+    isMinor: boolean('is_minor').notNull().default(false), // 13-17 → restricted mode
 
     // Flags
     isLocal: boolean('is_local').default(false).notNull(),
