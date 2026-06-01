@@ -215,6 +215,18 @@ export async function dmRoutes(app: FastifyInstance) {
         return reply.code(403).send({ error: 'Bu kullanıcı senden mesaj almak istemiyor.' })
       }
 
+      // Child safety (restricted mode): a minor (13-17) only receives DMs from
+      // people they follow — no messages from strangers.
+      if (partner.isMinor) {
+        const minorFollowsSender = await db.query.follows.findFirst({
+          where: and(eq(follows.followerId, partner.id), eq(follows.followingId, ctx.actor.id), eq(follows.status, 'accepted')),
+          columns: { followerId: true },
+        })
+        if (!minorFollowsSender) {
+          return reply.code(403).send({ error: 'Bu kullanıcı yalnızca takip ettiği kişilerden mesaj alabilir.' })
+        }
+      }
+
       const { actor } = ctx
       const mediaIds = body.data.mediaIds ?? []
       if (mediaIds.length > 0) {

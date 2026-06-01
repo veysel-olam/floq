@@ -148,9 +148,10 @@ export async function postsRoutes(app: FastifyInstance) {
         apUrl: apId,
         scheduledAt: scheduledDate ?? null,
         isDraft: isDraft ?? false,
-        locationName: locationName ?? null,
-        locationLat: locationLat ?? null,
-        locationLng: locationLng ?? null,
+        // Child safety (restricted mode): minors can't share location.
+        locationName: actor.isMinor ? null : (locationName ?? null),
+        locationLat: actor.isMinor ? null : (locationLat ?? null),
+        locationLng: actor.isMinor ? null : (locationLng ?? null),
         groupId: resolvedGroupId,
         templateData: templateData ?? null,
         flairId: flairId ?? null,
