@@ -56,6 +56,8 @@ function ExploreContent() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [filters, setFilters] = useState<SearchFilters>(EMPTY_FILTERS)
   const [scope, setScope] = useState<'all' | 'local' | 'federated'>('all')
+  // Discovery "Herkese açık" feed scope (Mastodon-style Local/Federated/All)
+  const [feedScope, setFeedScope] = useState<'all' | 'local' | 'federated'>('all')
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [searchFocused, setSearchFocused] = useState(false)
@@ -114,7 +116,7 @@ function ExploreContent() {
 
   const loadTrending = useCallback(async (cursor?: string) => {
     try {
-      const data = await api.timeline.explore(cursor)
+      const data = await api.timeline.explore(cursor, feedScope === 'all' ? undefined : feedScope)
       if (cursor) setTrending((prev) => [...prev, ...data.posts])
       else setTrending(data.posts)
       setNextCursor(data.nextCursor)
@@ -123,7 +125,7 @@ function ExploreContent() {
       setLoading(false)
       setLoadingMore(false)
     }
-  }, [])
+  }, [feedScope])
 
   useEffect(() => { void loadTrending() }, [loadTrending])
 
@@ -519,12 +521,30 @@ function ExploreContent() {
             </section>
           )}
 
-          {/* Public feed header */}
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-(--color-border-secondary)">
-            <div className="w-6 h-6 rounded-lg bg-(--color-background-secondary) flex items-center justify-center">
-              <Globe className="w-3.5 h-3.5 text-(--color-text-tertiary)" />
+          {/* Public feed header + Local/Federated/All tabs (Mastodon-style) */}
+          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-(--color-border-secondary)">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg bg-(--color-background-secondary) flex items-center justify-center">
+                <Globe className="w-3.5 h-3.5 text-(--color-text-tertiary)" />
+              </div>
+              <span className="text-sm font-semibold text-(--color-text-secondary)">Herkese açık</span>
             </div>
-            <span className="text-sm font-semibold text-(--color-text-secondary)">Herkese açık</span>
+            <div className="flex gap-1">
+              {(['all', 'local', 'federated'] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setFeedScope(s)}
+                  className={cn(
+                    'px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
+                    feedScope === s
+                      ? 'bg-(--color-coral)/10 text-(--color-coral)'
+                      : 'text-(--color-text-tertiary) hover:text-(--color-text-secondary)',
+                  )}
+                >
+                  {s === 'all' ? 'Tümü' : s === 'local' ? 'Yerel' : 'Federe'}
+                </button>
+              ))}
+            </div>
           </div>
 
           {loading ? (

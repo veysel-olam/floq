@@ -637,8 +637,13 @@ export const api = {
       const qs = params.toString()
       return apiFetch<TimelineResponse & { sort?: FeedSort }>(`/api/timeline/home${qs ? `?${qs}` : ''}`)
     },
-    explore: (cursor?: string) =>
-      apiFetch<TimelineResponse>(`/api/timeline/explore${cursor ? `?cursor=${cursor}` : ''}`),
+    explore: (cursor?: string, feed?: 'local' | 'federated') => {
+      const p = new URLSearchParams()
+      if (cursor) p.set('cursor', cursor)
+      if (feed) p.set('feed', feed)
+      const qs = p.toString()
+      return apiFetch<TimelineResponse>(`/api/timeline/explore${qs ? `?${qs}` : ''}`)
+    },
     hashtag: (tag: string, cursor?: string) =>
       apiFetch<{ tag: string; posts: Post[]; nextCursor: string | null }>(
         `/api/timeline/hashtag/${encodeURIComponent(tag)}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
