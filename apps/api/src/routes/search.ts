@@ -243,22 +243,24 @@ export async function searchRoutes(app: FastifyInstance) {
     return reply.send({ actors: actorRows, posts: enrichedPosts })
   })
 
-  // GET /api/trending/tags — son 48 saatteki popüler hashtagler
+  // GET /api/trending/tags — recency-weighted trending hashtags.
+  // Score = Σ 0.5^(age_hours / 12): recent usage dominates (12h half-life) so the
+  // list reflects what's hot *now*, not just raw 48h totals. 72h window for data.
   app.get('/api/trending/tags', async (_req, reply) => {
-    const since = new Date(Date.now() - 48 * 60 * 60 * 1000)
-
     const rows = await db.execute(
       sql`
-        SELECT tag, COUNT(*) as count
+        SELECT tag,
+               COUNT(*) AS count,
+               SUM(POWER(0.5, EXTRACT(EPOCH FROM (now() - created_at)) / 43200.0)) AS score
         FROM (
-          SELECT unnest(${posts.tags}) as tag
+          SELECT unnest(${posts.tags}) AS tag, ${posts.createdAt} AS created_at
           FROM ${posts}
-          WHERE ${posts.createdAt} > ${since}
+          WHERE ${posts.createdAt} > now() - interval '72 hours'
             AND ${posts.isDeleted} = false
             AND ${posts.visibility} = 'public'
         ) t
         GROUP BY tag
-        ORDER BY count DESC
+        ORDER BY score DESC
         LIMIT 10
       `
     )
