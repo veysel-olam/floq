@@ -7,7 +7,11 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { Plus, X, Clock, Camera } from 'lucide-react'
+import {
+  Plus, X, Clock, Camera, Heart, Send, Flag, Trash2,
+  Volume2, VolumeX, SlidersHorizontal, Loader2,
+} from 'lucide-react'
+import { toast } from 'sonner'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -44,18 +48,148 @@ const FILTERS: FilterDef[] = [
   { label: 'Soluk', css: 'contrast(85%) brightness(110%)' },
 ]
 
+// ─── Manual adjustments (Instagram-style sliders) ───────────────────────────────
+
+type Adjust = { brightness: number; contrast: number; saturate: number; warmth: number }
+const DEFAULT_ADJUST: Adjust = { brightness: 1, contrast: 1, saturate: 1, warmth: 0 }
+
+const ADJUST_CONTROLS: { key: keyof Adjust; label: string; min: number; max: number; step: number }[] = [
+  { key: 'brightness', label: 'Parlaklık', min: 0.5, max: 1.5, step: 0.01 },
+  { key: 'contrast', label: 'Kontrast', min: 0.5, max: 1.5, step: 0.01 },
+  { key: 'saturate', label: 'Doygunluk', min: 0, max: 2, step: 0.01 },
+  { key: 'warmth', label: 'Sıcaklık', min: -100, max: 100, step: 1 },
+]
+
+// Warmth: positive → warm (sepia), negative → cool (hue shift)
+function warmthCss(w: number): string {
+  if (w > 0) return `sepia(${w}%)`
+  if (w < 0) return `hue-rotate(${w * 0.3}deg) saturate(${1 + -w / 250})`
+  return ''
+}
+
+// Combine a preset filter with the manual adjustment sliders into one CSS string
+function buildFilterCss(base: string, adj: Adjust): string {
+  return [
+    base,
+    `brightness(${adj.brightness})`,
+    `contrast(${adj.contrast})`,
+    `saturate(${adj.saturate})`,
+    warmthCss(adj.warmth),
+  ].filter(Boolean).join(' ').trim()
+}
+
+function isVideoMedia(m?: { mimeType?: string; url: string } | null): boolean {
+  if (!m) return false
+  if (m.mimeType?.startsWith('video/')) return true
+  return /\.(mp4|webm|mov|m4v|mkv)$/i.test(m.url)
+}
+
+// ─── Report ─────────────────────────────────────────────────────────────────────
+
+const REPORT_REASONS: { value: string; label: string }[] = [
+  { value: 'spam', label: 'Spam' },
+  { value: 'harassment', label: 'Taciz / zorbalık' },
+  { value: 'hate_speech', label: 'Nefret söylemi' },
+  { value: 'nsfw', label: 'Uygunsuz / +18' },
+  { value: 'violence', label: 'Şiddet' },
+  { value: 'csam', label: 'Çocuk istismarı' },
+  { value: 'other', label: 'Diğer' },
+]
+
 // ─── MomentViewer ─────────────────────────────────────────────────────────────
 
 function MomentViewer({
   group,
+  currentHandle,
   onClose,
+  onDeleted,
 }: {
   group: MomentGroup
+  currentHandle?: string
   onClose: () => void
+  onDeleted?: (id: string) => void
 }) {
   const [idx, setIdx] = useState(0)
   const moment = group.moments[idx]
-  const hasImage = moment?.media && moment.media.length > 0
+  const media = moment?.media?.[0]
+  const hasMedia = !!media
+  const video = isVideoMedia(media)
+  const isOwn = !!currentHandle && group.actor.handle === currentHandle
+
+  // Per-moment like state, seeded from the server payload
+  const [likeState, setLikeState] = useState<Record<string, { liked: boolean; count: number }>>(
+    () => Object.fromEntries(group.moments.map((m) => [m.id, { liked: m.viewerLiked, count: m.likesCount }])),
+  )
+  const like = moment ? likeState[moment.id] : undefined
+
+  const [reply, setReply] = useState('')
+  const [sending, setSending] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
+  const [reporting, setReporting] = useState(false)
+  const [muted, setMuted] = useState(true)
+
+  // Reset transient UI when moving between moments
+  useEffect(() => { setReply(''); setReportOpen(false) }, [idx])
+
+  async function toggleLike() {
+    if (!moment) return
+    const cur = likeState[moment.id] ?? { liked: false, count: 0 }
+    const next = { liked: !cur.liked, count: cur.count + (cur.liked ? -1 : 1) }
+    setLikeState((s) => ({ ...s, [moment.id]: next }))
+    try {
+      if (next.liked) await api.posts.like(moment.id)
+      else await api.posts.unlike(moment.id)
+    } catch {
+      setLikeState((s) => ({ ...s, [moment.id]: cur })) // revert
+      toast.error('Beğeni gönderilemedi')
+    }
+  }
+
+  async function sendReply() {
+    const text = reply.trim()
+    if (!text || !moment || sending) return
+    setSending(true)
+    try {
+      // Instagram-style: a private reply lands in the author's DMs, referencing the moment.
+      await api.dm.send(group.actor.handle, `↩️ Moment yanıtı: ${text}`)
+      setReply('')
+      toast.success('Yanıtın gönderildi')
+    } catch {
+      toast.error('Yanıt gönderilemedi')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function submitReport(reason: string) {
+    if (!moment || reporting) return
+    setReporting(true)
+    try {
+      await api.reports.submit({ postId: moment.id, reason })
+      setReportOpen(false)
+      toast.success('Rapor alındı, teşekkürler')
+    } catch (err) {
+      const msg = (err as { message?: string }).message
+      toast.error(msg === 'Already reported' ? 'Bu momenti zaten raporladın' : 'Rapor gönderilemedi')
+    } finally {
+      setReporting(false)
+    }
+  }
+
+  async function deleteOwn() {
+    if (!moment || !isOwn) return
+    if (!confirm('Bu momenti silmek istediğine emin misin?')) return
+    try {
+      await api.moments.delete(moment.id)
+      toast.success('Moment silindi')
+      onDeleted?.(moment.id)
+      onClose()
+    } catch {
+      toast.error('Silinemedi')
+    }
+  }
+
+  const dark = hasMedia // media present → light text on dark imagery
 
   return (
     <div
@@ -64,93 +198,158 @@ function MomentViewer({
     >
       <div
         className="relative w-full max-w-sm mx-4 rounded-2xl overflow-hidden bg-(--color-background) shadow-2xl"
-        style={{ aspectRatio: '9/16', maxHeight: '80vh' }}
+        style={{ aspectRatio: '9/16', maxHeight: '85vh' }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Full-bleed image background */}
-        {hasImage && (
+        {/* Full-bleed media background */}
+        {hasMedia && (video ? (
+          <video
+            key={media!.url}
+            src={media!.url}
+            poster={media!.previewUrl ?? undefined}
+            autoPlay
+            loop
+            playsInline
+            muted={muted}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : (
           <img
-            src={moment!.media![0]!.url}
+            src={media!.url}
             alt=""
             className="absolute inset-0 w-full h-full object-cover"
           />
-        )}
+        ))}
 
-        {/* Overlay gradient for readability when image is present */}
-        {hasImage && (
-          <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/50" />
+        {/* Overlay gradient for readability when media is present */}
+        {hasMedia && (
+          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 pointer-events-none" />
         )}
 
         {/* Progress bars */}
-        <div className="flex gap-1 p-3 absolute top-0 left-0 right-0 z-10">
+        <div className="flex gap-1 p-3 absolute top-0 left-0 right-0 z-30">
           {group.moments.map((_, i) => (
             <div
               key={i}
               className={cn(
                 'flex-1 h-0.5 rounded-full',
-                i < idx
-                  ? 'bg-white'
-                  : i === idx
-                    ? 'bg-white/80'
-                    : 'bg-white/30',
+                i < idx ? 'bg-white' : i === idx ? 'bg-white/80' : 'bg-white/30',
               )}
             />
           ))}
         </div>
 
         {/* Header */}
-        <div className="flex items-center gap-2 p-4 pt-7 relative z-10">
+        <div className="flex items-center gap-2 p-4 pt-7 relative z-30">
           <Avatar className="w-8 h-8 flex-shrink-0">
             {group.actor.avatarUrl && <AvatarImage src={group.actor.avatarUrl} alt={group.actor.handle} />}
-            <AvatarFallback
-              className="text-xs text-white"
-              style={{ background: 'var(--gradient-avatar)' }}
-            >
+            <AvatarFallback className="text-xs text-white" style={{ background: 'var(--gradient-avatar)' }}>
               {(group.actor.displayName ?? group.actor.handle).slice(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p className={cn('text-sm font-medium truncate', hasImage ? 'text-white' : 'text-(--color-text-primary)')}>
+            <p className={cn('text-sm font-medium truncate', dark ? 'text-white' : 'text-(--color-text-primary)')}>
               {group.actor.displayName ?? group.actor.handle}
             </p>
-            <p className={cn('text-xs flex items-center gap-1', hasImage ? 'text-white/70' : 'text-(--color-text-tertiary)')}>
+            <p className={cn('text-xs flex items-center gap-1', dark ? 'text-white/70' : 'text-(--color-text-tertiary)')}>
               <Clock className="w-3 h-3" />
               {moment ? timeLeft(moment.expiresAt) : ''}
             </p>
           </div>
-          <button onClick={onClose} className={cn(hasImage ? 'text-white/70 hover:text-white' : 'text-(--color-text-tertiary) hover:text-(--color-text-primary)')}>
+          {video && (
+            <button
+              onClick={() => setMuted((m) => !m)}
+              className={cn('p-1', dark ? 'text-white/80 hover:text-white' : 'text-(--color-text-tertiary)')}
+              aria-label={muted ? 'Sesi aç' : 'Sesi kapat'}
+            >
+              {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+            </button>
+          )}
+          {isOwn && (
+            <button onClick={deleteOwn} className={cn('p-1', dark ? 'text-white/80 hover:text-white' : 'text-(--color-text-tertiary) hover:text-red-500')} aria-label="Sil">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+          <button onClick={onClose} className={cn('p-1', dark ? 'text-white/80 hover:text-white' : 'text-(--color-text-tertiary) hover:text-(--color-text-primary)')}>
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Content — text only card if no image, overlaid pill if image */}
-        {hasImage ? (
+        {/* Caption — overlaid pill if media, plain card if text-only */}
+        {hasMedia ? (
           moment?.content?.trim() ? (
-            <div className="absolute bottom-4 left-4 right-4 z-10 bg-black/60 rounded-xl px-3 py-2">
+            <div className="absolute bottom-[68px] left-4 right-4 z-30 bg-black/60 rounded-xl px-3 py-2">
               <p className="text-white text-sm leading-relaxed">{moment.content}</p>
             </div>
           ) : null
         ) : (
           <div className="px-4 pb-6 min-h-[200px] flex items-center">
-            <p className="text-(--color-text-primary) text-base leading-relaxed">
-              {moment?.content}
-            </p>
+            <p className="text-(--color-text-primary) text-base leading-relaxed">{moment?.content}</p>
           </div>
         )}
 
-        {/* Navigation — invisible tap zones */}
-        <div className="flex absolute inset-0 top-16 z-20">
+        {/* Navigation — invisible tap zones (kept clear of header & footer) */}
+        <div className="flex absolute inset-x-0 top-16 bottom-16 z-20">
+          <button className="flex-1" aria-label="Önceki" onClick={() => setIdx((i) => Math.max(0, i - 1))} />
           <button
             className="flex-1"
-            onClick={() => setIdx((i) => Math.max(0, i - 1))}
-          />
-          <button
-            className="flex-1"
+            aria-label="Sonraki"
             onClick={() => {
               if (idx < group.moments.length - 1) setIdx((i) => i + 1)
               else onClose()
             }}
           />
+        </div>
+
+        {/* Report reason sheet */}
+        {reportOpen && (
+          <div className="absolute inset-0 z-40 flex items-end bg-black/50" onClick={() => setReportOpen(false)}>
+            <div className="w-full bg-(--color-background) rounded-t-2xl p-3 space-y-1" onClick={(e) => e.stopPropagation()}>
+              <p className="text-sm font-semibold text-(--color-text-primary) px-2 py-1.5">Neden raporluyorsun?</p>
+              {REPORT_REASONS.map((r) => (
+                <button
+                  key={r.value}
+                  disabled={reporting}
+                  onClick={() => submitReport(r.value)}
+                  className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-(--color-text-secondary) hover:bg-(--color-background-secondary) disabled:opacity-50"
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Footer action bar */}
+        <div className="absolute bottom-0 inset-x-0 z-30 flex items-center gap-2 p-3">
+          {isOwn ? (
+            <p className={cn('flex-1 text-center text-xs', dark ? 'text-white/70' : 'text-(--color-text-tertiary)')}>
+              Bu senin momentin · {like?.count ?? 0} beğeni
+            </p>
+          ) : (
+            <>
+              <div className={cn('flex-1 flex items-center gap-2 rounded-full px-3 h-9', dark ? 'bg-white/15 backdrop-blur-sm' : 'bg-(--color-background-secondary)')}>
+                <input
+                  value={reply}
+                  onChange={(e) => setReply(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') void sendReply() }}
+                  placeholder="Yanıt gönder..."
+                  className={cn('flex-1 bg-transparent border-0 outline-none text-sm', dark ? 'text-white placeholder:text-white/60' : 'text-(--color-text-primary) placeholder:text-(--color-text-tertiary)')}
+                />
+                {reply.trim() && (
+                  <button onClick={sendReply} disabled={sending} className={cn('flex-shrink-0', dark ? 'text-white' : 'text-(--color-coral)')}>
+                    {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  </button>
+                )}
+              </div>
+              <button onClick={toggleLike} className="flex-shrink-0 flex flex-col items-center" aria-label="Beğen">
+                <Heart className={cn('w-6 h-6 transition-colors', like?.liked ? 'fill-(--color-coral) text-(--color-coral)' : dark ? 'text-white' : 'text-(--color-text-secondary)')} />
+              </button>
+              <button onClick={() => setReportOpen(true)} className={cn('flex-shrink-0 p-1', dark ? 'text-white/80 hover:text-white' : 'text-(--color-text-tertiary) hover:text-(--color-text-primary)')} aria-label="Raporla">
+                <Flag className="w-5 h-5" />
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -169,13 +368,19 @@ function ComposeModal({
   const [content, setContent] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [isVideo, setIsVideo] = useState(false)
   const [activeFilter, setActiveFilter] = useState<FilterDef>(FILTERS[0]!)
+  const [adjust, setAdjust] = useState<Adjust>(DEFAULT_ADJUST)
+  const [showAdjust, setShowAdjust] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [posting, setPosting] = useState(false)
   const [dragOver, setDragOver] = useState(false)
 
   const imgRef = useRef<HTMLImageElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Live CSS filter: preset + manual adjustments, shared by preview and export
+  const combinedFilter = buildFilterCss(activeFilter.css, adjust)
 
   // Clean up object URL on unmount or when preview changes
   useEffect(() => {
@@ -185,12 +390,16 @@ function ComposeModal({
   }, [previewUrl])
 
   const handleFileSelect = useCallback((file: File) => {
-    if (!file.type.startsWith('image/')) return
+    const video = file.type.startsWith('video/')
+    if (!file.type.startsWith('image/') && !video) return
     if (previewUrl) URL.revokeObjectURL(previewUrl)
     const url = URL.createObjectURL(file)
     setSelectedFile(file)
     setPreviewUrl(url)
+    setIsVideo(video)
     setActiveFilter(FILTERS[0]!)
+    setAdjust(DEFAULT_ADJUST)
+    setShowAdjust(false)
   }, [previewUrl])
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -220,20 +429,25 @@ function ComposeModal({
     try {
       let mediaId: string | undefined
 
-      if (selectedFile && imgRef.current) {
+      if (selectedFile) {
         setUploading(true)
-        // Apply the selected filter via canvas and export as a new blob
-        const blob = await applyFilterAndExport(imgRef.current, activeFilter.css)
-        const filteredFile = new File([blob], selectedFile.name, { type: 'image/jpeg' })
-        const uploaded = await api.media.upload(filteredFile)
-        mediaId = uploaded.id
+        if (isVideo) {
+          const uploaded = await api.media.uploadVideo(selectedFile)
+          mediaId = uploaded.id
+        } else if (imgRef.current) {
+          // Bake the preset filter + manual adjustments into the image via canvas
+          const blob = await applyFilterAndExport(imgRef.current, combinedFilter)
+          const filteredFile = new File([blob], selectedFile.name, { type: 'image/jpeg' })
+          const uploaded = await api.media.upload(filteredFile)
+          mediaId = uploaded.id
+        }
         setUploading(false)
       }
 
       await api.moments.create(content.trim(), mediaId)
       onPosted()
     } catch {
-      // ignore
+      toast.error('Moment paylaşılamadı')
     } finally {
       setPosting(false)
       setUploading(false)
@@ -263,7 +477,7 @@ function ComposeModal({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept="image/*,video/*"
           className="hidden"
           onChange={handleInputChange}
         />
@@ -285,29 +499,42 @@ function ComposeModal({
               onDragLeave={handleDragLeave}
             >
               <Camera className="w-8 h-8 text-(--color-text-tertiary) mb-2" />
-              <p className="text-sm text-(--color-text-tertiary) font-medium">Fotoğraf ekle</p>
-              <p className="text-xs text-(--color-text-tertiary) mt-1">tıkla veya sürükle-bırak</p>
+              <p className="text-sm text-(--color-text-tertiary) font-medium">Fotoğraf veya video ekle</p>
+              <p className="text-xs text-(--color-text-tertiary) mt-1">tıkla veya sürükle-bırak · dikey en iyi sonucu verir</p>
             </div>
           ) : (
             <div className="space-y-2">
-              {/* Image preview with filter applied via CSS */}
-              <div className="relative rounded-xl overflow-hidden" style={{ aspectRatio: '9/16', maxWidth: 320, margin: '0 auto' }}>
-                <img
-                  ref={imgRef}
-                  src={previewUrl!}
-                  alt="Preview"
-                  className="w-full h-full object-cover"
-                  style={{ filter: activeFilter.css || undefined }}
-                  crossOrigin="anonymous"
-                />
-                {/* Remove image button */}
+              {/* Preview — video plays inline, image shows live filter/adjustments */}
+              <div className="relative rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '9/16', maxWidth: 320, margin: '0 auto' }}>
+                {isVideo ? (
+                  <video
+                    src={previewUrl!}
+                    className="w-full h-full object-cover"
+                    controls
+                    playsInline
+                    loop
+                  />
+                ) : (
+                  <img
+                    ref={imgRef}
+                    src={previewUrl!}
+                    alt="Preview"
+                    className="w-full h-full object-cover"
+                    style={{ filter: combinedFilter || undefined }}
+                    crossOrigin="anonymous"
+                  />
+                )}
+                {/* Remove media button */}
                 <button
                   className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center hover:bg-black/80"
                   onClick={() => {
                     if (previewUrl) URL.revokeObjectURL(previewUrl)
                     setPreviewUrl(null)
                     setSelectedFile(null)
+                    setIsVideo(false)
                     setActiveFilter(FILTERS[0]!)
+                    setAdjust(DEFAULT_ADJUST)
+                    setShowAdjust(false)
                     if (fileInputRef.current) fileInputRef.current.value = ''
                   }}
                 >
@@ -315,43 +542,85 @@ function ComposeModal({
                 </button>
               </div>
 
-              {/* Filter row */}
-              <div>
-                <p className="text-xs text-(--color-text-tertiary) font-medium mb-1.5">Filtreler</p>
-                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                  {FILTERS.map((f) => (
+              {/* Filters + adjustments — images only */}
+              {!isVideo && (
+                <>
+                  <div>
+                    <p className="text-xs text-(--color-text-tertiary) font-medium mb-1.5">Filtreler</p>
+                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+                      {FILTERS.map((f) => (
+                        <button
+                          key={f.label}
+                          onClick={() => setActiveFilter(f)}
+                          className="flex-shrink-0 flex flex-col items-center gap-1"
+                        >
+                          <div
+                            className={cn(
+                              'w-12 h-16 rounded-lg overflow-hidden border-2 transition-colors',
+                              activeFilter.label === f.label
+                                ? 'border-(--color-coral)'
+                                : 'border-transparent hover:border-(--color-border)',
+                            )}
+                          >
+                            <img
+                              src={previewUrl!}
+                              alt={f.label}
+                              className="w-full h-full object-cover"
+                              style={{ filter: f.css || undefined }}
+                            />
+                          </div>
+                          <span className={cn(
+                            'text-[9px] font-medium',
+                            activeFilter.label === f.label
+                              ? 'text-(--color-coral)'
+                              : 'text-(--color-text-tertiary)',
+                          )}>
+                            {f.label}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Manual adjustments — collapsible sliders */}
+                  <div>
                     <button
-                      key={f.label}
-                      onClick={() => setActiveFilter(f)}
-                      className="flex-shrink-0 flex flex-col items-center gap-1"
+                      onClick={() => setShowAdjust((s) => !s)}
+                      className="flex items-center gap-1.5 text-xs font-medium text-(--color-text-tertiary) hover:text-(--color-text-secondary) transition-colors"
                     >
-                      <div
-                        className={cn(
-                          'w-12 h-16 rounded-lg overflow-hidden border-2 transition-colors',
-                          activeFilter.label === f.label
-                            ? 'border-(--color-coral)'
-                            : 'border-transparent hover:border-(--color-border)',
-                        )}
-                      >
-                        <img
-                          src={previewUrl!}
-                          alt={f.label}
-                          className="w-full h-full object-cover"
-                          style={{ filter: f.css || undefined }}
-                        />
-                      </div>
-                      <span className={cn(
-                        'text-[9px] font-medium',
-                        activeFilter.label === f.label
-                          ? 'text-(--color-coral)'
-                          : 'text-(--color-text-tertiary)',
-                      )}>
-                        {f.label}
-                      </span>
+                      <SlidersHorizontal className="w-3.5 h-3.5" />
+                      Ayarlar
+                      {(adjust.brightness !== 1 || adjust.contrast !== 1 || adjust.saturate !== 1 || adjust.warmth !== 0) && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-(--color-coral)" />
+                      )}
                     </button>
-                  ))}
-                </div>
-              </div>
+                    {showAdjust && (
+                      <div className="mt-2 space-y-2.5">
+                        {ADJUST_CONTROLS.map((c) => (
+                          <div key={c.key} className="flex items-center gap-2">
+                            <span className="text-[11px] text-(--color-text-tertiary) w-16 flex-shrink-0">{c.label}</span>
+                            <input
+                              type="range"
+                              min={c.min}
+                              max={c.max}
+                              step={c.step}
+                              value={adjust[c.key]}
+                              onChange={(e) => setAdjust((a) => ({ ...a, [c.key]: Number(e.target.value) }))}
+                              className="flex-1 accent-(--color-coral) h-1"
+                            />
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => setAdjust(DEFAULT_ADJUST)}
+                          className="text-[11px] text-(--color-coral) hover:underline"
+                        >
+                          Sıfırla
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -388,6 +657,7 @@ function ComposeModal({
 
 export function MomentsBar() {
   const { data: session } = useSession()
+  const currentHandle = (session?.user as { handle?: string } | undefined)?.handle
   const [groups, setGroups] = useState<MomentGroup[]>([])
   const [viewing, setViewing] = useState<MomentGroup | null>(null)
   const [composing, setComposing] = useState(false)
@@ -411,7 +681,22 @@ export function MomentsBar() {
   return (
     <>
       {viewing && (
-        <MomentViewer group={viewing} onClose={() => setViewing(null)} />
+        <MomentViewer
+          group={viewing}
+          currentHandle={currentHandle}
+          onClose={() => setViewing(null)}
+          onDeleted={(id) => {
+            setGroups((prev) =>
+              prev
+                .map((g) =>
+                  g.actor.id === viewing.actor.id
+                    ? { ...g, moments: g.moments.filter((m) => m.id !== id) }
+                    : g,
+                )
+                .filter((g) => g.moments.length > 0),
+            )
+          }}
+        />
       )}
 
       {composing && (

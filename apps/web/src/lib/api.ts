@@ -457,7 +457,15 @@ export interface HalkaPeer {
 
 export interface MomentGroup {
   actor: Pick<Actor, 'id' | 'handle' | 'displayName' | 'avatarUrl'>
-  moments: Array<{ id: string; content: string; expiresAt: string; createdAt: string; media?: Array<{ url: string; width: number | null; height: number | null }> }>
+  moments: Array<{
+    id: string
+    content: string
+    expiresAt: string
+    createdAt: string
+    likesCount: number
+    viewerLiked: boolean
+    media?: Array<{ url: string; width: number | null; height: number | null; mimeType?: string; previewUrl?: string | null }>
+  }>
 }
 
 export interface MutedActor {

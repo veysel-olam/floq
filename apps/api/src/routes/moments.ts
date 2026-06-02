@@ -23,7 +23,10 @@ export async function momentsRoutes(app: FastifyInstance) {
     // Get active moments from followed users + self using sql tag
     const rows = await db.execute(
       sql`SELECT
-        p.id, p.content, p.expires_at, p.created_at,
+        p.id, p.content, p.expires_at, p.created_at, p.likes_count,
+        EXISTS (
+          SELECT 1 FROM likes l WHERE l.post_id = p.id AND l.actor_id = ${viewer.id}
+        ) AS viewer_liked,
         a.id   AS author_id,
         a.handle AS author_handle,
         a.display_name AS author_display_name,
@@ -43,24 +46,42 @@ export async function momentsRoutes(app: FastifyInstance) {
        ORDER BY a.id, p.created_at ASC`,
     )
 
-    type MomentRow = {
+    type DbRow = {
       id: string
       content: string
       expires_at: Date
       created_at: Date
+      likes_count: number
+      viewer_liked: boolean
       author_id: string
       author_handle: string
       author_display_name: string | null
       author_avatar_url: string | null
-      media?: { url: string; width: number | null; height: number | null }[]
+    }
+    type MomentMedia = {
+      url: string
+      width: number | null
+      height: number | null
+      mimeType: string
+      previewUrl: string | null
+    }
+    type Moment = {
+      id: string
+      content: string
+      expiresAt: Date
+      createdAt: Date
+      likesCount: number
+      viewerLiked: boolean
+      media: MomentMedia[]
     }
 
-    // Group by author
+    // Group by author — normalise snake_case → camelCase so the client
+    // receives the same shape it consumes elsewhere (expiresAt, likesCount…).
     const byAuthor = new Map<
       string,
-      { actor: { id: string; handle: string; displayName: string | null; avatarUrl: string | null }; moments: MomentRow[] }
+      { actor: { id: string; handle: string; displayName: string | null; avatarUrl: string | null }; moments: Moment[] }
     >()
-    for (const row of rows.rows as MomentRow[]) {
+    for (const row of rows.rows as DbRow[]) {
       if (!byAuthor.has(row.author_id)) {
         byAuthor.set(row.author_id, {
           actor: {
@@ -72,21 +93,29 @@ export async function momentsRoutes(app: FastifyInstance) {
           moments: [],
         })
       }
-      byAuthor.get(row.author_id)!.moments.push(row)
+      byAuthor.get(row.author_id)!.moments.push({
+        id: row.id,
+        content: row.content,
+        expiresAt: row.expires_at,
+        createdAt: row.created_at,
+        likesCount: Number(row.likes_count ?? 0),
+        viewerLiked: Boolean(row.viewer_liked),
+        media: [],
+      })
     }
 
     // Fetch media for all moments
     const momentIds = [...byAuthor.values()].flatMap(g => g.moments.map(m => m.id))
-    let mediaByPost: Record<string, { url: string; width: number | null; height: number | null }[]> = {}
+    let mediaByPost: Record<string, MomentMedia[]> = {}
     if (momentIds.length > 0) {
       const mediaRows = await db.query.mediaAttachments.findMany({
         where: inArray(mediaAttachments.postId, momentIds),
-        columns: { postId: true, url: true, width: true, height: true },
+        columns: { postId: true, url: true, width: true, height: true, mimeType: true, previewUrl: true },
       })
       for (const m of mediaRows) {
         if (!m.postId) continue
         if (!mediaByPost[m.postId]) mediaByPost[m.postId] = []
-        mediaByPost[m.postId]!.push({ url: m.url, width: m.width, height: m.height })
+        mediaByPost[m.postId]!.push({ url: m.url, width: m.width, height: m.height, mimeType: m.mimeType, previewUrl: m.previewUrl })
       }
     }
 
