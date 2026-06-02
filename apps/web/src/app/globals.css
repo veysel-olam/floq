@@ -71,6 +71,13 @@
 
 /* Dark mode — managed entirely by next-themes (.dark class) */
 .dark {
+  /* Coral, deepened for dark surfaces: the light-mode #E8593C only reaches
+     ~3.5:1 with white text (below AA). #D8492B (brand ember family) lifts
+     white-on-fill AND coral-text-on-dark both to ~4.3:1 — passes AA while
+     staying unmistakably the brand orange. */
+  --color-coral: #D8492B;
+  --color-coral-hover: #C23F24;
+
   --color-background: #17171B;           /* page base */
   --color-background-secondary: #252529; /* hover, interactive areas */
   --color-background-tertiary: #2F2F35;
@@ -110,6 +117,22 @@ body {
   background: var(--color-background);
   color: var(--color-text-primary);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-optical-sizing: auto;
+  letter-spacing: -0.005em;
+}
+
+/* ── Display headings (Outfit) ──────────────────────────────────
+   Outfit is a geometric display face — a touch of negative tracking
+   and tighter leading make headings read as crisp, intentional units
+   rather than loose body text. Applies to native headings and to the
+   many elements that opt into the display font inline. */
+h1, h2, h3, h4,
+[style*="--font-outfit"],
+[style*="--font-display"] {
+  letter-spacing: -0.02em;
+  line-height: 1.15;
 }
 
 /* ── Landing page animations ─────────────────────────────── */
