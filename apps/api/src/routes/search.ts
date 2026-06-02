@@ -198,6 +198,8 @@ export async function searchRoutes(app: FastifyInstance) {
       const conditions = [
         eq(posts.isDeleted, false),
         eq(posts.visibility, 'public'),
+        eq(posts.isEphemeral, false), // moments (stories) are excluded from search
+
         scope === 'local' ? eq(posts.isLocal, true) : scope === 'federated' ? eq(posts.isLocal, false) : undefined,
         // Respect noIndex — exclude posts from actors who opted out of indexing
         sql`NOT EXISTS (SELECT 1 FROM actors a WHERE a.id = ${posts.authorId} AND a.no_index = true)`,
@@ -246,20 +248,24 @@ export async function searchRoutes(app: FastifyInstance) {
   // GET /api/trending/tags — recency-weighted trending hashtags.
   // Score = Σ 0.5^(age_hours / 12): recent usage dominates (12h half-life) so the
   // list reflects what's hot *now*, not just raw 48h totals. 72h window for data.
+  // A tag only "trends" if at least 2 distinct authors used it — this stops a
+  // single user's repeated hashtags from dominating everyone's sidebar.
   app.get('/api/trending/tags', async (_req, reply) => {
     const rows = await db.execute(
       sql`
         SELECT tag,
-               COUNT(*) AS count,
+               COUNT(DISTINCT author_id) AS count,
                SUM(POWER(0.5, EXTRACT(EPOCH FROM (now() - created_at)) / 43200.0)) AS score
         FROM (
-          SELECT unnest(${posts.tags}) AS tag, ${posts.createdAt} AS created_at
+          SELECT unnest(${posts.tags}) AS tag, ${posts.createdAt} AS created_at, ${posts.authorId} AS author_id
           FROM ${posts}
           WHERE ${posts.createdAt} > now() - interval '72 hours'
             AND ${posts.isDeleted} = false
             AND ${posts.visibility} = 'public'
+            AND ${posts.isEphemeral} = false
         ) t
         GROUP BY tag
+        HAVING COUNT(DISTINCT author_id) >= 2
         ORDER BY score DESC
         LIMIT 10
       `

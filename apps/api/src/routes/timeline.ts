@@ -142,6 +142,7 @@ export async function timelineRoutes(app: FastifyInstance) {
         sourceCondition,
         eq(posts.isDeleted, false),
         isNull(posts.scheduledAt),
+        eq(posts.isEphemeral, false), // moments are story-only — never in the home feed
         // Hide posts from anyone in a block relationship with the viewer.
         sql`NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ${ctx.actor.id} AND b.blocked_id = ${posts.authorId}) OR (b.blocker_id = ${posts.authorId} AND b.blocked_id = ${ctx.actor.id}))`,
       ]
@@ -320,7 +321,7 @@ export async function timelineRoutes(app: FastifyInstance) {
       const cursor = req.query.cursor ? new Date(req.query.cursor) : undefined
       const feed = req.query.feed // 'local' | 'federated' | undefined
 
-      const conditions = [eq(posts.visibility, 'public'), eq(posts.isDeleted, false), isNull(posts.scheduledAt)]
+      const conditions = [eq(posts.visibility, 'public'), eq(posts.isDeleted, false), isNull(posts.scheduledAt), eq(posts.isEphemeral, false)]
       // Restricted mode: minors (13-17) don't see sensitive/NSFW content.
       if (viewerIsMinor) conditions.push(eq(posts.sensitive, false))
       // Hide posts from anyone in a block relationship with the viewer (both ways).
@@ -367,6 +368,7 @@ export async function timelineRoutes(app: FastifyInstance) {
         eq(posts.visibility, 'public'),
         eq(posts.isDeleted, false),
         isNull(posts.scheduledAt),
+        eq(posts.isEphemeral, false),
         arrayContains(posts.tags, [tag]),
         ...(cursor ? [lt(posts.createdAt, cursor)] : []),
       ]

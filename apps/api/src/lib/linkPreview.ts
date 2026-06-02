@@ -53,6 +53,8 @@ interface MusicMeta {
   platform: string
   type: string
   embedUrl: string | null
+  appleId?: string      // numeric id for iTunes Lookup (Apple Music)
+  appleLocale?: string  // 2-letter locale from the URL
 }
 
 function detectMusicPlatform(url: URL): MusicMeta | null {
@@ -84,12 +86,25 @@ function detectMusicPlatform(url: URL): MusicMeta | null {
     }
   }
 
-  // Apple Music: music.apple.com/{locale}/album/{name}/{id}?i={songId}
+  // Apple Music:
+  //   album: music.apple.com/{locale}/album/{name}/{id}[?i={songId}]
+  //   song:  music.apple.com/{locale}/song/{name}/{id}
   if (host === 'music.apple.com') {
     const songId = url.searchParams.get('i')
-    const m = path.match(/^\/([a-z]{2})\/album\/[^/]+\/(\d+)/)
-    if (m) {
-      const [, locale, albumId] = m
+    const songM = path.match(/^\/([a-z]{2})\/song\/[^/]+\/(\d+)/)
+    if (songM) {
+      const [, locale, id] = songM
+      return {
+        platform: 'applemusic',
+        type: 'track',
+        embedUrl: `https://embed.music.apple.com/${locale}/song/${id}`,
+        appleId: id!,
+        appleLocale: locale!,
+      }
+    }
+    const albumM = path.match(/^\/([a-z]{2})\/album\/[^/]+\/(\d+)/)
+    if (albumM) {
+      const [, locale, albumId] = albumM
       const embedPath = songId
         ? `/${locale}/album/${albumId}?i=${songId}`
         : `/${locale}/album/${albumId}`
@@ -97,6 +112,8 @@ function detectMusicPlatform(url: URL): MusicMeta | null {
         platform: 'applemusic',
         type: songId ? 'track' : 'album',
         embedUrl: `https://embed.music.apple.com${embedPath}`,
+        appleId: (songId ?? albumId)!,
+        appleLocale: locale!,
       }
     }
   }
@@ -209,6 +226,54 @@ function parseMusicNames(
   return { track: title, artist: null }
 }
 
+// Apple Music pages are JS-rendered and rarely expose usable OG tags to a
+// server-side fetch. The public iTunes Lookup API returns clean track/artist/
+// artwork by numeric id, with no auth — far more reliable than scraping.
+async function appleMusicPreview(music: MusicMeta, urlHref: string): Promise<LinkPreview | null> {
+  if (!music.appleId) return null
+  try {
+    const res = await fetch(`https://itunes.apple.com/lookup?id=${music.appleId}`, {
+      signal: AbortSignal.timeout(6000),
+      headers: { Accept: 'application/json' },
+    })
+    if (!res.ok) return null
+    const data = await res.json() as {
+      results?: Array<{
+        wrapperType?: string; kind?: string
+        trackName?: string; collectionName?: string; artistName?: string
+        artworkUrl100?: string; collectionId?: number
+      }>
+    }
+    const r = data.results?.[0]
+    if (!r) return null
+
+    const isTrack = r.kind === 'song' || r.wrapperType === 'track'
+    const track = isTrack ? (r.trackName ?? r.collectionName ?? null) : (r.collectionName ?? null)
+    const artist = r.artistName ?? null
+    // artworkUrl100 → request a larger square
+    const image = r.artworkUrl100 ? r.artworkUrl100.replace(/\/\d+x\d+bb\.(jpg|png)/, '/600x600bb.$1') : null
+    // Prefer the canonical album-embed for songs (richer player) when we know the album
+    const embedUrl = isTrack && r.collectionId && music.appleLocale
+      ? `https://embed.music.apple.com/${music.appleLocale}/album/${r.collectionId}?i=${music.appleId}`
+      : music.embedUrl
+
+    return {
+      url: urlHref,
+      title: track && artist ? `${track} – ${artist}` : (track ?? null),
+      description: r.collectionName ?? null,
+      image,
+      siteName: 'Apple Music',
+      musicPlatform: 'applemusic',
+      musicType: isTrack ? 'track' : 'album',
+      ...(embedUrl != null && { musicEmbedUrl: embedUrl }),
+      ...(artist != null && { musicArtist: artist }),
+      ...(track != null && { musicTrack: track }),
+    }
+  } catch {
+    return null
+  }
+}
+
 export async function fetchLinkPreview(rawUrl: string): Promise<LinkPreview | null> {
   let url: URL
   try {
@@ -219,6 +284,13 @@ export async function fetchLinkPreview(rawUrl: string): Promise<LinkPreview | nu
   if (!['http:', 'https:'].includes(url.protocol)) return null
 
   const musicMeta = detectMusicPlatform(url)
+
+  // Apple Music → resolve names/artwork via iTunes Lookup (reliable, no scraping)
+  if (musicMeta?.platform === 'applemusic') {
+    const apple = await appleMusicPreview(musicMeta, url.href)
+    if (apple) return apple
+    // else fall through to the generic scrape below
+  }
 
   try {
     const controller = new AbortController()

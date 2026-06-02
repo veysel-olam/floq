@@ -89,7 +89,7 @@ export async function actorsRoutes(app: FastifyInstance) {
     const [likesRow] = await db
       .select({ total: sql<number>`COALESCE(SUM(${posts.likesCount}), 0)::int` })
       .from(posts)
-      .where(and(eq(posts.authorId, actor.id), eq(posts.isDeleted, false), isNull(posts.scheduledAt)))
+      .where(and(eq(posts.authorId, actor.id), eq(posts.isDeleted, false), isNull(posts.scheduledAt), eq(posts.isEphemeral, false)))
 
     // Profil ziyareti sayacı — kendi profili hariç (fire-and-forget)
     if (!viewerActorId || viewerActorId !== actor.id) {
@@ -151,6 +151,7 @@ export async function actorsRoutes(app: FastifyInstance) {
       eq(posts.authorId, actor.id),
       eq(posts.isDeleted, false),
       isNull(posts.scheduledAt),
+      eq(posts.isEphemeral, false), // moments (stories) never show in the profile feed
       visibilityCond,
       ...(mediaCond ? [mediaCond] : []),
       ...(onlyReplies ? [isNotNull(posts.replyToId)] : onlyMedia ? [] : [isNull(posts.replyToId)]),
