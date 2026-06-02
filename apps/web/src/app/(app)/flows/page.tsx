@@ -17,7 +17,7 @@ import {
 import { cn } from '@/lib/utils'
 import {
   Loader2, Layers, Plus, Search, Users, FileText,
-  Lock, Globe, Link2, ChevronDown,
+  Lock, Globe, Link2, ChevronDown, Compass, UserPlus, PenLine,
 } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
 
@@ -305,6 +305,53 @@ export default function FlowsPage() {
         </CollapsibleContent>
       </Collapsible>
 
+      {/* Onboarding — explain what Flows are, shown until the user joins one */}
+      {joined.length === 0 && !search && (
+        <div className="px-4 pt-4 pb-1">
+          <div className="rounded-2xl border border-(--color-border-secondary) bg-(--color-background-secondary)/40 p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-(--color-coral)/15 flex items-center justify-center flex-shrink-0">
+                <Layers className="w-5 h-5 text-(--color-coral)" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-sm font-bold text-(--color-text-primary)" style={{ fontFamily: 'var(--font-outfit)' }}>
+                  Akış nedir?
+                </h2>
+                <p className="text-[12px] text-(--color-text-secondary) mt-1 leading-relaxed">
+                  Akışlar, ortak bir konu etrafında paylaşım yapılan kanallardır. Bir akışa
+                  katıl, oraya özel gönderiler at ve yalnızca o konunun akışını takip et.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 mt-4">
+              {[
+                { icon: Compass, title: 'Keşfet', desc: 'İlgine göre akış bul' },
+                { icon: UserPlus, title: 'Katıl', desc: 'Tek dokunuşla üye ol' },
+                { icon: PenLine, title: 'Paylaş', desc: 'Akışa özel gönder' },
+              ].map(({ icon: Icon, title, desc }) => (
+                <div key={title} className="flex flex-col items-center text-center gap-1.5 rounded-xl bg-(--color-background) px-2 py-3">
+                  <Icon className="w-4 h-4 text-(--color-coral)" />
+                  <span className="text-[11px] font-semibold text-(--color-text-primary)">{title}</span>
+                  <span className="text-[10px] text-(--color-text-tertiary) leading-tight">{desc}</span>
+                </div>
+              ))}
+            </div>
+
+            <Button
+              onClick={() => setCreateOpen(true)}
+              className="w-full mt-3 bg-(--color-coral) hover:bg-(--color-coral-hover) text-white gap-1.5 rounded-full h-9"
+            >
+              <Plus className="w-4 h-4" />
+              Kendi akışını oluştur
+            </Button>
+            <p className="text-[11px] text-(--color-text-tertiary) text-center mt-2">
+              ya da aşağıdan popüler akışlara göz at
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Joined flows */}
       {joined.length > 0 && (
         <>
@@ -319,7 +366,15 @@ export default function FlowsPage() {
         </>
       )}
 
-      {/* Discover tabs */}
+      {/* Discover */}
+      {!search && (
+        <div className="px-4 pt-4 pb-2 flex items-center gap-2">
+          <Compass className="w-3.5 h-3.5 text-(--color-text-tertiary)" />
+          <p className="text-[11px] font-semibold text-(--color-text-tertiary) uppercase tracking-wider">
+            Keşfet
+          </p>
+        </div>
+      )}
       <Tabs
         value={discoverTab}
         onValueChange={(v) => setDiscoverTab(v as DiscoverTab)}
@@ -345,11 +400,11 @@ export default function FlowsPage() {
         </>
       )}
 
-      {joined.length === 0 && discover.length === 0 && (
+      {search && joined.length === 0 && discover.length === 0 && (
         <EmptyState
-          icon={Layers}
-          title={search ? 'Sonuç bulunamadı' : 'Henüz akış yok'}
-          description={search ? undefined : 'Akışlar, konu bazlı paylaşım kanallarıdır.'}
+          icon={Search}
+          title="Sonuç bulunamadı"
+          description={`"${search}" ile eşleşen akış yok. Farklı bir kelime dene ya da bu isimle kendi akışını oluştur.`}
         />
       )}
 
