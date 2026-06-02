@@ -729,9 +729,22 @@ export default function DmThreadPage({ params }: { params: Promise<{ handle: str
     }
   }, [isPending, session, load])
 
+  // Only mark the partner's messages read when the tab is actually visible —
+  // a message merely *delivered* to a backgrounded tab isn't "seen" yet.
   useEffect(() => {
-    if (!loading && messages.length > 0) void api.dm.markRead(handle)
+    if (!loading && messages.length > 0 && document.visibilityState === 'visible') {
+      void api.dm.markRead(handle)
+    }
   }, [loading, handle, messages.length])
+
+  // When the user returns to the tab, mark read.
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'visible' && messages.length > 0) void api.dm.markRead(handle)
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [handle, messages.length])
 
   useEffect(() => () => {
     if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
@@ -744,7 +757,8 @@ export default function DmThreadPage({ params }: { params: Promise<{ handle: str
     const { from, post } = data as { from: string; post: Post }
     if (from !== handle) return
     setMessages((prev) => prev.some((m) => m.id === post.id) ? prev : [...prev, post])
-    void api.dm.markRead(handle)
+    // Only mark read if the user is actually looking (visible tab).
+    if (document.visibilityState === 'visible') void api.dm.markRead(handle)
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
   }, [handle])
 

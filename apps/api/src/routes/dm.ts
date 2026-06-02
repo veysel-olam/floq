@@ -339,15 +339,14 @@ export async function dmRoutes(app: FastifyInstance) {
 
     const myId = ctx.actor.id
 
-    // Find the most recent message in this conversation
+    // Read receipts track reading the PARTNER's messages — so mark up to their
+    // latest message TO me (never my own; otherwise I'd "read" my own sends).
     const lastMsg = await db.query.posts.findFirst({
       where: and(
         eq(posts.visibility, 'direct'),
         eq(posts.isDeleted, false),
-        or(
-          and(eq(posts.authorId, myId), eq(posts.recipientId, partner.id)),
-          and(eq(posts.authorId, partner.id), eq(posts.recipientId, myId)),
-        ),
+        eq(posts.authorId, partner.id),
+        eq(posts.recipientId, myId),
       ),
       orderBy: [desc(posts.createdAt)],
       columns: { id: true },
