@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { db } from '../db/client.js'
 import { posts, actors, actorPreferences, mediaAttachments, conversations, conversationMembers, follows, dmReads, dmSettings } from '../db/schema.js'
 import { requireActor } from '../lib/session.js'
+import { areBlocked } from '../lib/blocks.js'
 import { enrichPosts } from '../lib/enrichPosts.js'
 import { env } from '../lib/env.js'
 import { publish } from '../lib/pubsub.js'
@@ -196,6 +197,11 @@ export async function dmRoutes(app: FastifyInstance) {
       })
       if (!partner) return reply.code(404).send({ error: 'Not found' })
       if (partner.id === ctx.actor.id) return reply.code(400).send({ error: 'Cannot DM yourself' })
+
+      // Blocking is enforced both ways — neither party can DM the other.
+      if (await areBlocked(ctx.actor.id, partner.id)) {
+        return reply.code(403).send({ error: 'Bu kullanıcıyla mesajlaşamazsınız.' })
+      }
 
       // Check if recipient has disabled DMs
       const recipientPrefs = await db.query.actorPreferences.findFirst({

@@ -142,6 +142,8 @@ export async function timelineRoutes(app: FastifyInstance) {
         sourceCondition,
         eq(posts.isDeleted, false),
         isNull(posts.scheduledAt),
+        // Hide posts from anyone in a block relationship with the viewer.
+        sql`NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ${ctx.actor.id} AND b.blocked_id = ${posts.authorId}) OR (b.blocker_id = ${posts.authorId} AND b.blocked_id = ${ctx.actor.id}))`,
       ]
       if (rule.hideReplies) conditions.push(isNull(posts.replyToId))
 
@@ -321,6 +323,10 @@ export async function timelineRoutes(app: FastifyInstance) {
       const conditions = [eq(posts.visibility, 'public'), eq(posts.isDeleted, false), isNull(posts.scheduledAt)]
       // Restricted mode: minors (13-17) don't see sensitive/NSFW content.
       if (viewerIsMinor) conditions.push(eq(posts.sensitive, false))
+      // Hide posts from anyone in a block relationship with the viewer (both ways).
+      if (actorId) {
+        conditions.push(sql`NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ${actorId} AND b.blocked_id = ${posts.authorId}) OR (b.blocker_id = ${posts.authorId} AND b.blocked_id = ${actorId}))`)
+      }
       if (cursor) conditions.push(lt(posts.createdAt, cursor))
       if (feed === 'local') conditions.push(eq(posts.isLocal, true))
       if (feed === 'federated') conditions.push(eq(posts.isLocal, false))
