@@ -1,4 +1,6 @@
-const CACHE_NAME = 'floq-v1'
+// Bump this on each release so the browser detects a new SW → open tabs
+// auto-reload to the latest app (see service-worker-register.tsx).
+const CACHE_NAME = 'floq-v2'
 const OFFLINE_URL = '/offline'
 
 const PRECACHE_URLS = [
