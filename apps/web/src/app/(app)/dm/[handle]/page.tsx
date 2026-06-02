@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, use } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import Link from 'next/link'
 import {
   ArrowLeft, Loader2, Send, Lock, ShieldCheck, Mic, MicOff, Play, Pause,
@@ -881,6 +882,12 @@ export default function DmThreadPage({ params }: { params: Promise<{ handle: str
   }
 
   async function startRecording() {
+    // getUserMedia needs a secure context (HTTPS) + browser support. On an
+    // insecure origin or unsupported browser, navigator.mediaDevices is undefined.
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast.error('Bu tarayıcı/cihaz ses kaydını desteklemiyor (HTTPS gerekli).')
+      return
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
@@ -898,7 +905,7 @@ export default function DmThreadPage({ params }: { params: Promise<{ handle: str
           const newMsg = await api.dm.sendMedia(handle, [att.id])
           setMessages((prev) => [...prev, newMsg])
           setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
-        } catch { } finally { setRecordingState('idle'); setRecordingSeconds(0) }
+        } catch { toast.error('Ses mesajı gönderilemedi.') } finally { setRecordingState('idle'); setRecordingSeconds(0) }
       }
       mediaRecorderRef.current = recorder
       recorder.start(250)
@@ -907,7 +914,16 @@ export default function DmThreadPage({ params }: { params: Promise<{ handle: str
       recordingTimerRef.current = setInterval(() => {
         setRecordingSeconds((s) => { if (s >= 119) { stopRecording(); return s } return s + 1 })
       }, 1000)
-    } catch { }
+    } catch (err) {
+      const name = (err as { name?: string }).name
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        toast.error('Mikrofon izni reddedildi. Tarayıcı/site ayarlarından izin ver.')
+      } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        toast.error('Mikrofon bulunamadı.')
+      } else {
+        toast.error('Ses kaydı başlatılamadı.')
+      }
+    }
   }
 
   function stopRecording() {
