@@ -95,6 +95,8 @@ export async function blueskyRoutes(app: FastifyInstance) {
       .set({
         ...(body.data.crosspost_enabled !== undefined ? { crosspostEnabled: body.data.crosspost_enabled } : {}),
         ...(body.data.import_enabled !== undefined ? { importEnabled: body.data.import_enabled } : {}),
+        // Stamp the moment import is (re)enabled — the cutoff for outbound fan-out.
+        ...(body.data.import_enabled === true ? { importEnabledAt: new Date() } : {}),
         updatedAt: new Date(),
       })
       .where(eq(blueskyConnections.userId, ctx.userId))

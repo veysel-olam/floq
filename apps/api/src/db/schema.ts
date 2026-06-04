@@ -1712,6 +1712,9 @@ export const blueskyConnections = pgTable('bluesky_connections', {
   refreshJwt: text('refresh_jwt').notNull(),
   crosspostEnabled: boolean('crosspost_enabled').notNull().default(true),
   importEnabled: boolean('import_enabled').notNull().default(false),
+  // When import was last enabled — posts created after this federate outward;
+  // the initial backfill of older posts is mirrored to floq only (no fan-out).
+  importEnabledAt: timestamp('import_enabled_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })

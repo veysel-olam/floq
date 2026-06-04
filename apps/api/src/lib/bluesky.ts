@@ -1,9 +1,11 @@
 import { BskyAgent } from '@atproto/api'
 import sharp from 'sharp'
 import { db } from '../db/client.js'
-import { blueskyConnections, posts, actors } from '../db/schema.js'
+import { blueskyConnections, posts, actors, mediaAttachments } from '../db/schema.js'
 import { eq, sql } from 'drizzle-orm'
 import { env } from './env.js'
+import { buildNote, buildCreate } from './activityPub.js'
+import { deliverToFollowers } from './federation.js'
 
 export interface CrosspostMedia { url: string; alt?: string | null }
 
@@ -127,10 +129,38 @@ export async function crosspostToBluesky(
 
 // ─── Inbound: mirror a user's own Bluesky posts into floq ───────────────────────
 
+// Pull image attachments out of a Bluesky post's embed view (hotlinked — we
+// store the Bluesky CDN url, matching how floq handles other remote media).
+type BskyImage = { url: string; alt: string; width: number | null; height: number | null }
+function extractBskyImages(embed: unknown): BskyImage[] {
+  const e = embed as { '$type'?: string; images?: unknown[]; media?: { '$type'?: string; images?: unknown[] } } | null
+  if (!e) return []
+  let imgs: unknown[] | undefined
+  if (e['$type'] === 'app.bsky.embed.images#view') imgs = e.images
+  else if (e['$type'] === 'app.bsky.embed.recordWithMedia#view' && e.media?.['$type'] === 'app.bsky.embed.images#view') imgs = e.media.images
+  if (!imgs) return []
+  return imgs
+    .map((im) => {
+      const o = im as { fullsize?: string; alt?: string; aspectRatio?: { width?: number; height?: number } }
+      return {
+        url: o.fullsize ?? '',
+        alt: o.alt ?? '',
+        width: o.aspectRatio?.width ?? null,
+        height: o.aspectRatio?.height ?? null,
+      }
+    })
+    .filter((x) => x.url.startsWith('http'))
+    .slice(0, 4)
+}
+
 // Pull the connected user's recent Bluesky posts and mirror new ones into floq as
 // their own local posts. Direct DB insert (not the post route) means no crosspost
 // is triggered, so there's no echo loop; dedupe + the bskyUri loop-guard ensure a
 // post is never mirrored twice or bounced back to Bluesky.
+//
+// Media (images) is hotlinked. Posts created AFTER import was enabled also
+// federate out to the user's fediverse followers; the initial backfill of older
+// posts is mirrored to floq only, so enabling import never floods followers.
 export async function importBlueskyPosts(userId: string): Promise<number> {
   const conn = await db.query.blueskyConnections.findFirst({
     where: eq(blueskyConnections.userId, userId),
@@ -186,6 +216,39 @@ export async function importBlueskyPosts(userId: string): Promise<number> {
 
     const apId = `${env.APP_URL}/users/${actor.handle}/posts/${inserted.id}`
     await db.update(posts).set({ apId, apUrl: apId }).where(eq(posts.id, inserted.id))
+
+    // Hotlink any images from the Bluesky embed
+    const images = extractBskyImages(post.embed)
+    if (images.length) {
+      await db.insert(mediaAttachments).values(images.map((im) => ({
+        postId: inserted.id,
+        actorId: actor.id,
+        url: im.url,
+        remoteUrl: im.url,
+        mimeType: 'image/jpeg',
+        altText: im.alt || null,
+        width: im.width,
+        height: im.height,
+      }))).catch(() => {})
+    }
+
+    // Going-forward fan-out: federate posts made after import was enabled, so the
+    // user's fediverse followers see new Bluesky posts (backfill stays silent).
+    if (conn.importEnabledAt && createdAt > conn.importEnabledAt) {
+      const note = buildNote({
+        id: inserted.id,
+        content: text,
+        sensitive: false,
+        contentWarning: null,
+        visibility: 'public',
+        createdAt,
+        apInReplyTo: null,
+        tags,
+        author: { handle: actor.handle },
+      })
+      void deliverToFollowers(actor.handle, actor.id, buildCreate(note, actor.handle)).catch(() => {})
+    }
+
     imported++
     if (imported >= 10) break // bound work per sweep
   }

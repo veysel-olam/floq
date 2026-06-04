@@ -58,8 +58,12 @@ uzak actor sayıları + refresh TTL · thread/yanıt çözümleme · boost timel
 - [x] **Köprü cross-post job'a alındı** — `crosspostQueue` (BullMQ, 3 deneme + exponential backoff). Hem web hem Mastodon-API yolu `enqueueBlueskyCrosspost`/`enqueueNostrCrosspost` kullanıyor; fire-and-forget kaldırıldı. (2026-06)
 - [x] **Bluesky inbound** — `importBlueskyPosts`: `import_enabled` olan kullanıcıların kendi Bluesky gönderileri 10 dakikalık `sweepBlueskyImports` job'ı ile floq'a aynalanıyor (yerel post olarak doğrudan insert → crosspost tetiklenmez). Ayarlar → Köprüler'de toggle; açınca anlık ilk import. (2026-06)
 - [x] **Cross-post geri-besleme döngüsü koruması** — `posts.bsky_uri`: crosspost'ta dönen at:// uri yazılır, import'ta dedupe için okunur; kendi çıktımızı asla geri aynalamayız. (2026-06)
-- [ ] **Bluesky inbound — kapsam genişletme** — Şu an yalnızca kullanıcının kendi üst-düzey gönderileri (yanıt/repost/medya hariç). İçe aktarılan gönderiler ActivityPub ile dışarı federe **edilmiyor** (yalnızca floq içinde görünür). Medya + yanıt + AP fan-out sonraki adım.
+- [x] **Bluesky inbound — medya** — `extractBskyImages`: `app.bsky.embed.images#view` + `recordWithMedia#view` görselleri hotlink ile (`url=remoteUrl=Bluesky CDN`, max 4) floq gönderisine eklenir. (2026-06)
+- [x] **Bluesky inbound — fediverse fan-out (ileriye dönük)** — İçe aktarılan gönderiler, `import_enabled_at`'tan *sonra* oluşturulduysa `buildNote`+`deliverToFollowers` ile fediverse takipçilerine federe edilir. İlk backfill (eski gönderiler) sessiz kalır → takipçi floodu yok. (2026-06)
+- [ ] **Bluesky inbound — video** — Şu an yalnızca görsel; `app.bsky.embed.video#view` (HLS playlist) aktarılmıyor.
+- [ ] **Bluesky inbound — yanıtlar** — Yalnızca üst-düzey gönderiler; yanıt thread eşlemesi (`reply.parent.uri` → floq postu) yapılmadı.
 - [ ] **Bluesky inbound — etkileşim geri akışı** — Bluesky'deki beğeni/yanıt sayaçlarının floq'a yansıtılması doğrulanmadı.
+- [ ] **Not — Bridgy Fed loop riski** — Kullanıcı hem Bridgy Fed hem native crosspost+import kullanırsa Bluesky→floq→AP→Bridgy→Bluesky döngüsü olabilir; native yolda `bsky_uri` guard korur, Bridgy ayrı yol.
 
 ## 🧪 Test & Gözlemlenebilirlik
 
