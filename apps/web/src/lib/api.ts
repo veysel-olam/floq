@@ -870,7 +870,7 @@ export const api = {
   },
   bluesky: {
     connection: () =>
-      apiFetch<{ connected: boolean; did?: string; handle?: string; crosspost_enabled?: boolean; import_enabled?: boolean }>(
+      apiFetch<{ connected: boolean; did?: string; handle?: string; crosspost_enabled?: boolean; import_enabled?: boolean; last_sync_at?: string | null; last_error?: string | null }>(
         '/api/bluesky/connection',
       ),
     connect: (identifier: string, appPassword: string) =>

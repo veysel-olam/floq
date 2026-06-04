@@ -24,6 +24,8 @@ export async function blueskyRoutes(app: FastifyInstance) {
       handle: conn.handle,
       crosspost_enabled: conn.crosspostEnabled,
       import_enabled: conn.importEnabled,
+      last_sync_at: conn.lastSyncAt?.toISOString() ?? null,
+      last_error: conn.lastError ?? null,
     })
   })
 

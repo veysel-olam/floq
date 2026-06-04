@@ -28,6 +28,15 @@ async function uploadImageToBluesky(agent: BskyAgent, url: string): Promise<unkn
   }
 }
 
+// Record bridge health so the Köprüler tab can show "last synced / error".
+// Pass null to mark a successful sync; a string to record an error.
+async function setBridgeStatus(userId: string, error: string | null): Promise<void> {
+  await db.update(blueskyConnections)
+    .set(error ? { lastError: error.slice(0, 500) } : { lastSyncAt: new Date(), lastError: null })
+    .where(eq(blueskyConnections.userId, userId))
+    .catch(() => {})
+}
+
 export async function getBskyAgent(userId: string): Promise<BskyAgent | null> {
   const conn = await db.query.blueskyConnections.findFirst({
     where: eq(blueskyConnections.userId, userId),
@@ -54,6 +63,8 @@ export async function getBskyAgent(userId: string): Promise<BskyAgent | null> {
         .where(eq(blueskyConnections.userId, userId))
     }
   } catch {
+    // Session couldn't be resumed — almost always a revoked/expired app password.
+    await setBridgeStatus(userId, 'reauth_needed')
     return null
   }
 
@@ -118,12 +129,18 @@ export async function crosspostToBluesky(
   }
   if (facets.length) record.facets = facets as NonNullable<Parameters<typeof agent.post>[0]['facets']>
   if (embed) record.embed = embed as NonNullable<Parameters<typeof agent.post>[0]['embed']>
-  const res = await agent.post(record)
 
-  // Record the resulting at:// uri on the floq post so the inbound importer
-  // recognises this as our own output and never re-mirrors it (loop guard).
-  if (postId && res?.uri) {
-    await db.update(posts).set({ bskyUri: res.uri }).where(eq(posts.id, postId)).catch(() => {})
+  try {
+    const res = await agent.post(record)
+    // Record the resulting at:// uri on the floq post so the inbound importer
+    // recognises this as our own output and never re-mirrors it (loop guard).
+    if (postId && res?.uri) {
+      await db.update(posts).set({ bskyUri: res.uri }).where(eq(posts.id, postId)).catch(() => {})
+    }
+    await setBridgeStatus(userId, null)
+  } catch (e) {
+    await setBridgeStatus(userId, (e as Error).message ?? 'crosspost failed')
+    throw e // let the job retry
   }
 }
 
@@ -177,7 +194,8 @@ export async function importBlueskyPosts(userId: string): Promise<number> {
   try {
     const res = await agent.getAuthorFeed({ actor: conn.did, limit: 20, filter: 'posts_no_replies' })
     feed = res.data.feed
-  } catch {
+  } catch (e) {
+    await setBridgeStatus(userId, (e as Error).message ?? 'import failed')
     return 0
   }
 
@@ -259,6 +277,7 @@ export async function importBlueskyPosts(userId: string): Promise<number> {
       .where(eq(actors.id, actor.id))
       .catch(() => {})
   }
+  await setBridgeStatus(userId, null) // a clean sweep — mark healthy
   return imported
 }
 

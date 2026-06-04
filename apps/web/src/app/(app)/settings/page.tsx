@@ -1166,7 +1166,7 @@ function BridgesTab({ session }: { session: ReturnType<typeof useSession>['data'
   const [blueskyHandle, setBlueskyHandle] = useState('')
   const [savingBluesky, setSavingBluesky] = useState(false)
   const [savedBluesky, setSavedBluesky] = useState(false)
-  const [bskyConn, setBskyConn] = useState<{ connected: boolean; handle?: string; crosspost_enabled?: boolean; import_enabled?: boolean } | null>(null)
+  const [bskyConn, setBskyConn] = useState<{ connected: boolean; handle?: string; crosspost_enabled?: boolean; import_enabled?: boolean; last_sync_at?: string | null; last_error?: string | null } | null>(null)
   const [bskyId, setBskyId] = useState('')
   const [bskyPwd, setBskyPwd] = useState('')
   const [bskyConnecting, setBskyConnecting] = useState(false)
@@ -1355,6 +1355,25 @@ function BridgesTab({ session }: { session: ReturnType<typeof useSession>['data'
               <p className="text-xs text-(--color-text-tertiary)">
                 Bağlı: <span className="font-mono text-(--color-text-secondary)">@{bskyConn.handle}</span>
               </p>
+
+              {/* Bridge health */}
+              {bskyConn.last_error === 'reauth_needed' ? (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400 flex items-start gap-1.5">
+                  <Unlock className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                  <span>Oturum süresi doldu (app password iptal edilmiş olabilir). Aşağıdan bağlantıyı kesip yeniden bağlan.</span>
+                </p>
+              ) : bskyConn.last_error ? (
+                <p className="text-[11px] text-red-500 break-words">Son hata: {bskyConn.last_error}</p>
+              ) : bskyConn.last_sync_at ? (
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-500 flex items-center gap-1">
+                  <Check className="w-3 h-3" />
+                  Son senkron: {(() => {
+                    const mins = Math.floor((Date.now() - new Date(bskyConn.last_sync_at).getTime()) / 60000)
+                    return mins < 1 ? 'az önce' : mins < 60 ? `${mins} dk önce` : `${Math.floor(mins / 60)} sa önce`
+                  })()}
+                </p>
+              ) : null}
+
               <label className="flex items-center gap-2 text-sm text-(--color-text-primary) cursor-pointer">
                 <input
                   type="checkbox"

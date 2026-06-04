@@ -730,6 +730,26 @@ export async function actorsRoutes(app: FastifyInstance) {
       limit: 20,
     })
 
+    // Cold-start: on a small/new instance there may be few local accounts, which
+    // would leave a fresh user with an empty feed. Supplement with notable
+    // federated accounts the instance already knows, so there's always someone
+    // worth following from day one (Faz 1 — "ada olmamak").
+    if (suggested.length < 10) {
+      const remote = await db.query.actors.findMany({
+        where: and(
+          eq(actors.isLocal, false),
+          eq(actors.isBot, false),
+          eq(actors.noIndex, false),
+          notInArray(actors.id, [...excludeIds, ...suggested.map((s) => s.id)].length > 0
+            ? [...excludeIds, ...suggested.map((s) => s.id)]
+            : ['00000000-0000-0000-0000-000000000000']),
+        ),
+        orderBy: [desc(actors.followersCount)],
+        limit: 15 - suggested.length,
+      })
+      suggested.push(...remote)
+    }
+
     return reply.send({ actors: suggested })
   })
 

@@ -1715,6 +1715,10 @@ export const blueskyConnections = pgTable('bluesky_connections', {
   // When import was last enabled — posts created after this federate outward;
   // the initial backfill of older posts is mirrored to floq only (no fan-out).
   importEnabledAt: timestamp('import_enabled_at'),
+  // Bridge health surfacing — last successful sync + last error (so silent
+  // failures become visible in the Köprüler settings tab).
+  lastSyncAt: timestamp('last_sync_at'),
+  lastError: text('last_error'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })
