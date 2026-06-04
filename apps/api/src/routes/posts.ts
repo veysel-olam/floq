@@ -310,7 +310,7 @@ export async function postsRoutes(app: FastifyInstance) {
           }))
             .filter((m) => m.mimeType.startsWith('image/'))
             .map((m) => ({ url: m.url, alt: m.altText }))
-          void enqueueBlueskyCrosspost(actor.userId, content, post!.tags ?? [], media).catch(() => {})
+          void enqueueBlueskyCrosspost(actor.userId, content, post!.tags ?? [], media, post!.id).catch(() => {})
         }
         if (actor.nostrCrosspostEnabled && actor.nostrPrivateKeyEncrypted) {
           void enqueueNostrCrosspost(actor.nostrPrivateKeyEncrypted, content, post!.tags ?? []).catch(() => {})

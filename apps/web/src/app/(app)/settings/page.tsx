@@ -42,6 +42,7 @@ import {
   HelpCircle,
   MessageCircle,
   BookOpen,
+  Waypoints,
   GitBranch,
   FileText,
   Lock,
@@ -67,10 +68,11 @@ import {
   Snowflake,
 } from 'lucide-react'
 
-type Tab = 'profile' | 'privacy' | 'moderation' | 'filters' | 'feed' | 'notifications' | 'security' | 'sessions' | 'appearance' | 'account' | 'help'
+type Tab = 'profile' | 'bridges' | 'privacy' | 'moderation' | 'filters' | 'feed' | 'notifications' | 'security' | 'sessions' | 'appearance' | 'account' | 'help'
 
 const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'profile', label: 'Profil', icon: <User className="w-4 h-4" /> },
+  { id: 'bridges', label: 'Köprüler', icon: <Waypoints className="w-4 h-4" /> },
   { id: 'privacy', label: 'Gizlilik', icon: <Lock className="w-4 h-4" /> },
   { id: 'moderation', label: 'Moderasyon', icon: <UserX className="w-4 h-4" /> },
   { id: 'filters', label: 'Filtreler', icon: <Filter className="w-4 h-4" /> },
@@ -1157,6 +1159,402 @@ function CropModal({ file, shape, onSave, onCancel }: CropModalProps) {
   )
 }
 
+// ─── Bridges Tab (Köprüler) ─────────────────────────────────────────────────
+function BridgesTab({ session }: { session: ReturnType<typeof useSession>['data'] }) {
+  const handle = (session?.user as { handle?: string } | undefined)?.handle
+
+  const [blueskyHandle, setBlueskyHandle] = useState('')
+  const [savingBluesky, setSavingBluesky] = useState(false)
+  const [savedBluesky, setSavedBluesky] = useState(false)
+  const [bskyConn, setBskyConn] = useState<{ connected: boolean; handle?: string; crosspost_enabled?: boolean; import_enabled?: boolean } | null>(null)
+  const [bskyId, setBskyId] = useState('')
+  const [bskyPwd, setBskyPwd] = useState('')
+  const [bskyConnecting, setBskyConnecting] = useState(false)
+  const [bskyError, setBskyError] = useState<string | null>(null)
+  const [nostr, setNostr] = useState<{ enabled: boolean; npub?: string; identifier?: string; crosspost_enabled?: boolean } | null>(null)
+  const [nostrBusy, setNostrBusy] = useState(false)
+  const [customHandle, setCustomHandle] = useState('')
+  const [customHandleVerifiedAt, setCustomHandleVerifiedAt] = useState<string | null>(null)
+  const [savingDomain, setSavingDomain] = useState(false)
+  const [verifyingDomain, setVerifyingDomain] = useState(false)
+  const [domainError, setDomainError] = useState<string | null>(null)
+  const [domainSaved, setDomainSaved] = useState(false)
+
+  useEffect(() => {
+    if (!handle) return
+    api.actors.get(handle).then((actor) => {
+      setBlueskyHandle(actor.blueskyHandle ?? '')
+      setCustomHandle(actor.customHandle ?? '')
+      setCustomHandleVerifiedAt(actor.customHandleVerifiedAt ?? null)
+    }).catch(() => {})
+  }, [handle])
+  useEffect(() => { api.bluesky.connection().then(setBskyConn).catch(() => {}) }, [])
+  useEffect(() => { api.nostr.identity().then(setNostr).catch(() => {}) }, [])
+
+  async function saveBluesky() {
+    setSavingBluesky(true)
+    try {
+      const cleaned = blueskyHandle.replace(/^@/, '').trim() || null
+      await api.account.linkBluesky(cleaned)
+      setSavedBluesky(true)
+      setTimeout(() => setSavedBluesky(false), 2000)
+    } catch {
+    } finally {
+      setSavingBluesky(false)
+    }
+  }
+  async function enableNostr() {
+    setNostrBusy(true)
+    try { setNostr(await api.nostr.enable()) } catch {} finally { setNostrBusy(false) }
+  }
+  async function disconnectNostr() {
+    await api.nostr.disconnect().catch(() => {})
+    setNostr({ enabled: false })
+  }
+  async function toggleNostrCrosspost(v: boolean) {
+    setNostr((n) => n ? { ...n, crosspost_enabled: v } : n)
+    await api.nostr.setCrosspost(v).catch(() => {})
+  }
+  async function connectBsky() {
+    if (!bskyId.trim() || !bskyPwd.trim()) return
+    setBskyConnecting(true); setBskyError(null)
+    try {
+      const res = await api.bluesky.connect(bskyId.replace(/^@/, '').trim(), bskyPwd.trim())
+      setBskyConn(res); setBskyPwd(''); setBskyId('')
+    } catch {
+      setBskyError("Bağlanılamadı. Handle ve App Password'ı kontrol et.")
+    } finally { setBskyConnecting(false) }
+  }
+  async function disconnectBsky() {
+    await api.bluesky.disconnect().catch(() => {})
+    setBskyConn({ connected: false })
+  }
+  async function toggleBskyCrosspost(v: boolean) {
+    setBskyConn((c) => c ? { ...c, crosspost_enabled: v } : c)
+    await api.bluesky.updateSettings({ crosspost_enabled: v }).catch(() => {})
+  }
+  async function toggleBskyImport(v: boolean) {
+    setBskyConn((c) => c ? { ...c, import_enabled: v } : c)
+    await api.bluesky.updateSettings({ import_enabled: v }).catch(() => {})
+  }
+  async function saveDomain() {
+    setSavingDomain(true)
+    setDomainError(null)
+    try {
+      const cleaned = customHandle.replace(/^@/, '').trim().toLowerCase() || null
+      await api.account.setDomainHandle(cleaned)
+      setCustomHandle(cleaned ?? '')
+      setCustomHandleVerifiedAt(null)
+      setDomainSaved(true)
+      setTimeout(() => setDomainSaved(false), 2000)
+    } catch (err) {
+      setDomainError((err as Error).message ?? 'Kaydedilemedi')
+    } finally {
+      setSavingDomain(false)
+    }
+  }
+  async function verifyDomain() {
+    setVerifyingDomain(true)
+    setDomainError(null)
+    try {
+      const res = await api.account.verifyDomainHandle()
+      if (res.verified) {
+        setCustomHandleVerifiedAt(res.verifiedAt ?? new Date().toISOString())
+      } else {
+        setDomainError(res.error ?? 'Doğrulama başarısız')
+      }
+    } catch (err) {
+      setDomainError((err as Error).message ?? 'Doğrulama başarısız')
+    } finally {
+      setVerifyingDomain(false)
+    }
+  }
+
+  return (
+      <div className="space-y-6">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <AtSign className="w-4 h-4 text-(--color-text-secondary)" />
+            <p className="text-sm font-semibold text-(--color-text-primary)">AT Protocol / Bluesky</p>
+          </div>
+          <p className="text-xs text-(--color-text-tertiary)">
+            floq, AT Protocol destekli bir sunucudur. Hesabın Bluesky ekosistemine köprülenebilir.
+          </p>
+        </div>
+
+        {/* DID badge */}
+        {handle && (
+          <div className="rounded-xl border border-(--color-border) bg-(--color-background-secondary) p-3 space-y-1">
+            <p className="text-[10px] text-(--color-text-tertiary) uppercase tracking-wide font-medium">Decentralized ID</p>
+            <p className="text-xs font-mono text-(--color-text-primary) break-all">
+              {`did:web:${typeof window !== 'undefined' ? new URL(process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001').host : '…'}:users:${handle}`}
+            </p>
+          </div>
+        )}
+
+        {/* Bridgy Fed bridge */}
+        <div className="rounded-xl border border-(--color-border) bg-(--color-background-secondary) p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Zap className="w-3.5 h-3.5 text-sky-500" />
+            <p className="text-xs font-semibold text-(--color-text-primary)">Bridgy Fed Köprüsü</p>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400 font-medium">Ücretsiz</span>
+          </div>
+          <p className="text-xs text-(--color-text-tertiary) leading-relaxed">
+            Bluesky kullanıcıları seni <span className="font-mono text-(--color-text-secondary)">{handle ? `@${handle}.ap.brid.gy` : '@kullanici.ap.brid.gy'}</span> üzerinden takip edebilir. Aktivasyon gerekmez — hesabın zaten görünür.
+          </p>
+          {handle && (
+            <a
+              href={`https://bsky.app/profile/${handle}.${typeof window !== 'undefined' ? new URL(process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001').host : 'floq.com'}.ap.brid.gy`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-sky-500 hover:text-sky-400 transition-colors"
+            >
+              <ExternalLink className="w-3 h-3" />
+              Bluesky'da profili gör
+            </a>
+          )}
+        </div>
+
+        {/* Mevcut Bluesky hesabını bağla */}
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-(--color-text-secondary)">Bluesky hesabını profilinde göster</p>
+          <p className="text-xs text-(--color-text-tertiary)">
+            Zaten bir Bluesky hesabın varsa handle'ını ekle. (örn. <span className="font-mono">kullanici.bsky.social</span>)
+          </p>
+          <div className="flex gap-2">
+            <Input
+              value={blueskyHandle}
+              onChange={(e) => setBlueskyHandle(e.target.value)}
+              placeholder="kullanici.bsky.social"
+              className="font-mono text-sm"
+            />
+            <Button
+              onClick={saveBluesky}
+              disabled={savingBluesky || savedBluesky}
+              variant="outline"
+              className="flex-shrink-0"
+            >
+              {savingBluesky ? <Loader2 className="w-4 h-4 animate-spin" /> : savedBluesky ? <Check className="w-4 h-4" /> : 'Kaydet'}
+            </Button>
+          </div>
+          {blueskyHandle && (
+            <button
+              onClick={() => { setBlueskyHandle(''); api.account.linkBluesky(null).catch(() => {}) }}
+              className="text-xs text-(--color-text-tertiary) hover:text-red-500 transition-colors"
+            >
+              Bağlantıyı kaldır
+            </button>
+          )}
+        </div>
+
+        {/* Bluesky'ye otomatik paylaş (cross-post — app password ile) */}
+        <div className="border-t border-(--color-border) pt-5 space-y-2">
+          <p className="text-xs font-medium text-(--color-text-secondary)">Bluesky'ye otomatik paylaş</p>
+          {bskyConn?.connected ? (
+            <div className="space-y-2.5">
+              <p className="text-xs text-(--color-text-tertiary)">
+                Bağlı: <span className="font-mono text-(--color-text-secondary)">@{bskyConn.handle}</span>
+              </p>
+              <label className="flex items-center gap-2 text-sm text-(--color-text-primary) cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={bskyConn.crosspost_enabled ?? false}
+                  onChange={(e) => void toggleBskyCrosspost(e.target.checked)}
+                  className="accent-(--color-coral)"
+                />
+                Yeni public gönderilerimi Bluesky'ye de paylaş
+              </label>
+              <label className="flex items-center gap-2 text-sm text-(--color-text-primary) cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={bskyConn.import_enabled ?? false}
+                  onChange={(e) => void toggleBskyImport(e.target.checked)}
+                  className="accent-(--color-coral)"
+                />
+                Bluesky gönderilerimi floq'a aktar
+              </label>
+              <p className="text-[11px] text-(--color-text-tertiary) leading-relaxed">
+                Açık olduğunda Bluesky'de paylaştıkların ~10 dk içinde floq profilinde de görünür. (Yanıt ve repost hariç.)
+              </p>
+              <button onClick={() => void disconnectBsky()} className="text-xs text-(--color-text-tertiary) hover:text-red-500 transition-colors">
+                Bluesky bağlantısını kes
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-(--color-text-tertiary)">
+                Gönderilerini Bluesky'ye de yaymak için bağlan.
+              </p>
+
+              <details className="group rounded-lg border border-(--color-border) bg-(--color-background-secondary)/50">
+                <summary className="flex items-center gap-1.5 cursor-pointer list-none px-3 py-2 text-xs font-medium text-(--color-text-secondary)">
+                  <ChevronRight className="w-3.5 h-3.5 transition-transform group-open:rotate-90" />
+                  Nasıl bağlanır?
+                </summary>
+                <div className="px-3 pb-3 pt-1 space-y-2 text-xs text-(--color-text-tertiary) leading-relaxed">
+                  <ol className="list-decimal list-inside space-y-1">
+                    <li>Bluesky → <span className="font-medium">Settings → App Passwords</span> → <span className="font-medium">Add App Password</span></li>
+                    <li>Bir isim ver, oluştur, çıkan <span className="font-mono">xxxx-xxxx-xxxx-xxxx</span> kodu kopyala</li>
+                    <li>Handle'ını (<span className="font-mono">kullanici.bsky.social</span>) ve bu kodu aşağıya yapıştır</li>
+                  </ol>
+                  <p className="flex items-start gap-1.5 text-amber-600 dark:text-amber-400">
+                    <Unlock className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                    <span>Gerçek şifreni <strong>değil</strong>, App Password kullan. Cross-post edilen gönderiler Bluesky'de <strong>herkese açık</strong> görünür.</span>
+                  </p>
+                  <a href="https://bsky.app/settings/app-passwords" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-(--color-coral) hover:underline">
+                    App Passwords sayfasını aç <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </details>
+
+              <Input value={bskyId} onChange={(e) => setBskyId(e.target.value)} placeholder="kullanici.bsky.social" className="font-mono text-sm" />
+              <Input value={bskyPwd} onChange={(e) => setBskyPwd(e.target.value)} type="password" placeholder="xxxx-xxxx-xxxx-xxxx" className="font-mono text-sm" />
+              {bskyError && <p className="text-xs text-red-500">{bskyError}</p>}
+              <Button onClick={() => void connectBsky()} disabled={bskyConnecting || !bskyId.trim() || !bskyPwd.trim()} variant="outline">
+                {bskyConnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Bluesky'ye bağlan"}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Nostr köprüsü */}
+        <div className="border-t border-(--color-border) pt-5 space-y-2">
+          <p className="text-xs font-medium text-(--color-text-secondary)">Nostr</p>
+          {nostr?.enabled ? (
+            <div className="space-y-2.5">
+              <p className="text-xs text-(--color-text-tertiary)">
+                NIP-05: <span className="font-mono text-(--color-text-secondary)">{nostr.identifier}</span>
+              </p>
+              <p className="text-xs text-(--color-text-tertiary) break-all">
+                <span className="font-mono">{nostr.npub}</span>
+              </p>
+              <label className="flex items-center gap-2 text-sm text-(--color-text-primary) cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={nostr.crosspost_enabled ?? false}
+                  onChange={(e) => void toggleNostrCrosspost(e.target.checked)}
+                  className="accent-(--color-coral)"
+                />
+                Yeni public gönderilerimi Nostr relay'lerine de yay
+              </label>
+              <button onClick={() => void disconnectNostr()} className="text-xs text-(--color-text-tertiary) hover:text-red-500 transition-colors">
+                Nostr kimliğini kaldır
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-(--color-text-tertiary)">
+                Nostr kimliği oluştur — floq, NIP-05 doğrulaman olur ve gönderilerini Nostr relay'lerine yayabilirsin.
+              </p>
+              <details className="group rounded-lg border border-(--color-border) bg-(--color-background-secondary)/50">
+                <summary className="flex items-center gap-1.5 cursor-pointer list-none px-3 py-2 text-xs font-medium text-(--color-text-secondary)">
+                  <ChevronRight className="w-3.5 h-3.5 transition-transform group-open:rotate-90" />
+                  Nostr nedir?
+                </summary>
+                <div className="px-3 pb-3 pt-1 space-y-2 text-xs text-(--color-text-tertiary) leading-relaxed">
+                  <p>Nostr, sunucudan bağımsız bir sosyal protokol. floq senin için bir <strong>anahtar çifti</strong> üretir; <span className="font-mono">npub</span> herkese açık kimliğindir.</p>
+                  <p className="flex items-start gap-1.5 text-amber-600 dark:text-amber-400">
+                    <Unlock className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                    <span>Özel anahtar floq'ta <strong>şifreli</strong> saklanır. Nostr'a yayılan gönderiler <strong>herkese açıktır</strong>.</span>
+                  </p>
+                </div>
+              </details>
+              <Button onClick={() => void enableNostr()} disabled={nostrBusy} variant="outline">
+                {nostrBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Nostr kimliği oluştur'}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Domain tabanlı handle */}
+        <div className="border-t border-(--color-border) pt-5 space-y-3">
+          <div>
+            <p className="text-xs font-medium text-(--color-text-secondary)">Özel Domain Handle</p>
+            <p className="text-xs text-(--color-text-tertiary) mt-0.5 leading-relaxed">
+              Kendi domainini floq handle'ı olarak kullan. (örn. <span className="font-mono">adın.dev</span>)
+            </p>
+          </div>
+
+          {customHandleVerifiedAt && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/50">
+              <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+              <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                <span className="font-mono font-semibold">@{customHandle}</span> doğrulandı
+              </p>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <Input
+              value={customHandle}
+              onChange={(e) => { setCustomHandle(e.target.value); setCustomHandleVerifiedAt(null) }}
+              placeholder="adın.dev"
+              className="font-mono text-sm"
+            />
+            <Button
+              onClick={() => void saveDomain()}
+              disabled={savingDomain || domainSaved}
+              variant="outline"
+              className="flex-shrink-0"
+            >
+              {savingDomain ? <Loader2 className="w-4 h-4 animate-spin" /> : domainSaved ? <Check className="w-4 h-4 text-emerald-500" /> : 'Kaydet'}
+            </Button>
+          </div>
+
+          {/* Doğrulama adımları */}
+          {customHandle && !customHandleVerifiedAt && (
+            <div className="rounded-xl border border-(--color-border) bg-(--color-background-secondary) p-4 space-y-3">
+              <p className="text-xs font-medium text-(--color-text-secondary)">Doğrulama adımları</p>
+              <ol className="space-y-2 text-xs text-(--color-text-tertiary)">
+                <li className="flex gap-2">
+                  <span className="w-4 h-4 rounded-full bg-(--color-coral) text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">1</span>
+                  <span>
+                    <span className="font-mono bg-(--color-background) px-1.5 py-0.5 rounded border border-(--color-border)">
+                      https://{customHandle}/.well-known/floq-verification
+                    </span>{' '}
+                    adresinde bir dosya yayınla
+                  </span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="w-4 h-4 rounded-full bg-(--color-coral) text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">2</span>
+                  <span>
+                    Dosyanın içeriği tam olarak şu olsun:{' '}
+                    <span className="font-mono bg-(--color-background) px-1.5 py-0.5 rounded border border-(--color-border)">
+                      @{handle}@{instanceDomain()}
+                    </span>
+                  </span>
+                </li>
+              </ol>
+              <Button
+                onClick={() => void verifyDomain()}
+                disabled={verifyingDomain}
+                size="sm"
+                className="text-white"
+                style={{ background: 'var(--gradient-avatar)' }}
+              >
+                {verifyingDomain ? <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />Kontrol ediliyor…</> : 'Doğrula'}
+              </Button>
+            </div>
+          )}
+
+          {domainError && (
+            <p className="text-xs text-red-500">{domainError}</p>
+          )}
+
+          {customHandle && (
+            <button
+              onClick={() => { setCustomHandle(''); setCustomHandleVerifiedAt(null); api.account.setDomainHandle(null).catch(() => {}) }}
+              className="text-xs text-(--color-text-tertiary) hover:text-red-500 transition-colors"
+            >
+              Domain handle'ı kaldır
+            </button>
+          )}
+        </div>
+      </div>
+  )
+}
+
+
 // ─── Profile Tab ─────────────────────────────────────────────────────────────
 
 function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'] }) {
@@ -1177,27 +1575,6 @@ function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'
   const [cropFile, setCropFile] = useState<File | null>(null)
   const [cropShape, setCropShape] = useState<'circle' | 'banner'>('circle')
 
-  // Bluesky linking
-  const [blueskyHandle, setBlueskyHandle] = useState('')
-  const [savingBluesky, setSavingBluesky] = useState(false)
-  const [savedBluesky, setSavedBluesky] = useState(false)
-  // Bluesky crosspost bridge (app-password connection)
-  const [bskyConn, setBskyConn] = useState<{ connected: boolean; handle?: string; crosspost_enabled?: boolean } | null>(null)
-  const [bskyId, setBskyId] = useState('')
-  const [bskyPwd, setBskyPwd] = useState('')
-  const [bskyConnecting, setBskyConnecting] = useState(false)
-  const [bskyError, setBskyError] = useState<string | null>(null)
-  // Nostr identity + crosspost
-  const [nostr, setNostr] = useState<{ enabled: boolean; npub?: string; identifier?: string; crosspost_enabled?: boolean } | null>(null)
-  const [nostrBusy, setNostrBusy] = useState(false)
-
-  // Domain handle
-  const [customHandle, setCustomHandle] = useState('')
-  const [customHandleVerifiedAt, setCustomHandleVerifiedAt] = useState<string | null>(null)
-  const [savingDomain, setSavingDomain] = useState(false)
-  const [verifyingDomain, setVerifyingDomain] = useState(false)
-  const [domainError, setDomainError] = useState<string | null>(null)
-  const [domainSaved, setDomainSaved] = useState(false)
 
   const handle = (session?.user as { handle?: string } | undefined)?.handle
   const email = session?.user.email
@@ -1212,96 +1589,12 @@ function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'
         setAvatarUrl(actor.avatarUrl)
         setHeaderUrl(actor.headerUrl)
         setIsLocked(actor.isLocked ?? false)
-        setBlueskyHandle(actor.blueskyHandle ?? '')
-        setCustomHandle(actor.customHandle ?? '')
-        setCustomHandleVerifiedAt(actor.customHandleVerifiedAt ?? null)
         const fields = actor.profileFields ?? []
         setProfileFields(fields.length > 0 ? fields : [{ name: '', value: '' }])
       }).catch(() => {})
     }
   }, [handle, session])
 
-  useEffect(() => { api.bluesky.connection().then(setBskyConn).catch(() => {}) }, [])
-  useEffect(() => { api.nostr.identity().then(setNostr).catch(() => {}) }, [])
-
-  async function enableNostr() {
-    setNostrBusy(true)
-    try { setNostr(await api.nostr.enable()) } catch {} finally { setNostrBusy(false) }
-  }
-  async function disconnectNostr() {
-    await api.nostr.disconnect().catch(() => {})
-    setNostr({ enabled: false })
-  }
-  async function toggleNostrCrosspost(v: boolean) {
-    setNostr((n) => n ? { ...n, crosspost_enabled: v } : n)
-    await api.nostr.setCrosspost(v).catch(() => {})
-  }
-
-  async function connectBsky() {
-    if (!bskyId.trim() || !bskyPwd.trim()) return
-    setBskyConnecting(true); setBskyError(null)
-    try {
-      const res = await api.bluesky.connect(bskyId.replace(/^@/, '').trim(), bskyPwd.trim())
-      setBskyConn(res); setBskyPwd(''); setBskyId('')
-    } catch {
-      setBskyError("Bağlanılamadı. Handle ve App Password'ı kontrol et.")
-    } finally { setBskyConnecting(false) }
-  }
-  async function disconnectBsky() {
-    await api.bluesky.disconnect().catch(() => {})
-    setBskyConn({ connected: false })
-  }
-  async function toggleBskyCrosspost(v: boolean) {
-    setBskyConn((c) => c ? { ...c, crosspost_enabled: v } : c)
-    await api.bluesky.updateSettings({ crosspost_enabled: v }).catch(() => {})
-  }
-
-  async function saveBluesky() {
-    setSavingBluesky(true)
-    try {
-      const cleaned = blueskyHandle.replace(/^@/, '').trim() || null
-      await api.account.linkBluesky(cleaned)
-      setSavedBluesky(true)
-      setTimeout(() => setSavedBluesky(false), 2000)
-    } catch {
-    } finally {
-      setSavingBluesky(false)
-    }
-  }
-
-  async function saveDomain() {
-    setSavingDomain(true)
-    setDomainError(null)
-    try {
-      const cleaned = customHandle.replace(/^@/, '').trim().toLowerCase() || null
-      await api.account.setDomainHandle(cleaned)
-      setCustomHandle(cleaned ?? '')
-      setCustomHandleVerifiedAt(null)
-      setDomainSaved(true)
-      setTimeout(() => setDomainSaved(false), 2000)
-    } catch (err) {
-      setDomainError((err as Error).message ?? 'Kaydedilemedi')
-    } finally {
-      setSavingDomain(false)
-    }
-  }
-
-  async function verifyDomain() {
-    setVerifyingDomain(true)
-    setDomainError(null)
-    try {
-      const res = await api.account.verifyDomainHandle()
-      if (res.verified) {
-        setCustomHandleVerifiedAt(res.verifiedAt ?? new Date().toISOString())
-      } else {
-        setDomainError(res.error ?? 'Doğrulama başarısız')
-      }
-    } catch (err) {
-      setDomainError((err as Error).message ?? 'Doğrulama başarısız')
-    } finally {
-      setVerifyingDomain(false)
-    }
-  }
 
   function handleAvatarFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -1544,276 +1837,6 @@ function ProfileTab({ session }: { session: ReturnType<typeof useSession>['data'
         {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : saved ? <Check className="w-4 h-4 mr-2" /> : null}
         {saved ? 'Kaydedildi' : 'Kaydet'}
       </Button>
-
-      {/* ── Bluesky & AT Protocol ── */}
-      <div className="border-t border-(--color-border) pt-6 space-y-5">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <AtSign className="w-4 h-4 text-(--color-text-secondary)" />
-            <p className="text-sm font-semibold text-(--color-text-primary)">AT Protocol / Bluesky</p>
-          </div>
-          <p className="text-xs text-(--color-text-tertiary)">
-            floq, AT Protocol destekli bir sunucudur. Hesabın Bluesky ekosistemine köprülenebilir.
-          </p>
-        </div>
-
-        {/* DID badge */}
-        {handle && (
-          <div className="rounded-xl border border-(--color-border) bg-(--color-background-secondary) p-3 space-y-1">
-            <p className="text-[10px] text-(--color-text-tertiary) uppercase tracking-wide font-medium">Decentralized ID</p>
-            <p className="text-xs font-mono text-(--color-text-primary) break-all">
-              {`did:web:${typeof window !== 'undefined' ? new URL(process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001').host : '…'}:users:${handle}`}
-            </p>
-          </div>
-        )}
-
-        {/* Bridgy Fed bridge */}
-        <div className="rounded-xl border border-(--color-border) bg-(--color-background-secondary) p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <Zap className="w-3.5 h-3.5 text-sky-500" />
-            <p className="text-xs font-semibold text-(--color-text-primary)">Bridgy Fed Köprüsü</p>
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400 font-medium">Ücretsiz</span>
-          </div>
-          <p className="text-xs text-(--color-text-tertiary) leading-relaxed">
-            Bluesky kullanıcıları seni <span className="font-mono text-(--color-text-secondary)">{handle ? `@${handle}.ap.brid.gy` : '@kullanici.ap.brid.gy'}</span> üzerinden takip edebilir. Aktivasyon gerekmez — hesabın zaten görünür.
-          </p>
-          {handle && (
-            <a
-              href={`https://bsky.app/profile/${handle}.${typeof window !== 'undefined' ? new URL(process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001').host : 'floq.com'}.ap.brid.gy`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs text-sky-500 hover:text-sky-400 transition-colors"
-            >
-              <ExternalLink className="w-3 h-3" />
-              Bluesky'da profili gör
-            </a>
-          )}
-        </div>
-
-        {/* Mevcut Bluesky hesabını bağla */}
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-(--color-text-secondary)">Bluesky hesabını profilinde göster</p>
-          <p className="text-xs text-(--color-text-tertiary)">
-            Zaten bir Bluesky hesabın varsa handle'ını ekle. (örn. <span className="font-mono">kullanici.bsky.social</span>)
-          </p>
-          <div className="flex gap-2">
-            <Input
-              value={blueskyHandle}
-              onChange={(e) => setBlueskyHandle(e.target.value)}
-              placeholder="kullanici.bsky.social"
-              className="font-mono text-sm"
-            />
-            <Button
-              onClick={saveBluesky}
-              disabled={savingBluesky || savedBluesky}
-              variant="outline"
-              className="flex-shrink-0"
-            >
-              {savingBluesky ? <Loader2 className="w-4 h-4 animate-spin" /> : savedBluesky ? <Check className="w-4 h-4" /> : 'Kaydet'}
-            </Button>
-          </div>
-          {blueskyHandle && (
-            <button
-              onClick={() => { setBlueskyHandle(''); api.account.linkBluesky(null).catch(() => {}) }}
-              className="text-xs text-(--color-text-tertiary) hover:text-red-500 transition-colors"
-            >
-              Bağlantıyı kaldır
-            </button>
-          )}
-        </div>
-
-        {/* Bluesky'ye otomatik paylaş (cross-post — app password ile) */}
-        <div className="border-t border-(--color-border) pt-5 space-y-2">
-          <p className="text-xs font-medium text-(--color-text-secondary)">Bluesky'ye otomatik paylaş</p>
-          {bskyConn?.connected ? (
-            <div className="space-y-2.5">
-              <p className="text-xs text-(--color-text-tertiary)">
-                Bağlı: <span className="font-mono text-(--color-text-secondary)">@{bskyConn.handle}</span>
-              </p>
-              <label className="flex items-center gap-2 text-sm text-(--color-text-primary) cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={bskyConn.crosspost_enabled ?? false}
-                  onChange={(e) => void toggleBskyCrosspost(e.target.checked)}
-                  className="accent-(--color-coral)"
-                />
-                Yeni public gönderilerimi Bluesky'ye de paylaş
-              </label>
-              <button onClick={() => void disconnectBsky()} className="text-xs text-(--color-text-tertiary) hover:text-red-500 transition-colors">
-                Bluesky bağlantısını kes
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-xs text-(--color-text-tertiary)">
-                Gönderilerini Bluesky'ye de yaymak için bağlan.
-              </p>
-
-              <details className="group rounded-lg border border-(--color-border) bg-(--color-background-secondary)/50">
-                <summary className="flex items-center gap-1.5 cursor-pointer list-none px-3 py-2 text-xs font-medium text-(--color-text-secondary)">
-                  <ChevronRight className="w-3.5 h-3.5 transition-transform group-open:rotate-90" />
-                  Nasıl bağlanır?
-                </summary>
-                <div className="px-3 pb-3 pt-1 space-y-2 text-xs text-(--color-text-tertiary) leading-relaxed">
-                  <ol className="list-decimal list-inside space-y-1">
-                    <li>Bluesky → <span className="font-medium">Settings → App Passwords</span> → <span className="font-medium">Add App Password</span></li>
-                    <li>Bir isim ver, oluştur, çıkan <span className="font-mono">xxxx-xxxx-xxxx-xxxx</span> kodu kopyala</li>
-                    <li>Handle'ını (<span className="font-mono">kullanici.bsky.social</span>) ve bu kodu aşağıya yapıştır</li>
-                  </ol>
-                  <p className="flex items-start gap-1.5 text-amber-600 dark:text-amber-400">
-                    <Unlock className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                    <span>Gerçek şifreni <strong>değil</strong>, App Password kullan. Cross-post edilen gönderiler Bluesky'de <strong>herkese açık</strong> görünür.</span>
-                  </p>
-                  <a href="https://bsky.app/settings/app-passwords" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-(--color-coral) hover:underline">
-                    App Passwords sayfasını aç <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              </details>
-
-              <Input value={bskyId} onChange={(e) => setBskyId(e.target.value)} placeholder="kullanici.bsky.social" className="font-mono text-sm" />
-              <Input value={bskyPwd} onChange={(e) => setBskyPwd(e.target.value)} type="password" placeholder="xxxx-xxxx-xxxx-xxxx" className="font-mono text-sm" />
-              {bskyError && <p className="text-xs text-red-500">{bskyError}</p>}
-              <Button onClick={() => void connectBsky()} disabled={bskyConnecting || !bskyId.trim() || !bskyPwd.trim()} variant="outline">
-                {bskyConnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Bluesky'ye bağlan"}
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {/* Nostr köprüsü */}
-        <div className="border-t border-(--color-border) pt-5 space-y-2">
-          <p className="text-xs font-medium text-(--color-text-secondary)">Nostr</p>
-          {nostr?.enabled ? (
-            <div className="space-y-2.5">
-              <p className="text-xs text-(--color-text-tertiary)">
-                NIP-05: <span className="font-mono text-(--color-text-secondary)">{nostr.identifier}</span>
-              </p>
-              <p className="text-xs text-(--color-text-tertiary) break-all">
-                <span className="font-mono">{nostr.npub}</span>
-              </p>
-              <label className="flex items-center gap-2 text-sm text-(--color-text-primary) cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={nostr.crosspost_enabled ?? false}
-                  onChange={(e) => void toggleNostrCrosspost(e.target.checked)}
-                  className="accent-(--color-coral)"
-                />
-                Yeni public gönderilerimi Nostr relay'lerine de yay
-              </label>
-              <button onClick={() => void disconnectNostr()} className="text-xs text-(--color-text-tertiary) hover:text-red-500 transition-colors">
-                Nostr kimliğini kaldır
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-xs text-(--color-text-tertiary)">
-                Nostr kimliği oluştur — floq, NIP-05 doğrulaman olur ve gönderilerini Nostr relay'lerine yayabilirsin.
-              </p>
-              <details className="group rounded-lg border border-(--color-border) bg-(--color-background-secondary)/50">
-                <summary className="flex items-center gap-1.5 cursor-pointer list-none px-3 py-2 text-xs font-medium text-(--color-text-secondary)">
-                  <ChevronRight className="w-3.5 h-3.5 transition-transform group-open:rotate-90" />
-                  Nostr nedir?
-                </summary>
-                <div className="px-3 pb-3 pt-1 space-y-2 text-xs text-(--color-text-tertiary) leading-relaxed">
-                  <p>Nostr, sunucudan bağımsız bir sosyal protokol. floq senin için bir <strong>anahtar çifti</strong> üretir; <span className="font-mono">npub</span> herkese açık kimliğindir.</p>
-                  <p className="flex items-start gap-1.5 text-amber-600 dark:text-amber-400">
-                    <Unlock className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                    <span>Özel anahtar floq'ta <strong>şifreli</strong> saklanır. Nostr'a yayılan gönderiler <strong>herkese açıktır</strong>.</span>
-                  </p>
-                </div>
-              </details>
-              <Button onClick={() => void enableNostr()} disabled={nostrBusy} variant="outline">
-                {nostrBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Nostr kimliği oluştur'}
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {/* Domain tabanlı handle */}
-        <div className="border-t border-(--color-border) pt-5 space-y-3">
-          <div>
-            <p className="text-xs font-medium text-(--color-text-secondary)">Özel Domain Handle</p>
-            <p className="text-xs text-(--color-text-tertiary) mt-0.5 leading-relaxed">
-              Kendi domainini floq handle'ı olarak kullan. (örn. <span className="font-mono">adın.dev</span>)
-            </p>
-          </div>
-
-          {customHandleVerifiedAt && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/50">
-              <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-              <p className="text-xs text-emerald-700 dark:text-emerald-400">
-                <span className="font-mono font-semibold">@{customHandle}</span> doğrulandı
-              </p>
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            <Input
-              value={customHandle}
-              onChange={(e) => { setCustomHandle(e.target.value); setCustomHandleVerifiedAt(null) }}
-              placeholder="adın.dev"
-              className="font-mono text-sm"
-            />
-            <Button
-              onClick={() => void saveDomain()}
-              disabled={savingDomain || domainSaved}
-              variant="outline"
-              className="flex-shrink-0"
-            >
-              {savingDomain ? <Loader2 className="w-4 h-4 animate-spin" /> : domainSaved ? <Check className="w-4 h-4 text-emerald-500" /> : 'Kaydet'}
-            </Button>
-          </div>
-
-          {/* Doğrulama adımları */}
-          {customHandle && !customHandleVerifiedAt && (
-            <div className="rounded-xl border border-(--color-border) bg-(--color-background-secondary) p-4 space-y-3">
-              <p className="text-xs font-medium text-(--color-text-secondary)">Doğrulama adımları</p>
-              <ol className="space-y-2 text-xs text-(--color-text-tertiary)">
-                <li className="flex gap-2">
-                  <span className="w-4 h-4 rounded-full bg-(--color-coral) text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">1</span>
-                  <span>
-                    <span className="font-mono bg-(--color-background) px-1.5 py-0.5 rounded border border-(--color-border)">
-                      https://{customHandle}/.well-known/floq-verification
-                    </span>{' '}
-                    adresinde bir dosya yayınla
-                  </span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="w-4 h-4 rounded-full bg-(--color-coral) text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">2</span>
-                  <span>
-                    Dosyanın içeriği tam olarak şu olsun:{' '}
-                    <span className="font-mono bg-(--color-background) px-1.5 py-0.5 rounded border border-(--color-border)">
-                      @{handle}@{instanceDomain()}
-                    </span>
-                  </span>
-                </li>
-              </ol>
-              <Button
-                onClick={() => void verifyDomain()}
-                disabled={verifyingDomain}
-                size="sm"
-                className="text-white"
-                style={{ background: 'var(--gradient-avatar)' }}
-              >
-                {verifyingDomain ? <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />Kontrol ediliyor…</> : 'Doğrula'}
-              </Button>
-            </div>
-          )}
-
-          {domainError && (
-            <p className="text-xs text-red-500">{domainError}</p>
-          )}
-
-          {customHandle && (
-            <button
-              onClick={() => { setCustomHandle(''); setCustomHandleVerifiedAt(null); api.account.setDomainHandle(null).catch(() => {}) }}
-              className="text-xs text-(--color-text-tertiary) hover:text-red-500 transition-colors"
-            >
-              Domain handle'ı kaldır
-            </button>
-          )}
-        </div>
-      </div>
 
       {cropFile && (
         <CropModal
@@ -4246,6 +4269,7 @@ function SettingsPageContent() {
           ) : (
             <>
               {activeTab === 'profile' && <ProfileTab session={session} />}
+              {activeTab === 'bridges' && <BridgesTab session={session} />}
               {activeTab === 'privacy' && <PrivacyTab />}
               {activeTab === 'moderation' && <ModerationTab />}
               {activeTab === 'filters' && <FiltersTab />}

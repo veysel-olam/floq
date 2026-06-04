@@ -17,8 +17,7 @@ import {
 } from '../../lib/pubsub.js'
 import { deliverToRelays } from '../../lib/federation.js'
 import { notifySubscribers } from '../../lib/websub.js'
-import { publishNote } from '../../lib/nostr.js'
-import { crosspostToBluesky } from '../../lib/bluesky.js'
+import { enqueueBlueskyCrosspost, enqueueNostrCrosspost } from '../../jobs/crosspost.js'
 
 export async function mastodonStatusRoutes(app: FastifyInstance) {
   // POST /api/v1/statuses
@@ -86,15 +85,16 @@ export async function mastodonStatusRoutes(app: FastifyInstance) {
         for (const tag of fullPost.tags.filter((t) => t.startsWith('#'))) {
           void notifySubscribers(`${env.APP_URL}/tags/${tag.slice(1)}/rss`)
         }
-        // Nostr cross-post if user has a Nostr identity
-        if (ctx.actor.nostrPrivateKeyEncrypted) {
-          const nostrTags = fullPost.tags
-            .filter((t) => t.startsWith('#'))
-            .map((t) => ['t', t.slice(1).toLowerCase()])
-          void publishNote(content, ctx.actor.nostrPrivateKeyEncrypted, nostrTags)
+        // Cross-post to connected bridges via the durable job queue (retry +
+        // media), matching the main web post path so client-API posts behave
+        // identically to web-composed ones.
+        if (ctx.actor.nostrCrosspostEnabled && ctx.actor.nostrPrivateKeyEncrypted) {
+          void enqueueNostrCrosspost(ctx.actor.nostrPrivateKeyEncrypted, content, fullPost.tags ?? []).catch(() => {})
         }
-        // Bluesky cross-post if user has connected their Bluesky account
-        void crosspostToBluesky(ctx.userId, content, fullPost.tags)
+        const bridgeMedia = mediaForPost
+          .filter((m) => m.mimeType.startsWith('image/'))
+          .map((m) => ({ url: m.url, alt: m.altText }))
+        void enqueueBlueskyCrosspost(ctx.userId, content, fullPost.tags ?? [], bridgeMedia, fullPost.id).catch(() => {})
       }
     }
 

@@ -5,6 +5,7 @@ import { BskyAgent } from '@atproto/api'
 import { db } from '../db/client.js'
 import { blueskyConnections } from '../db/schema.js'
 import { requireMastodonUser } from '../lib/mastodonAuth.js'
+import { importBlueskyPosts } from '../lib/bluesky.js'
 
 export async function blueskyRoutes(app: FastifyInstance) {
   // GET /api/bluesky/connection — get current Bluesky connection
@@ -97,6 +98,12 @@ export async function blueskyRoutes(app: FastifyInstance) {
         updatedAt: new Date(),
       })
       .where(eq(blueskyConnections.userId, ctx.userId))
+
+    // Kick off an immediate first import so the user sees their posts appear
+    // right away rather than waiting for the next 10-minute sweep.
+    if (body.data.import_enabled === true) {
+      void importBlueskyPosts(ctx.userId).catch(() => {})
+    }
 
     return reply.send({ ok: true })
   })

@@ -53,11 +53,13 @@ uzak actor sayıları + refresh TTL · thread/yanıt çözümleme · boost timel
 ## 🌉 Köprüler (Bluesky / Nostr / AT Protocol)
 
 - [x] **Bluesky cross-post** — `crosspostToBluesky` ana web post akışına bağlandı (önceden yalnızca Mastodon-API yolundaydı). Bağlı + `crosspostEnabled` ise orijinal public/unlisted gönderiler Bluesky'ye gidiyor. (2026-05-31)
-- [ ] **Bluesky inbound** — Bluesky'den floq'a içerik akışı? Şu an AT Protocol köprüsü (`atprotocol.ts`: `did.json` + XRPC) floq içeriğini Bluesky okuyucularına **okutuyor**; Bluesky→floq (yanıt/beğeni geri akışı) doğrulanmadı.
 - [x] **Nostr cross-post** — `crosspostToNostr` (kind:1 event imzala + relay publish) eklendi; `actors.nostr_crosspost_enabled` toggle'ı + ayarlarda UI (kimlik oluştur, npub/NIP-05, crosspost toggle, rehber). Nostr artık Bluesky paritesinde. (2026-05-31)
-- [ ] **Bluesky cross-post medya** — Şu an yalnızca metin (300 char) + hashtag facet; görsel/medya Bluesky'ye yüklenmiyor.
-- [ ] **Köprü cross-post job'a alınmalı** — Şu an `void crosspostToBluesky(...)` fire-and-forget; başarısızlıkta retry yok. BullMQ job'a taşınmalı (federation gibi).
-- [ ] **Cross-post geri-besleme döngüsü koruması** — Bluesky'den okunan içerik tekrar Bluesky'ye yazılmamalı (loop guard).
+- [x] **Bluesky cross-post medya** — `uploadImageToBluesky` (sharp ile ~1MB blob limitine küçültme) + `app.bsky.embed.images` (max 4). Görseller artık Bluesky'ye gidiyor. (2026-06)
+- [x] **Köprü cross-post job'a alındı** — `crosspostQueue` (BullMQ, 3 deneme + exponential backoff). Hem web hem Mastodon-API yolu `enqueueBlueskyCrosspost`/`enqueueNostrCrosspost` kullanıyor; fire-and-forget kaldırıldı. (2026-06)
+- [x] **Bluesky inbound** — `importBlueskyPosts`: `import_enabled` olan kullanıcıların kendi Bluesky gönderileri 10 dakikalık `sweepBlueskyImports` job'ı ile floq'a aynalanıyor (yerel post olarak doğrudan insert → crosspost tetiklenmez). Ayarlar → Köprüler'de toggle; açınca anlık ilk import. (2026-06)
+- [x] **Cross-post geri-besleme döngüsü koruması** — `posts.bsky_uri`: crosspost'ta dönen at:// uri yazılır, import'ta dedupe için okunur; kendi çıktımızı asla geri aynalamayız. (2026-06)
+- [ ] **Bluesky inbound — kapsam genişletme** — Şu an yalnızca kullanıcının kendi üst-düzey gönderileri (yanıt/repost/medya hariç). İçe aktarılan gönderiler ActivityPub ile dışarı federe **edilmiyor** (yalnızca floq içinde görünür). Medya + yanıt + AP fan-out sonraki adım.
+- [ ] **Bluesky inbound — etkileşim geri akışı** — Bluesky'deki beğeni/yanıt sayaçlarının floq'a yansıtılması doğrulanmadı.
 
 ## 🧪 Test & Gözlemlenebilirlik
 

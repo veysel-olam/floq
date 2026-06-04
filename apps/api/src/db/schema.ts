@@ -598,6 +598,11 @@ export const posts = pgTable(
     // SHA-256 of canonical content for integrity verification
     contentHash: varchar('content_hash', { length: 64 }),
 
+    // AT Protocol (Bluesky) bridge: the at:// uri of the mirrored post.
+    // Set both when we cross-post a floq post out AND when we import a Bluesky
+    // post in — so the importer can dedupe and never re-mirror its own output.
+    bskyUri: varchar('bsky_uri', { length: 512 }),
+
     // Location tag
     locationName: varchar('location_name', { length: 200 }),
     locationLat: doublePrecision('location_lat'),
@@ -627,6 +632,7 @@ export const posts = pgTable(
     index('posts_conversation_idx').on(t.conversationId),
     index('posts_flow_idx').on(t.flowId),
     index('posts_scheduled_at_idx').on(t.scheduledAt),
+    index('posts_bsky_uri_idx').on(t.bskyUri),
   ],
 )
 
