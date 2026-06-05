@@ -20,6 +20,29 @@ function ApIcon({ className }: { className?: string }) {
   )
 }
 
+/* ── Shared panel shell (one look for all sidebar cards) ── */
+function Panel({ children }: { children: React.ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-(--color-border) bg-(--color-background-secondary) overflow-hidden">
+      {children}
+    </section>
+  )
+}
+
+function PanelHeader({ icon, title, right }: { icon: React.ReactNode; title: string; right?: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between px-4 py-2.5 border-b border-(--color-border)">
+      <div className="flex items-center gap-2">
+        <span className="text-(--color-coral)">{icon}</span>
+        <h2 className="text-sm font-semibold text-(--color-text-primary)" style={{ fontFamily: 'var(--font-outfit)' }}>
+          {title}
+        </h2>
+      </div>
+      {right}
+    </div>
+  )
+}
+
 /* ── Federation health widget ─────────────────────────── */
 function FederationWidget() {
   const [stats, setStats] = useState<{ instances: number; actors: number; inbound: number } | null>(null)
@@ -37,27 +60,19 @@ function FederationWidget() {
   }, [])
 
   return (
-    <section className="rounded-2xl border border-(--color-border) overflow-hidden">
-      <div className="px-4 py-3 bg-gradient-to-r from-(--color-coral)/8 to-(--color-teal)/8 border-b border-(--color-border)">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ApIcon className="w-4 h-4 text-(--color-coral)" />
-            <h2
-              className="text-sm font-semibold text-(--color-text-primary)"
-              style={{ fontFamily: 'var(--font-outfit)' }}
-            >
-              Federe Ağ
-            </h2>
-          </div>
+    <Panel>
+      <PanelHeader
+        icon={<ApIcon className="w-4 h-4" />}
+        title="Federe Ağ"
+        right={
           <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Canlı
           </span>
-        </div>
-      </div>
-
+        }
+      />
       {loading ? (
-        <div className="flex justify-center py-5">
+        <div className="flex justify-center py-6">
           <Loader2 className="w-4 h-4 animate-spin text-(--color-text-tertiary)" />
         </div>
       ) : stats ? (
@@ -67,14 +82,14 @@ function FederationWidget() {
           <StatCell icon={<Wifi className="w-3.5 h-3.5" />} value={stats.inbound} label="mesaj/gün" compact />
         </div>
       ) : (
-        <div className="px-4 py-3 flex items-center gap-2.5">
-          <Globe className="w-3.5 h-3.5 text-(--color-teal) flex-shrink-0" />
-          <p className="text-xs text-(--color-text-secondary) leading-snug">
-            ActivityPub protokolüyle binlerce federe sunucuya bağlı.
+        <div className="px-4 py-3.5 flex items-start gap-2.5">
+          <Globe className="w-4 h-4 text-(--color-teal) flex-shrink-0 mt-px" />
+          <p className="text-xs text-(--color-text-secondary) leading-relaxed">
+            ActivityPub ile binlerce federe sunucuya bağlısın.
           </p>
         </div>
       )}
-    </section>
+    </Panel>
   )
 }
 
@@ -117,15 +132,8 @@ function TrendingSection() {
   if (tags.length === 0) return null
 
   return (
-    <section className="rounded-2xl border border-(--color-border) bg-(--color-background-secondary) overflow-hidden">
-      <div className="px-4 py-3 border-b border-(--color-border)">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-(--color-coral)" />
-          <h2 className="text-sm font-semibold text-(--color-text-primary)" style={{ fontFamily: 'var(--font-outfit)' }}>
-            Gündem
-          </h2>
-        </div>
-      </div>
+    <Panel>
+      <PanelHeader icon={<TrendingUp className="w-4 h-4" />} title="Gündem" />
       <div className="divide-y divide-(--color-border)">
         {tags.map(({ tag, count }, i) => (
           <Link
@@ -148,7 +156,7 @@ function TrendingSection() {
           </Link>
         ))}
       </div>
-    </section>
+    </Panel>
   )
 }
 
@@ -180,12 +188,8 @@ function SuggestedSection() {
   if (actors.length === 0) return null
 
   return (
-    <section className="rounded-2xl border border-(--color-border) bg-(--color-background-secondary) overflow-hidden">
-      <div className="px-4 py-3 border-b border-(--color-border)">
-        <h2 className="text-sm font-semibold text-(--color-text-primary)" style={{ fontFamily: 'var(--font-outfit)' }}>
-          Seni Tanıyabilirler
-        </h2>
-      </div>
+    <Panel>
+      <PanelHeader icon={<Users className="w-4 h-4" />} title="Seni Tanıyabilirler" />
       <div className="divide-y divide-(--color-border)">
         {actors.map((actor) => {
           const initials = (actor.displayName ?? actor.handle).slice(0, 2).toUpperCase()
@@ -239,12 +243,12 @@ function SuggestedSection() {
           )
         })}
       </div>
-      <div className="px-4 py-2.5">
-        <Link href="/explore" className="text-xs text-(--color-coral) hover:underline">
-          Daha fazla gör
+      <div className="px-4 py-2.5 border-t border-(--color-border)">
+        <Link href="/explore" className="text-xs font-medium text-(--color-coral) hover:underline">
+          Daha fazla gör →
         </Link>
       </div>
-    </section>
+    </Panel>
   )
 }
 
@@ -278,7 +282,7 @@ export function RightPanel() {
   }
 
   return (
-    <aside className="hidden xl:flex flex-col w-72 flex-shrink-0 sticky top-0 self-start h-screen overflow-y-auto pt-4 pr-4 gap-3 scrollbar-none">
+    <aside className="hidden xl:flex flex-col w-72 flex-shrink-0 sticky top-0 self-start h-screen overflow-y-auto pt-4 pr-4 pb-6 gap-3.5 scrollbar-none">
       {/* Search */}
       <form onSubmit={handleSearch} className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-(--color-text-tertiary) pointer-events-none" />
