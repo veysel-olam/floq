@@ -973,6 +973,11 @@ export const api = {
     apiFetch<{ url: string; title: string | null; description: string | null; image: string | null; siteName: string | null }>(
       `/api/link-preview?url=${encodeURIComponent(url)}`,
     ),
+  instance: {
+    // Public federation reach for the sidebar widget (no auth).
+    federation: () =>
+      apiFetch<{ activeInstances: number; remoteActors: number; inbound24h: number }>('/api/instance/federation'),
+  },
   search: {
     query: (
       q: string,

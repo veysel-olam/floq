@@ -49,11 +49,11 @@ function FederationWidget() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.admin.federation()
+    api.instance.federation()
       .then((d) => setStats({
-        instances: d.summary.activeInstances,
-        actors: d.summary.remoteActors,
-        inbound: d.summary.inbound24h,
+        instances: d.activeInstances,
+        actors: d.remoteActors,
+        inbound: d.inbound24h,
       }))
       .catch(() => setStats(null))
       .finally(() => setLoading(false))
