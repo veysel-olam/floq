@@ -1593,23 +1593,25 @@ export async function groupRoutes(app: FastifyInstance) {
         orderBy: [desc(communityPartnerships.createdAt)],
       })
 
-      // Resolve the partner community for each row
-      const partnerIds = rows.map((r) =>
+      // Resolve the partner community for each row. community_a/b_id reference
+      // apGroups.id, so map: apGroups.id → group → actor (NOT actors.id directly).
+      const partnerGroupIds = rows.map((r) =>
         r.communityAId === group.id ? r.communityBId : r.communityAId,
       )
-      const partnerActors = partnerIds.length
-        ? await db.query.actors.findMany({ where: inArray(actors.id, partnerIds) })
+      const partnerGroups = partnerGroupIds.length
+        ? await db.query.apGroups.findMany({ where: inArray(apGroups.id, partnerGroupIds) })
+        : []
+      const partnerGroupById = new Map(partnerGroups.map((g) => [g.id, g]))
+      const partnerActorIds = partnerGroups.map((g) => g.actorId)
+      const partnerActors = partnerActorIds.length
+        ? await db.query.actors.findMany({ where: inArray(actors.id, partnerActorIds) })
         : []
       const partnerActorById = new Map(partnerActors.map((a) => [a.id, a]))
-      const partnerGroups = partnerIds.length
-        ? await db.query.apGroups.findMany({ where: inArray(apGroups.actorId, partnerIds) })
-        : []
-      const partnerGroupByActorId = new Map(partnerGroups.map((g) => [g.actorId, g]))
 
       return reply.send(rows.map((r) => {
-        const partnerId = r.communityAId === group.id ? r.communityBId : r.communityAId
-        const partnerActor = partnerActorById.get(partnerId)
-        const partnerGroup = partnerGroupByActorId.get(partnerId)
+        const partnerGroupId = r.communityAId === group.id ? r.communityBId : r.communityAId
+        const partnerGroup = partnerGroupById.get(partnerGroupId)
+        const partnerActor = partnerGroup ? partnerActorById.get(partnerGroup.actorId) : undefined
         return {
           id: r.id,
           status: r.status,
@@ -1617,7 +1619,7 @@ export async function groupRoutes(app: FastifyInstance) {
           initiatedByUs: r.initiatedBy === result.actor.id,
           createdAt: r.createdAt.toISOString(),
           partner: partnerActor ? {
-            id: partnerId,
+            id: partnerActor.id,
             handle: partnerActor.handle,
             displayName: partnerActor.displayName,
             avatarUrl: partnerActor.avatarUrl,
