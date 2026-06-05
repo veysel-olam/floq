@@ -247,9 +247,11 @@ export async function searchRoutes(app: FastifyInstance) {
 
   // GET /api/trending/tags — recency-weighted trending hashtags.
   // Score = Σ 0.5^(age_hours / 12): recent usage dominates (12h half-life) so the
-  // list reflects what's hot *now*, not just raw 48h totals. 72h window for data.
-  // A tag only "trends" if at least 2 distinct authors used it — this stops a
-  // single user's repeated hashtags from dominating everyone's sidebar.
+  // list reflects what's hot *now*. 7-day window for data (old tags decay to ~0
+  // via the half-life anyway).
+  // Ranking (not filtering) by distinct authors: community-wide tags float to the
+  // top and no single user's repeated hashtag can outrank a 2-author tag — yet on
+  // a small/quiet instance the panel still shows something instead of vanishing.
   app.get('/api/trending/tags', async (_req, reply) => {
     const rows = await db.execute(
       sql`
@@ -259,14 +261,13 @@ export async function searchRoutes(app: FastifyInstance) {
         FROM (
           SELECT unnest(${posts.tags}) AS tag, ${posts.createdAt} AS created_at, ${posts.authorId} AS author_id
           FROM ${posts}
-          WHERE ${posts.createdAt} > now() - interval '72 hours'
+          WHERE ${posts.createdAt} > now() - interval '7 days'
             AND ${posts.isDeleted} = false
             AND ${posts.visibility} = 'public'
             AND ${posts.isEphemeral} = false
         ) t
         GROUP BY tag
-        HAVING COUNT(DISTINCT author_id) >= 2
-        ORDER BY score DESC
+        ORDER BY COUNT(DISTINCT author_id) DESC, score DESC
         LIMIT 10
       `
     )
