@@ -1,0 +1,4 @@
+# Ampirik koşu çıktıları (harness.ts) buraya yazılır.
+# Gerçek koşu verisini tekrar-üretilebilirlik için tutabilirsin.
+*.json
+!.gitkeep
