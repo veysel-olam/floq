@@ -489,7 +489,7 @@ export default function FlowPage() {
           </div>
           {pinnedPosts.map((post) => (
             <div key={post.id} className="relative border-l-2 border-amber-400">
-              <PostCard post={post} currentActorHandle={currentHandle} />
+              <PostCard post={post} currentActorHandle={currentHandle} hideMenu={isOwner || post.author?.handle === currentHandle} />
               {(isOwner || post.author?.handle === currentHandle) && (
                 <div className="absolute top-2 right-2">
                   <PostContextMenu
@@ -523,7 +523,7 @@ export default function FlowPage() {
         <>
           {posts.map((post) => (
             <div key={post.id} className="relative">
-              <PostCard post={post} currentActorHandle={currentHandle} />
+              <PostCard post={post} currentActorHandle={currentHandle} hideMenu={isOwner || post.author?.handle === currentHandle} />
               {(isOwner || post.author?.handle === currentHandle) && (
                 <div className="absolute top-2 right-2">
                   <PostContextMenu

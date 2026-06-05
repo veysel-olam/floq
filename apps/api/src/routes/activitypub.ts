@@ -1025,6 +1025,17 @@ export async function activityPubRoutes(app: FastifyInstance) {
         }
         if (!post) return
 
+        // Community (Group) Announce: this is how Lemmy/Mastodon groups distribute
+        // their members' posts. Associate the post with the community (groupId)
+        // instead of treating it as a social boost — so it shows in the community
+        // feed and in members' home timelines (which key off posts.groupId).
+        if (senderActor.actorType === 'Group') {
+          if (!post.groupId) {
+            await db.update(posts).set({ groupId: senderActor.id }).where(eq(posts.id, post.id))
+          }
+          break
+        }
+
         // Record the boost so it appears in the booster's followers' timelines
         // (the home feed reads the boosts table), then bump the count + notify.
         const [inserted] = await db.insert(boosts)

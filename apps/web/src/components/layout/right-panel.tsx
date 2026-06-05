@@ -106,10 +106,10 @@ function StatCell({
 }) {
   const display = compact && value >= 1000 ? `${(value / 1000).toFixed(1)}K` : value.toString()
   return (
-    <div className="flex flex-col items-center gap-0.5 py-3 px-2 text-center">
-      <span className="text-(--color-text-tertiary)">{icon}</span>
-      <span className="text-sm font-bold text-(--color-text-primary) tabular-nums">{display}</span>
-      <span className="text-[9px] text-(--color-text-tertiary) uppercase tracking-wide">{label}</span>
+    <div className="flex flex-col items-center gap-1 py-3.5 px-1 text-center">
+      <span className="text-(--color-coral)">{icon}</span>
+      <span className="text-base font-bold text-(--color-text-primary) tabular-nums leading-none">{display}</span>
+      <span className="text-[9.5px] text-(--color-text-tertiary) leading-tight whitespace-nowrap">{label}</span>
     </div>
   )
 }

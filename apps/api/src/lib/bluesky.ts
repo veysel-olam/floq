@@ -215,7 +215,30 @@ export async function importBlueskyPosts(userId: string): Promise<number> {
       where: eq(posts.bskyUri, uri),
       columns: { id: true },
     })
-    if (existing) continue
+    if (existing) {
+      // Backfill: posts imported before image support exist without media. If the
+      // Bluesky post has images and we never attached any, add them now.
+      const hasMedia = await db.query.mediaAttachments.findFirst({
+        where: eq(mediaAttachments.postId, existing.id),
+        columns: { id: true },
+      })
+      if (!hasMedia) {
+        const imgs = extractBskyImages(post.embed)
+        if (imgs.length) {
+          await db.insert(mediaAttachments).values(imgs.map((im) => ({
+            postId: existing.id,
+            actorId: actor.id,
+            url: im.url,
+            remoteUrl: im.url,
+            mimeType: 'image/jpeg',
+            altText: im.alt || null,
+            width: im.width,
+            height: im.height,
+          }))).catch(() => {})
+        }
+      }
+      continue
+    }
 
     const tags = Array.from(text.matchAll(/#([\p{L}\p{N}_]+)/gu)).map((m) => `#${m[1]}`)
     const createdAt = record.createdAt ? new Date(record.createdAt) : new Date()

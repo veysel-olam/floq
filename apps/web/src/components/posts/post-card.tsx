@@ -42,6 +42,8 @@ interface PostCardProps {
   pinned?: boolean
   onPinChange?: (postId: string, pinned: boolean) => void
   hideActions?: boolean
+  /** Suppress the post's own ⋮ menu (e.g. when a parent renders its own context menu, as flows do). */
+  hideMenu?: boolean
   detail?: boolean
   /** Draws a continuous vertical thread connector down from the avatar and removes the bottom border (for ancestor posts in a thread). */
   threadLine?: boolean
@@ -1138,7 +1140,7 @@ function postCardReducer(state: PostCardState, action: PostCardAction): PostCard
   }
 }
 
-function PostCardImpl({ post, onDelete, onReply, onEdit, currentActorHandle, filterResult, pinned, onPinChange, hideActions, detail, threadLine, communityPin }: PostCardProps) {
+function PostCardImpl({ post, onDelete, onReply, onEdit, currentActorHandle, filterResult, pinned, onPinChange, hideActions, hideMenu, detail, threadLine, communityPin }: PostCardProps) {
   const router = useRouter()
   const { nsfwMode } = useUserPrefs()
   const isNsfwBlurred = post.sensitive && nsfwMode === 'blur'
@@ -1639,7 +1641,7 @@ function PostCardImpl({ post, onDelete, onReply, onEdit, currentActorHandle, fil
             </div>
 
             {/* Menus — shared between both modes, always at top-right */}
-            {isOwn && (
+            {isOwn && !hideMenu && (
               <div className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => dispatch({ type: 'MENU_TOGGLE' })}
@@ -1714,7 +1716,7 @@ function PostCardImpl({ post, onDelete, onReply, onEdit, currentActorHandle, fil
             )}
 
             {/* Non-own post menu — report */}
-            {!isOwn && currentActorHandle && (
+            {!isOwn && currentActorHandle && !hideMenu && (
               <div className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => dispatch({ type: 'MENU_TOGGLE' })}

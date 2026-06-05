@@ -569,8 +569,8 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                       className={cn(
                         'p-2 rounded-full border transition-colors',
                         isCloseFriend
-                          ? 'border-green-300 text-green-500 bg-green-500/10'
-                          : 'border-(--color-border) text-(--color-text-secondary) hover:border-green-300 hover:text-green-500',
+                          ? 'border-amber-300 text-amber-500 bg-amber-500/10'
+                          : 'border-(--color-border) text-(--color-text-secondary) hover:border-amber-300 hover:text-amber-500',
                       )}
                     >
                       {cfLoading
