@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { createHash, randomUUID } from 'node:crypto'
 import { eq, and, or, desc, lt, inArray, gte } from 'drizzle-orm'
 import { db } from '../db/client.js'
-import { actors, posts, follows, apActivities, polls, pollOptions, pollVotes, customEmojis, postEdits, boosts, likes, reactions, reports, instances } from '../db/schema.js'
+import { actors, posts, follows, apActivities, polls, pollOptions, pollVotes, customEmojis, postEdits, boosts, likes, reactions, reports } from '../db/schema.js'
 import { env } from '../lib/env.js'
 import {
   buildActor,
@@ -165,18 +165,23 @@ export async function activityPubRoutes(app: FastifyInstance) {
   // inbound activities arrived in the last 24h. Powers the sidebar "Federe Ağ" card
   // for everyone (not just admins). Lightly cached.
   app.get('/api/instance/federation', async (_req, reply) => {
-    const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000)
-    const [inst, ract, inb] = await Promise.all([
-      db.select({ count: sql<number>`count(*)::int` }).from(instances)
-        .where(and(gte(instances.lastSeenAt, since7d), eq(instances.isSuspended, false))),
+    const [instRes, ract, inb] = await Promise.all([
+      // Distinct federated servers we actually know accounts from (derived from
+      // remote handles `user@domain`). More reliable than instances.lastSeenAt and
+      // stays consistent with the remote-actor count next to it.
+      db.execute(sql`
+        SELECT COUNT(DISTINCT split_part(handle, '@', 2))::int AS count
+        FROM actors WHERE is_local = false AND handle LIKE '%@%'
+      `),
       db.select({ count: sql<number>`count(*)::int` }).from(actors).where(eq(actors.isLocal, false)),
       db.select({ count: sql<number>`count(*)::int` }).from(apActivities)
         .where(and(eq(apActivities.direction, 'inbound'), gte(apActivities.createdAt, since24h))),
     ])
+    const activeInstances = (instRes as unknown as { rows: { count: number }[] }).rows[0]?.count ?? 0
     reply.header('Cache-Control', 'public, max-age=120')
     return reply.send({
-      activeInstances: inst[0]?.count ?? 0,
+      activeInstances,
       remoteActors: ract[0]?.count ?? 0,
       inbound24h: inb[0]?.count ?? 0,
     })
