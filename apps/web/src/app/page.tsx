@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation'
 import { FloqLogo } from '@/components/floq-logo'
 import { PostCard } from '@/components/posts/post-card'
 import { Input } from '@/components/ui/input'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { api, type Post } from '@/lib/api'
 import { Search, TrendingUp, Hash, Loader2, Check } from 'lucide-react'
@@ -16,11 +15,6 @@ const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'
 /* ── Types ── */
 interface NodeInfo {
   usage: { users: { total: number }; localPosts: number }
-}
-interface InstanceAdmin {
-  handle: string
-  displayName: string | null
-  avatarUrl: string | null
 }
 
 /* ── Mock post builder (fallback while API loads) ── */
@@ -83,7 +77,6 @@ const FALLBACK_POSTS: Post[] = [
 function ServerInfoSidebar() {
   const [userCount, setUserCount] = useState<number | null>(null)
   const [postCount, setPostCount] = useState<number | null>(null)
-  const [admins, setAdmins] = useState<InstanceAdmin[]>([])
 
   useEffect(() => {
     fetch(`${API_URL}/nodeinfo/2.1`)
@@ -92,11 +85,6 @@ function ServerInfoSidebar() {
         setUserCount(d.usage.users.total)
         setPostCount(d.usage.localPosts)
       })
-      .catch(() => {})
-
-    fetch(`${API_URL}/api/instance`)
-      .then(r => r.json() as Promise<{ admins: InstanceAdmin[] }>)
-      .then(d => setAdmins(d.admins ?? []))
       .catch(() => {})
   }, [])
 
@@ -182,27 +170,6 @@ function ServerInfoSidebar() {
         </div>
       </div>
 
-      {/* Admin */}
-      {admins.length > 0 && (
-        <div className="flex flex-col gap-2">
-          {admins.slice(0, 2).map(admin => (
-            <Link key={admin.handle} href={`/${admin.handle}`} className="flex items-center gap-2.5 group">
-              <Avatar className="w-8 h-8 flex-shrink-0">
-                {admin.avatarUrl && <AvatarImage src={admin.avatarUrl} alt={admin.displayName ?? admin.handle} />}
-                <AvatarFallback className="text-xs text-white font-bold" style={{ background: 'var(--gradient-avatar)' }}>
-                  {(admin.displayName ?? admin.handle).slice(0, 1).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-(--color-text-primary) truncate group-hover:underline">
-                  {admin.displayName ?? admin.handle}
-                </p>
-                <p className="text-xs text-(--color-text-tertiary) truncate">@{admin.handle}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
     </aside>
   )
 }
