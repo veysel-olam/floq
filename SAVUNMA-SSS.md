@@ -170,4 +170,71 @@ Yani floq'un özgürlük iddiası "**bana güvenmek zorunda değilsin**" değil 
 
 ---
 
+## 11. Sitede çocuk koruması nasıl çalışıyor?
+
+floq'ta çocuk koruması **kayıttan itibaren, kodda zorunlu** çalışır — sadece bir politika metni değil:
+
+- **Yaş kapısı (kayıtta)** — kayıt sırasında doğum yılı zorunlu olarak alınır ([auth.ts](apps/api/src/lib/auth.ts)). **13 yaşından küçükler kesin reddedilir** (hesap oluşturulmaz; COPPA/KVKK uyumlu yaklaşım).
+- **Reşit olmayan (13-17) kısıtlı mod** — `isMinor` bayrağı açılır ve şu kısıtlamalar **kodda** uygulanır:
+  - **Arama motoru indekslemesi kapalı** (`noIndex`) — profili dışarıya açık dizine girmez.
+  - **Hassas/NSFW içerik gizlenir** — reşit olmayan kullanıcının akışında `sensitive` gönderiler filtrelenir ([timeline.ts:329](apps/api/src/routes/timeline.ts#L329)).
+  - **Konum paylaşımı engellenir** — gönderilerine coğrafi konum eklenemez ([posts.ts:152](apps/api/src/routes/posts.ts#L152)).
+  - **DM koruması** — reşit olmayan birine doğrudan mesaj gönderimi engellenir ([dm.ts:226](apps/api/src/routes/dm.ts#L226)).
+- **CSAM (çocuk istismarı içeriği) — sıfır tolerans** — ayrı bir şikâyet kategorisidir (`report_reason = 'csam'`); en yüksek öncelikle ele alınır, içerik kaldırılır, hesap kapatılır ve yetkililere bildirim esastır. Federe gelen böyle içerik için kaynak sunucu **defedere** edilir.
+
+> **15 sn:** Kayıtta doğum yılı zorunlu; 13 altı kesin reddedilir, 13-17 "kısıtlı mod"a girer — indekslenmez, hassas içerik görmez, konum paylaşamaz, kendisine DM atılamaz. CSAM ayrı kategori, sıfır tolerans + defederasyon.
+
+---
+
+## 12. Bir üye taciz ederse site nasıl muamele ediyor?
+
+Katmanlı bir süreç işler — hem **anlık kullanıcı araçları** hem de **moderatör yaptırımı**:
+
+1. **Anlık kullanıcı araçları** — kurban beklemeden kendini korur: **engelle, sustur, şikâyet et** (`harassment` kategorisi var).
+2. **Şikâyet kaydı** — şikâyet `reports` tablosuna düşer (sebep + detay + durum: `pending`); moderatör/admin kuyruğunda görünür.
+3. **Moderatör incelemesi** — admin paneli `/api/admin/reports` üzerinden şikâyet kabul/ret eder, not düşer; her karar **`admin_audit_logs`'a** kaydedilir (şeffaflık).
+4. **Yaptırım** — gerekirse içerik etiketlenir/kaldırılır veya kullanıcı **askıya alınır** (`user.suspend`). Kullanıcıya askı bildirimi gider.
+5. **İtiraz hakkı** — askıya alınan kullanıcı **itiraz** edebilir (`/api/v1/reports/:id/appeal`); itirazlar ayrı kuyrukta admin tarafından onay/ret edilir — keyfîliğe karşı denge.
+6. **Federe taciz** — taciz başka sunucudan geliyorsa o **kullanıcı/sunucu engellenir veya defedere edilir**; ayrıca **paylaşılan blok listeleri** (`block_lists`) ile tehdit topluca süzülebilir.
+
+> **15 sn:** Kurban anında engelle/sustur/şikâyet eder. Şikâyet moderatör kuyruğuna düşer, denetim günlüğüyle incelenir; gerekirse içerik kaldırılır veya kullanıcı askıya alınır. Askıya itiraz hakkı var. Federe tacizde defederasyon + paylaşılan blok listeleri.
+
+---
+
+## 13. Türkiye'den bir yasak (içerik kaldırma talebi) gelirse ne olur?
+
+Bu, federe mimarinin **hem gücünü hem sınırını** gösteren dürüst bir sorudur. Cevap, yasağın **neyi hedeflediğine** göre değişir:
+
+- **Yasa dışı içeriğe yönelik meşru talep** (mahkeme kararı vb.) — sunucu yöneticisi olarak **flq.social üzerindeki** ilgili içeriği kaldırır / hesabı askıya alır. Sunucu Türkiye yargı yetkisindeyse bu yasal bir yükümlülüktür ve karşılanır (denetim günlüğüne işlenir).
+- **Ama federasyon "tek düğmeyle her yerden silme"yi imkânsız kılar** — içerik zaten başka sunuculara federe olduysa, o kopyalar **kendi yargı bölgelerindeki** sunucularda kalır; Türkiye'nin yetkisi flq.social ile sınırlıdır, tüm fediverse'i kapsamaz. Bu, **sansüre karşı doğal direnç** sağlar.
+- **Tüm siteye erişim engeli (IP/DNS yasağı)** gelirse — flq.social Türkiye'den erişilemez olabilir, **ama kullanıcılar kilitli kalmaz:** hesaplarını başka ülkedeki bir fediverse sunucusuna **taşıyabilir** (ActivityPub `Move`), verilerini **dışa aktarabilir**, VPN/Tor veya kendi **self-host** sunucularıyla ağa katılmaya devam edebilir. Merkezi platformda "site yasaklandı = bittin"; federe ağda yasak **tek bir kapıyı** kapatır, ağı değil.
+
+Özetle: Meşru/yasal taleplere kendi sunucumuz düzeyinde uyulur; ama merkeziyetsiz yapı, **tek bir otoritenin tüm ağ üzerinde mutlak silme/engelleme gücü kurmasını** yapısal olarak engeller.
+
+> **15 sn:** Meşru yasal talep gelirse flq.social'daki içeriği kaldırırız (yargı yetkisi sunucuya uygulanır). Ama federasyon "her yerden sil"i imkânsız kılar — kopyalar başka ülkelerin sunucularında kalır. Tüm siteye erişim yasaklanırsa kullanıcı kilitli kalmaz: hesabını başka sunucuya taşır, verisini indirir, self-host eder. Yasak tek kapıyı kapatır, ağı değil.
+
+---
+
+## 14. Admin birini engellerse o veriye ne olur? Kullanıcı gerçekten özgür mü? Merkeziyetsizlik burada ne işlev görüyor?
+
+### Engellenen veriye ne olur?
+floq'ta admin "engelleme"si **yumuşak askıya almadır** (`isSuspended = true`), **veriyi yok etmez** ([admin.ts:408](apps/api/src/routes/admin.ts#L408)):
+- Hesap ve tüm içerik **veritabanında durur**; askı **geri alınabilir** (`unsuspend` ile aynen geri gelir).
+- Yani admin, içeriği **görünürlükten kaldırır** ama **mülkiyetini gasbetmez/silmez**. Bu, "kalıcı silme = sansür" ile "askı = denetlenebilir, geri döndürülebilir tedbir" arasındaki kritik farktır. Her askı **denetim günlüğüne** yazılır.
+
+### Kullanıcı gerçekten özgür mü? (dürüst cevap)
+Tek bir flq.social sunucusunda admin (ben), o sunucuda **gerçek bir yetkiye** sahibim — askıya alabilirim. Yani **o sunucu içinde** kullanıcı admin'e tabidir; bu inkâr edilmez. floq "yöneticisiz/güvensiz (trustless)" bir sistem **değildir**.
+
+**Özgürlük başka yerde:** Kullanıcı **bu sunucuya mahkûm değildir.**
+- **Exit hakkı** — askıya alınsa bile (veya almadan önce) hesabını başka sunucuya **taşır** (`Move`, takipçileriyle) ve verisini **dışa aktarır**. Admin onu o sunucudan çıkarabilir ama **ağdan veya kimliğinden koparamaz.**
+- **Açık protokol** — beğenmezse kendi sunucusunu kurar, aynı ağa eşit olarak katılır.
+- **Sunucudan bağımsız kimlik** — DID:key + Nostr anahtarları kullanıcıya aittir; sunucu onları geri alamaz.
+
+### Merkeziyetsizlik burada ne işlev görüyor?
+Tam olarak **gücü dengelemek**: Merkezi platformda admin'in yasağı *mutlaktır* — kimliğin, takipçilerin, verin hepsi gider, itiraz edemezsin, başka yere taşıyamazsın. Merkeziyetsizlikte admin'in yetkisi **kendi sunucusuyla sınırlıdır**; kullanıcının elinde **çıkış, taşıma ve kendi sunucusunu kurma** karşı-gücü vardır. Yani özgürlük "hiç kural/yönetici yok" değil — **"hiçbir yöneticinin üzerinde mutlak güç kuramaması"**dır. Merkeziyetsizlik, yaptırımı ortadan kaldırmaz; onu **tek elde toplanmaktan** alıkoyar.
+
+> **15 sn:** Admin "engelleme"si yumuşak askıdır — veri silinmez, geri alınabilir, denetim günlüğüne yazılır. Kullanıcı o sunucuda admin'e tabidir (floq trustless değil), ama sunucuya mahkûm değildir: hesabını taşır, verisini indirir, kendi sunucusunu kurar. Merkeziyetsizliğin işlevi yaptırımı yok etmek değil, hiçbir yöneticinin mutlak güç kurmasını engellemek — özgürlük "kural yok" değil, "kilit yok"tur.
+
+---
+
 *Hazırlayan: Veysel OLAM — floq bitirme projesi. Son güncelleme: 2026-06-05.*
