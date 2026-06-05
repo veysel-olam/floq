@@ -3,7 +3,7 @@
 import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  ChevronLeft, Loader2, Plus, Trash2, GripVertical, X, Check,
+  ChevronLeft, Loader2, Plus, Trash2, GripVertical, X, Check, Camera,
   Settings, LayoutTemplate, BookOpen, History, ShieldAlert, Award, Tag, Handshake, Vote,
 } from 'lucide-react'
 import { api, type Community, type PostTemplate, type PostTemplateField, type ModlogEntry, type CommunityType, type CommunityFlair, type Partnership } from '@/lib/api'
@@ -169,6 +169,34 @@ function GeneralSettings({ community, onSave }: { community: Community; onSave: 
   const [visibility, setVisibility] = useState(community.visibility)
   const [communityType, setCommunityType] = useState<CommunityType>(community.community_type)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState<null | 'avatar' | 'banner'>(null)
+  const [avatarUrl, setAvatarUrl] = useState(community.avatar_url)
+  const [bannerUrl, setBannerUrl] = useState(community.banner_url)
+  const [deleting, setDeleting] = useState(false)
+  const router = useRouter()
+
+  async function uploadPhoto(file: File, kind: 'avatar' | 'banner') {
+    setUploading(kind)
+    try {
+      const media = await api.media.upload(file)
+      const updated = await api.communities.update(community.handle,
+        kind === 'avatar' ? { avatar_url: media.url } : { banner_url: media.url })
+      if (kind === 'avatar') setAvatarUrl(media.url); else setBannerUrl(media.url)
+      onSave(updated)
+      toast.success('Görsel güncellendi.')
+    } catch { toast.error('Yüklenemedi.') }
+    finally { setUploading(null) }
+  }
+
+  async function deleteCommunity() {
+    if (!confirm(`"${community.name}" topluluğu kalıcı olarak silinecek. Üyelikler ve topluluk verileri kaldırılır; üyelerin gönderileri silinmez. Emin misin?`)) return
+    setDeleting(true)
+    try {
+      await api.communities.delete(community.handle)
+      toast.success('Topluluk silindi.')
+      router.push('/communities')
+    } catch { toast.error('Silinemedi.'); setDeleting(false) }
+  }
 
   async function save() {
     setSaving(true)
@@ -189,6 +217,33 @@ function GeneralSettings({ community, onSave }: { community: Community; onSave: 
 
   return (
     <div className="space-y-4">
+      {/* Görseller */}
+      <div>
+        <label className="text-xs font-semibold text-(--color-text-tertiary) uppercase tracking-widest block mb-2">Görseller</label>
+        <div className="relative rounded-xl overflow-hidden border border-(--color-border)">
+          <div className="h-24 bg-(--color-background-secondary)">
+            {bannerUrl && <img src={bannerUrl} alt="" className="w-full h-full object-cover" />}
+          </div>
+          <label className="absolute top-2 right-2 cursor-pointer text-[11px] font-medium px-2.5 py-1 rounded-full bg-black/55 text-white hover:bg-black/70 transition-colors">
+            {uploading === 'banner' ? 'Yükleniyor…' : 'Kapağı değiştir'}
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadPhoto(f, 'banner'); e.target.value = '' }} />
+          </label>
+          <div className="absolute left-3 -bottom-7">
+            <div className="relative">
+              <Avatar className="w-14 h-14 rounded-2xl border-4 border-(--color-background)">
+                {avatarUrl && <AvatarImage src={avatarUrl} />}
+                <AvatarFallback className="rounded-2xl text-sm font-bold text-white" style={{ background: 'var(--gradient-avatar)' }}>{community.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+              </Avatar>
+              <label className="absolute -right-1 -bottom-1 cursor-pointer w-6 h-6 rounded-full bg-(--color-coral) text-white flex items-center justify-center hover:bg-(--color-coral-hover) transition-colors">
+                {uploading === 'avatar' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Camera className="w-3 h-3" />}
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadPhoto(f, 'avatar'); e.target.value = '' }} />
+              </label>
+            </div>
+          </div>
+        </div>
+        <div className="h-8" />
+      </div>
+
       <div>
         <label className="text-xs font-semibold text-(--color-text-tertiary) uppercase tracking-widest block mb-1.5">Topluluk Adı</label>
         <input
@@ -220,28 +275,16 @@ function GeneralSettings({ community, onSave }: { community: Community; onSave: 
         </select>
       </div>
       <div>
-        <label className="text-xs font-semibold text-(--color-text-tertiary) uppercase tracking-widest block mb-2">Topluluk Tipi</label>
-        <div className="grid grid-cols-2 gap-2">
+        <label className="text-xs font-semibold text-(--color-text-tertiary) uppercase tracking-widest block mb-1.5">Topluluk Tipi</label>
+        <select
+          value={communityType}
+          onChange={(e) => setCommunityType(e.target.value as CommunityType)}
+          className="w-full text-sm bg-(--color-background-secondary) border border-(--color-border) rounded-xl px-3 py-2.5 text-(--color-text-primary) focus:outline-none focus:ring-2 focus:ring-(--color-coral)"
+        >
           {COMMUNITY_TYPES.map((t) => (
-            <button
-              key={t.value}
-              type="button"
-              onClick={() => setCommunityType(t.value)}
-              className={cn(
-                'flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors',
-                communityType === t.value
-                  ? 'border-(--color-coral) bg-(--color-coral)/5 ring-1 ring-(--color-coral)'
-                  : 'border-(--color-border) hover:border-(--color-border-strong)',
-              )}
-            >
-              <span className="text-lg leading-none mt-0.5">{t.emoji}</span>
-              <div className="min-w-0">
-                <p className="text-[13px] font-semibold text-(--color-text-primary) leading-tight">{t.label}</p>
-                <p className="text-[11px] text-(--color-text-tertiary) leading-snug mt-0.5 line-clamp-2">{t.description}</p>
-              </div>
-            </button>
+            <option key={t.value} value={t.value}>{t.label}</option>
           ))}
-        </div>
+        </select>
       </div>
       <div>
         <label className="text-xs font-semibold text-(--color-text-tertiary) uppercase tracking-widest block mb-1.5">Kurallar</label>
@@ -271,6 +314,23 @@ function GeneralSettings({ community, onSave }: { community: Community; onSave: 
         {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
         Kaydet
       </button>
+
+      {/* Tehlikeli Bölge */}
+      <div className="mt-8 pt-5 border-t border-(--color-border)">
+        <p className="text-xs font-semibold text-red-500 uppercase tracking-widest mb-1.5">Tehlikeli Bölge</p>
+        <p className="text-[13px] text-(--color-text-tertiary) mb-3 leading-relaxed">
+          Topluluğu silmek kalıcıdır: üyelikler, wiki, roller ve topluluk verileri kaldırılır.
+          Üyelerin gönderileri silinmez, yalnızca topluluk bağlantısı kalkar. Federe sunuculara da silme bildirilir.
+        </p>
+        <button
+          onClick={deleteCommunity}
+          disabled={deleting}
+          className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-full border border-red-400 text-red-500 font-semibold hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors disabled:opacity-50"
+        >
+          {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+          Topluluğu Sil
+        </button>
+      </div>
     </div>
   )
 }
