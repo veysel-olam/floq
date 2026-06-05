@@ -1256,7 +1256,7 @@ export default function CommunitySettingsPage({ params }: { params: Promise<{ sl
 
       {/* Tabs */}
       <div className="border-b border-(--color-border-secondary)">
-        <div className="flex">
+        <div className="flex overflow-x-auto scrollbar-none">
           {([
             { key: 'general' as SettingsTab, label: 'Genel', icon: <Settings className="w-3.5 h-3.5" /> },
             { key: 'templates' as SettingsTab, label: 'Şablonlar', icon: <LayoutTemplate className="w-3.5 h-3.5" /> },
@@ -1271,7 +1271,7 @@ export default function CommunitySettingsPage({ params }: { params: Promise<{ sl
               key={key}
               onClick={() => setTab(key)}
               className={cn(
-                'flex items-center gap-1.5 flex-1 justify-center py-3 text-sm font-medium transition-colors border-b-2',
+                'flex items-center gap-1.5 flex-shrink-0 px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2',
                 tab === key
                   ? 'border-(--color-coral) text-(--color-coral)'
                   : 'border-transparent text-(--color-text-tertiary) hover:text-(--color-text-primary)',

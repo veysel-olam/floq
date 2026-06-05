@@ -521,12 +521,24 @@ export async function groupRoutes(app: FastifyInstance) {
       })
       const modSet = new Set(modRows.map((m) => m.actorId))
 
-      return reply.send(rows.map((r) => ({
-        ...toMastodonAccount(r.follower!),
-        community_role: r.follower!.id === group.ownerId
-          ? 'owner'
-          : modSet.has(r.follower!.id) ? 'moderator' : 'member',
-      })))
+      // floq Actor shape (the web client expects handle/displayName/avatarUrl,
+      // not the Mastodon account shape) — and never leak key material.
+      return reply.send(rows.map((r) => {
+        const a = r.follower!
+        return {
+          id: a.id,
+          handle: a.handle,
+          displayName: a.displayName,
+          avatarUrl: a.avatarUrl,
+          headerUrl: a.headerUrl,
+          bio: a.bio,
+          isLocal: a.isLocal,
+          isBot: a.isBot,
+          community_role: a.id === group.ownerId
+            ? 'owner'
+            : modSet.has(a.id) ? 'moderator' : 'member',
+        }
+      }))
     },
   )
 

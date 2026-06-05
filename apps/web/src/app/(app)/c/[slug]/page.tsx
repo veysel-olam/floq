@@ -724,9 +724,9 @@ export default function CommunityPage({ params }: { params: Promise<{ slug: stri
       </div>
 
       {/* Profile section */}
-      <div className="px-4 -mt-8 mb-1">
+      <div className="px-4 mb-1">
         <div className="flex items-end justify-between mb-3">
-          <Avatar className="w-16 h-16 rounded-2xl border-4 border-(--color-background) shadow-md flex-shrink-0">
+          <Avatar className="w-16 h-16 -mt-8 rounded-2xl border-4 border-(--color-background) shadow-md flex-shrink-0">
             {community.avatar_url && <AvatarImage src={community.avatar_url} />}
             <AvatarFallback
               className="rounded-2xl text-lg font-bold text-white"
