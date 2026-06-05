@@ -29,7 +29,7 @@ import { generateActorKeyPair, decryptPrivateKey } from '../lib/keys.js'
 import { createSign, createHash } from 'node:crypto'
 import { env } from '../lib/env.js'
 import { buildActor, buildFollow, AP_CONTENT_TYPE, actorUrl, activityUrl } from '../lib/activityPub.js'
-import { fetchRemoteActor, deliverToInbox, deliverToFollowers, isSuspendedDomain } from '../lib/federation.js'
+import { fetchRemoteActor, deliverToInbox, isSuspendedDomain } from '../lib/federation.js'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -338,7 +338,6 @@ export async function groupRoutes(app: FastifyInstance) {
       visibility: z.enum(['public', 'restricted', 'private']).optional(),
       rules: z.string().max(2000).optional(),
       banner_url: z.string().url().optional().nullable(),
-      avatar_url: z.string().url().optional().nullable(),
       color_index: z.number().int().min(0).max(7).optional(),
       topics: z.string().max(500).optional().nullable(),
       post_templates: z.array(postTemplateSchema).max(5).optional().nullable(),
@@ -346,13 +345,12 @@ export async function groupRoutes(app: FastifyInstance) {
     }).safeParse(req.body)
     if (!body.success) return reply.code(422).send({ error: 'Validation failed' })
 
-    const { name, description, visibility, rules, banner_url, avatar_url, color_index, topics, post_templates, community_type } = body.data
+    const { name, description, visibility, rules, banner_url, color_index, topics, post_templates, community_type } = body.data
 
-    if (name !== undefined || description !== undefined || avatar_url !== undefined) {
+    if (name !== undefined || description !== undefined) {
       await db.update(actors).set({
         ...(name !== undefined && { displayName: name }),
         ...(description !== undefined && { bio: description }),
-        ...(avatar_url !== undefined && { avatarUrl: avatar_url }),
       }).where(eq(actors.id, actor.id))
     }
 
@@ -374,34 +372,6 @@ export async function groupRoutes(app: FastifyInstance) {
     return reply.send(serializeCommunity(updatedActor!, updatedGroup!, {
       memberStatus: isOwner ? 'owner' : 'mod',
     }))
-  })
-
-  // DELETE /api/communities/:handle — owner deletes the community (federated).
-  // In a decentralised network the owner of a community can dissolve it: we send a
-  // Delete(Group) to followers so remote instances that mirror it drop it, then hard
-  // delete the group actor — which cascades to apGroups + every community sub-table
-  // (moderators/wiki/modlog/badges/flairs/partnerships/votes/trust) and memberships.
-  // Members' own posts are detached (posts.group_id → null), not destroyed.
-  app.delete<{ Params: { handle: string } }>('/api/communities/:handle', async (req, reply) => {
-    const ctx = await requireMastodonUser(req, reply)
-    if (!ctx) return
-    const result = await getGroupWithActor(req.params.handle)
-    if (!result) return reply.code(404).send({ error: 'Topluluk bulunamadı' })
-    const { actor, group } = result
-    if (group.ownerId !== ctx.actor.id) return reply.code(403).send({ error: 'Sadece sahip topluluğu silebilir' })
-
-    const deleteActivity = {
-      '@context': 'https://www.w3.org/ns/activitystreams',
-      id: `${actor.apId}#delete`,
-      type: 'Delete',
-      actor: actor.apId,
-      object: actor.apId,
-      to: ['https://www.w3.org/ns/activitystreams#Public'],
-    }
-    void deliverToFollowers(actor.handle, actor.id, deleteActivity as Parameters<typeof deliverToFollowers>[2]).catch(() => {})
-
-    await db.delete(actors).where(eq(actors.id, actor.id))
-    return reply.send({ ok: true })
   })
 
   // POST /api/communities/:handle/join
