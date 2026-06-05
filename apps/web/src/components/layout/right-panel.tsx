@@ -167,7 +167,7 @@ function SuggestedSection() {
   const [following, setFollowing] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    api.actors.suggested().then((d) => setActors(d.actors.slice(0, 5))).catch(() => {}).finally(() => setLoading(false))
+    api.actors.suggested().then((d) => setActors(d.actors.slice(0, 3))).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
   const follow = useCallback(async (handle: string) => {
