@@ -1279,7 +1279,7 @@ export const api = {
     get: (handle: string) => apiFetch<Community>(`/api/communities/${handle}`),
     create: (body: { handle: string; name: string; description?: string; visibility?: 'public' | 'restricted' | 'private'; rules?: string; color_index?: number; topics?: string }) =>
       apiFetch<Community>('/api/communities', { method: 'POST', body: JSON.stringify(body) }),
-    update: (handle: string, body: { name?: string; description?: string; visibility?: 'public' | 'restricted' | 'private'; rules?: string; banner_url?: string | null; color_index?: number; topics?: string | null; post_templates?: PostTemplate[] | null; community_type?: CommunityType }) =>
+    update: (handle: string, body: { name?: string; description?: string; visibility?: 'public' | 'restricted' | 'private'; rules?: string; banner_url?: string | null; avatar_url?: string | null; color_index?: number; topics?: string | null; post_templates?: PostTemplate[] | null; community_type?: CommunityType }) =>
       apiFetch<Community>(`/api/communities/${handle}`, { method: 'PATCH', body: JSON.stringify(body) }),
     delete: (handle: string) =>
       apiFetch<{ ok: boolean }>(`/api/communities/${handle}`, { method: 'DELETE' }),
