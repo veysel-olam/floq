@@ -47,7 +47,7 @@ interface PostCardProps {
   detail?: boolean
   /** Draws a continuous vertical thread connector down from the avatar and removes the bottom border (for ancestor posts in a thread). */
   threadLine?: boolean
-  communityPin?: { isPinned: boolean; onToggle: () => Promise<void> }
+  communityPin?: { isPinned: boolean; onToggle: () => Promise<void>; label?: string }
 }
 
 const RICH_TOKEN = /(#[a-zA-ZğüşıöçĞÜŞİÖÇ0-9_]+|@[a-zA-Z0-9._-]+)/g
@@ -1685,7 +1685,7 @@ function PostCardImpl({ post, onDelete, onReply, onEdit, currentActorHandle, fil
                         >
                           {communityPin.isPinned
                             ? <><PinOff className="w-3.5 h-3.5 text-(--color-text-tertiary)" /> Sabitlemeyi Kaldır</>
-                            : <><Pin className="w-3.5 h-3.5 text-(--color-text-tertiary)" /> Topluluğa Sabitle</>}
+                            : <><Pin className="w-3.5 h-3.5 text-(--color-text-tertiary)" /> {communityPin.label ?? "Topluluğa Sabitle"}</>}
                         </button>
                       )}
                       {onPinChange && (
@@ -1760,7 +1760,7 @@ function PostCardImpl({ post, onDelete, onReply, onEdit, currentActorHandle, fil
                           >
                             {communityPin.isPinned
                               ? <><PinOff className="w-3.5 h-3.5 text-(--color-text-tertiary)" /> Sabitlemeyi Kaldır</>
-                              : <><Pin className="w-3.5 h-3.5 text-(--color-text-tertiary)" /> Topluluğa Sabitle</>}
+                              : <><Pin className="w-3.5 h-3.5 text-(--color-text-tertiary)" /> {communityPin.label ?? "Topluluğa Sabitle"}</>}
                           </button>
                         </>
                       )}

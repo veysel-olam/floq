@@ -6,6 +6,7 @@ import { eq, sql } from 'drizzle-orm'
 import { env } from './env.js'
 import { buildNote, buildCreate } from './activityPub.js'
 import { deliverToFollowers } from './federation.js'
+import { extractFirstUrl, fetchLinkPreview } from './linkPreview.js'
 
 export interface CrosspostMedia { url: string; alt?: string | null }
 
@@ -213,18 +214,18 @@ export async function importBlueskyPosts(userId: string): Promise<number> {
     // Dedupe: our own crossposts AND already-imported posts both carry bskyUri
     const existing = await db.query.posts.findFirst({
       where: eq(posts.bskyUri, uri),
-      columns: { id: true },
+      columns: { id: true, content: true, linkPreview: true },
     })
     if (existing) {
-      // Backfill: posts imported before image support exist without media. If the
-      // Bluesky post has images and we never attached any, add them now.
-      const hasMedia = await db.query.mediaAttachments.findFirst({
-        where: eq(mediaAttachments.postId, existing.id),
-        columns: { id: true },
-      })
-      if (!hasMedia) {
-        const imgs = extractBskyImages(post.embed)
-        if (imgs.length) {
+      // Backfill: posts imported before image/preview support. Add whichever is
+      // missing — embed images, or a link preview for a bare URL.
+      const imgs = extractBskyImages(post.embed)
+      if (imgs.length) {
+        const hasMedia = await db.query.mediaAttachments.findFirst({
+          where: eq(mediaAttachments.postId, existing.id),
+          columns: { id: true },
+        })
+        if (!hasMedia) {
           await db.insert(mediaAttachments).values(imgs.map((im) => ({
             postId: existing.id,
             actorId: actor.id,
@@ -235,6 +236,13 @@ export async function importBlueskyPosts(userId: string): Promise<number> {
             width: im.width,
             height: im.height,
           }))).catch(() => {})
+        }
+      } else if (!existing.linkPreview) {
+        const linkUrl = extractFirstUrl(existing.content)
+        if (linkUrl) {
+          void fetchLinkPreview(linkUrl)
+            .then((preview) => preview && db.update(posts).set({ linkPreview: preview }).where(eq(posts.id, existing.id)))
+            .catch(() => {})
         }
       }
       continue
@@ -271,6 +279,15 @@ export async function importBlueskyPosts(userId: string): Promise<number> {
         width: im.width,
         height: im.height,
       }))).catch(() => {})
+    } else {
+      // No image embed → if the text carries a link, build a rich preview
+      // (Apple Music / article card) just like native floq posts do.
+      const linkUrl = extractFirstUrl(text)
+      if (linkUrl) {
+        void fetchLinkPreview(linkUrl)
+          .then((preview) => preview && db.update(posts).set({ linkPreview: preview }).where(eq(posts.id, inserted.id)))
+          .catch(() => {})
+      }
     }
 
     // Going-forward fan-out: federate posts made after import was enabled, so the

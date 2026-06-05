@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useSession } from '@/lib/auth-client'
@@ -22,8 +22,6 @@ import {
   Bell,
   BellOff,
   Pin,
-  Trash2,
-  MoreHorizontal,
   Link2,
   Copy,
   Check,
@@ -43,71 +41,6 @@ interface MemberInfo {
   actor: Actor
   role: string
   createdAt: string
-}
-
-function PostContextMenu({
-  post,
-  slug,
-  isOwner,
-  isAuthor,
-  pinnedIds,
-  onPin,
-  onUnpin,
-  onDelete,
-}: {
-  post: Post
-  slug: string
-  isOwner: boolean
-  isAuthor: boolean
-  pinnedIds: Set<string>
-  onPin: (postId: string) => void
-  onUnpin: (postId: string) => void
-  onDelete: (postId: string) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  const isPinned = pinnedIds.has(post.id)
-
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    if (open) document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [open])
-
-  if (!isOwner && !isAuthor) return null
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="p-1 rounded hover:bg-(--color-background-secondary) text-(--color-text-tertiary) hover:text-(--color-text-primary) transition-colors"
-      >
-        <MoreHorizontal className="w-4 h-4" />
-      </button>
-      {open && (
-        <div className="absolute right-0 top-6 z-20 bg-(--color-background) border border-(--color-border) rounded-xl shadow-lg py-1 min-w-[140px]">
-          {isOwner && (
-            <button
-              onClick={() => { setOpen(false); isPinned ? onUnpin(post.id) : onPin(post.id) }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-(--color-text-primary) hover:bg-(--color-background-secondary) transition-colors"
-            >
-              <Pin className="w-3.5 h-3.5 text-amber-500" />
-              {isPinned ? 'Sabitlemeden Kaldır' : 'Sabitle'}
-            </button>
-          )}
-          <button
-            onClick={() => { setOpen(false); onDelete(post.id) }}
-            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-(--color-background-secondary) transition-colors"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Sil
-          </button>
-        </div>
-      )}
-    </div>
-  )
 }
 
 export default function FlowPage() {
@@ -242,7 +175,6 @@ export default function FlowPage() {
   }
 
   async function handleDeletePost(postId: string) {
-    if (!confirm('Bu gönderiyi akıştan silmek istediğinden emin misin?')) return
     await api.flows.deletePost(slug, postId)
     setPosts((prev) => prev.filter((p) => p.id !== postId))
     setPinnedPosts((prev) => prev.filter((p) => p.id !== postId))
@@ -488,22 +420,17 @@ export default function FlowPage() {
             </span>
           </div>
           {pinnedPosts.map((post) => (
-            <div key={post.id} className="relative border-l-2 border-amber-400">
-              <PostCard post={post} currentActorHandle={currentHandle} hideMenu={isOwner || post.author?.handle === currentHandle} />
-              {(isOwner || post.author?.handle === currentHandle) && (
-                <div className="absolute top-2 right-2">
-                  <PostContextMenu
-                    post={post}
-                    slug={slug}
-                    isOwner={isOwner}
-                    isAuthor={post.author?.handle === currentHandle}
-                    pinnedIds={pinnedIds}
-                    onPin={handlePin}
-                    onUnpin={handleUnpin}
-                    onDelete={handleDeletePost}
-                  />
-                </div>
-              )}
+            <div key={post.id} className="border-l-2 border-amber-400">
+              <PostCard
+                post={post}
+                currentActorHandle={currentHandle}
+                onDelete={handleDeletePost}
+                communityPin={(isOwner || post.author?.handle === currentHandle) ? {
+                  isPinned: pinnedIds.has(post.id),
+                  onToggle: () => (pinnedIds.has(post.id) ? handleUnpin(post.id) : handlePin(post.id)),
+                  label: 'Akışa Sabitle',
+                } : undefined}
+              />
             </div>
           ))}
         </div>
@@ -522,22 +449,17 @@ export default function FlowPage() {
       ) : (
         <>
           {posts.map((post) => (
-            <div key={post.id} className="relative">
-              <PostCard post={post} currentActorHandle={currentHandle} hideMenu={isOwner || post.author?.handle === currentHandle} />
-              {(isOwner || post.author?.handle === currentHandle) && (
-                <div className="absolute top-2 right-2">
-                  <PostContextMenu
-                    post={post}
-                    slug={slug}
-                    isOwner={isOwner}
-                    isAuthor={post.author?.handle === currentHandle}
-                    pinnedIds={pinnedIds}
-                    onPin={handlePin}
-                    onUnpin={handleUnpin}
-                    onDelete={handleDeletePost}
-                  />
-                </div>
-              )}
+            <div key={post.id}>
+              <PostCard
+                post={post}
+                currentActorHandle={currentHandle}
+                onDelete={handleDeletePost}
+                communityPin={(isOwner || post.author?.handle === currentHandle) ? {
+                  isPinned: pinnedIds.has(post.id),
+                  onToggle: () => (pinnedIds.has(post.id) ? handleUnpin(post.id) : handlePin(post.id)),
+                  label: 'Akışa Sabitle',
+                } : undefined}
+              />
             </div>
           ))}
           {nextCursor && (
