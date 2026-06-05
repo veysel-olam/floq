@@ -1,0 +1,13 @@
+dimension,ap,bluesky,nostr
+identity,1,1,na
+text,1,1,na
+visibility,1,0,na
+content_warning,1,0,na
+hashtags,1,1,na
+mentions,0.5,0,na
+quote,0,0,na
+media,1,0.5,na
+media_alt,0.5,1,na
+reply_thread,1,0,na
+timestamp,1,1,na
+language,0,0,na

@@ -17,13 +17,10 @@
 import { writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { DIMENSIONS, TARGETS, TARGET_LABEL, type Target, type Score } from './dimensions.js'
-
-interface Cell { score: Score; note: string; cite: string }
-type Row = Record<Target, Cell>
+import { DIMENSIONS, TARGETS, TARGET_LABEL, type Target, type Score, type Row } from './dimensions.js'
 
 // ── The audit (one row per dimension) ───────────────────────────────────────────
-const AUDIT: Record<string, Row> = {
+export const OUTBOUND: Record<string, Row> = {
   identity: {
     ap:      { score: 1,   note: 'Gönderi aynı floq actor URL\'sine attributedTo — kimlik birebir.', cite: 'buildNote: attributedTo = actorUrl(author.handle)' },
     bluesky: { score: 0.5, note: 'Kullanıcının ayrı Bluesky hesabı (app-password) altında çıkar; floq↔Bluesky kimliği kriptografik olarak bağlı değil.', cite: 'crosspostToBluesky: stored connection agent' },
@@ -111,19 +108,19 @@ function renderMatrixMd(): string {
   md += `| Boyut | ${TARGETS.map((t) => TARGET_LABEL[t]).join(' | ')} |\n`
   md += `|---|${TARGETS.map(() => '---').join('|')}|\n`
   for (const d of DIMENSIONS) {
-    const row = AUDIT[d.key]
+    const row = OUTBOUND[d.key]
     if (!row) continue
     md += `| ${d.label} | ${TARGETS.map((t) => glyph(row[t].score)).join(' | ')} |\n`
   }
   // Per-target average
   md += `| **Ortalama** | ${TARGETS.map((t) =>
-    `**${avg(DIMENSIONS.map((d) => AUDIT[d.key]?.[t].score ?? null))}**`).join(' | ')} |\n\n`
+    `**${avg(DIMENSIONS.map((d) => OUTBOUND[d.key]?.[t].score ?? null))}**`).join(' | ')} |\n\n`
 
   // Per-dimension fragility (avg across targets)
   md += `## Boyut kırılganlığı (hedefler ortalaması — düşük = kırılgan)\n\n`
   const dimAvgs = DIMENSIONS.map((d) => ({
     label: d.label,
-    a: Number(avg(TARGETS.map((t) => AUDIT[d.key]?.[t].score ?? null))) || 0,
+    a: Number(avg(TARGETS.map((t) => OUTBOUND[d.key]?.[t].score ?? null))) || 0,
   })).sort((x, y) => x.a - y.a)
   md += `| Boyut | Ort. korunma |\n|---|---|\n`
   for (const r of dimAvgs) md += `| ${r.label} | ${r.a.toFixed(2)} |\n`
@@ -132,7 +129,7 @@ function renderMatrixMd(): string {
   // Justifications
   md += `## Gerekçeler ve kod alıntıları\n\n`
   for (const d of DIMENSIONS) {
-    const row = AUDIT[d.key]
+    const row = OUTBOUND[d.key]
     if (!row) continue
     md += `### ${d.label} — *${d.measures}*\n`
     for (const t of TARGETS) {
@@ -153,17 +150,19 @@ function renderMatrixMd(): string {
 function renderCsv(): string {
   let csv = 'dimension,' + TARGETS.join(',') + '\n'
   for (const d of DIMENSIONS) {
-    const row = AUDIT[d.key]
+    const row = OUTBOUND[d.key]
     if (!row) continue
     csv += `${d.key},` + TARGETS.map((t) => (row[t].score ?? 'na')).join(',') + '\n'
   }
   return csv
 }
 
-// ── Main ─────────────────────────────────────────────────────────────────────
-const here = dirname(fileURLToPath(import.meta.url))
-writeFileSync(join(here, 'MATRIX.md'), renderMatrixMd())
-writeFileSync(join(here, 'matrix.csv'), renderCsv())
-console.log('✓ Üretildi: MATRIX.md + matrix.csv')
-console.log('Hedef ortalamaları:', TARGETS.map((t) =>
-  `${t}=${avg(DIMENSIONS.map((d) => AUDIT[d.key]?.[t].score ?? null))}`).join('  '))
+// ── Main (only when run directly, not when imported) ───────────────────────────
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const here = dirname(fileURLToPath(import.meta.url))
+  writeFileSync(join(here, 'MATRIX.md'), renderMatrixMd())
+  writeFileSync(join(here, 'matrix.csv'), renderCsv())
+  console.log('✓ Üretildi: MATRIX.md + matrix.csv')
+  console.log('Hedef ortalamaları:', TARGETS.map((t) =>
+    `${t}=${avg(DIMENSIONS.map((d) => OUTBOUND[d.key]?.[t].score ?? null))}`).join('  '))
+}

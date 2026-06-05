@@ -20,6 +20,10 @@ export const TARGET_LABEL: Record<Target, string> = {
 //   null = n/a (out of scope or meaningless for this target)
 export type Score = 1 | 0.5 | 0 | null
 
+// One audited (dimension × target) cell: score + justification + code citation.
+export interface Cell { score: Score; note: string; cite: string }
+export type Row = Record<Target, Cell>
+
 // A semantic unit of a post that may survive or be lost when bridged.
 export interface Dimension {
   key: string
