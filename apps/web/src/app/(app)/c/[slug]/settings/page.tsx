@@ -220,8 +220,8 @@ function GeneralSettings({ community, onSave }: { community: Community; onSave: 
       {/* Görseller */}
       <div>
         <label className="text-xs font-semibold text-(--color-text-tertiary) uppercase tracking-widest block mb-2">Görseller</label>
-        <div className="relative rounded-xl overflow-hidden border border-(--color-border)">
-          <div className="h-24 bg-(--color-background-secondary)">
+        <div className="relative">
+          <div className="h-24 rounded-xl overflow-hidden border border-(--color-border) bg-(--color-background-secondary)">
             {bannerUrl && <img src={bannerUrl} alt="" className="w-full h-full object-cover" />}
           </div>
           <label className="absolute top-2 right-2 cursor-pointer text-[11px] font-medium px-2.5 py-1 rounded-full bg-black/55 text-white hover:bg-black/70 transition-colors">

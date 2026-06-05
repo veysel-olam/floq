@@ -105,13 +105,16 @@ export async function timelineRoutes(app: FastifyInstance) {
         : inArray(posts.visibility, ['public', 'unlisted'])
 
       // Build base conditions
-      // Followed-users branch respects visibility (incl. close_friends)
-      const followedUsersCondition = and(inArray(posts.authorId, sourceIds), visibilityCondition)!
+      // Followed-users branch respects visibility (incl. close_friends).
+      // Community posts (group_id set) are excluded here — they surface only via the
+      // community branch below (membership), not just because you follow the author.
+      const followedUsersCondition = and(inArray(posts.authorId, sourceIds), visibilityCondition, isNull(posts.groupId))!
 
-      // Hashtag branch: only public posts from anyone
+      // Hashtag branch: only public, non-community posts from anyone
       const hashtagCondition = followedTags.length > 0
         ? and(
             eq(posts.visibility, 'public'),
+            isNull(posts.groupId),
             sql`${posts.tags} && ARRAY[${sql.join(followedTags.map((t) => sql`${t}`), sql`, `)}]::text[]`,
           )
         : null
@@ -321,7 +324,7 @@ export async function timelineRoutes(app: FastifyInstance) {
       const cursor = req.query.cursor ? new Date(req.query.cursor) : undefined
       const feed = req.query.feed // 'local' | 'federated' | undefined
 
-      const conditions = [eq(posts.visibility, 'public'), eq(posts.isDeleted, false), isNull(posts.scheduledAt), eq(posts.isEphemeral, false)]
+      const conditions = [eq(posts.visibility, 'public'), eq(posts.isDeleted, false), isNull(posts.scheduledAt), eq(posts.isEphemeral, false), isNull(posts.groupId)]
       // Restricted mode: minors (13-17) don't see sensitive/NSFW content.
       if (viewerIsMinor) conditions.push(eq(posts.sensitive, false))
       // Hide posts from anyone in a block relationship with the viewer (both ways).
