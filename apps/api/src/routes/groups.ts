@@ -29,7 +29,7 @@ import { generateActorKeyPair, decryptPrivateKey } from '../lib/keys.js'
 import { createSign, createHash } from 'node:crypto'
 import { env } from '../lib/env.js'
 import { buildActor, buildFollow, AP_CONTENT_TYPE, actorUrl, activityUrl } from '../lib/activityPub.js'
-import { fetchRemoteActor, deliverToInbox, deliverToFollowers, isSuspendedDomain } from '../lib/federation.js'
+import { fetchRemoteActor, deliverToInbox, isSuspendedDomain } from '../lib/federation.js'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -374,34 +374,6 @@ export async function groupRoutes(app: FastifyInstance) {
     return reply.send(serializeCommunity(updatedActor!, updatedGroup!, {
       memberStatus: isOwner ? 'owner' : 'mod',
     }))
-  })
-
-  // DELETE /api/communities/:handle — owner deletes the community (federated).
-  // In a decentralised network the owner of a community can dissolve it: we send a
-  // Delete(Group) to followers so remote instances that mirror it drop it, then hard
-  // delete the group actor — which cascades to apGroups + every community sub-table
-  // (moderators/wiki/modlog/badges/flairs/partnerships/votes/trust) and memberships.
-  // Members' own posts are detached (posts.group_id → null), not destroyed.
-  app.delete<{ Params: { handle: string } }>('/api/communities/:handle', async (req, reply) => {
-    const ctx = await requireMastodonUser(req, reply)
-    if (!ctx) return
-    const result = await getGroupWithActor(req.params.handle)
-    if (!result) return reply.code(404).send({ error: 'Topluluk bulunamadı' })
-    const { actor, group } = result
-    if (group.ownerId !== ctx.actor.id) return reply.code(403).send({ error: 'Sadece sahip topluluğu silebilir' })
-
-    const deleteActivity = {
-      '@context': 'https://www.w3.org/ns/activitystreams',
-      id: `${actor.apId}#delete`,
-      type: 'Delete',
-      actor: actor.apId,
-      object: actor.apId,
-      to: ['https://www.w3.org/ns/activitystreams#Public'],
-    }
-    void deliverToFollowers(actor.handle, actor.id, deleteActivity as Parameters<typeof deliverToFollowers>[2]).catch(() => {})
-
-    await db.delete(actors).where(eq(actors.id, actor.id))
-    return reply.send({ ok: true })
   })
 
   // POST /api/communities/:handle/join
