@@ -81,7 +81,7 @@ export default function LoginPage() {
             onChange={(e) => setTotpCode(e.target.value)}
             maxLength={6}
             placeholder="· · · · · ·"
-            className="tracking-[0.5em] text-center text-xl font-mono h-12 border-(--color-border) bg-(--color-background) focus-visible:ring-(--color-coral)"
+            className="tracking-[0.5em] text-center text-xl font-mono h-12 rounded-xl border-(--color-border) bg-(--color-background) focus-visible:ring-(--color-coral)"
             autoFocus
           />
         </div>
@@ -95,7 +95,7 @@ export default function LoginPage() {
         <Button
           onClick={verifyTotp}
           disabled={verifying || totpCode.length !== 6}
-          className="w-full text-white font-semibold h-11 gap-2"
+          className="w-full text-white font-semibold h-11 rounded-xl gap-2"
           style={{ background: 'var(--color-coral)' }}
         >
           {verifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Doğrula <ArrowRight className="w-4 h-4" /></>}
@@ -121,7 +121,7 @@ export default function LoginPage() {
             type="email"
             placeholder="ornek@mail.com"
             {...register('email')}
-            className="h-11 border-(--color-border) bg-(--color-background) focus-visible:ring-(--color-coral)"
+            className="h-11 rounded-xl border-(--color-border) bg-(--color-background) focus-visible:ring-(--color-coral)"
           />
           {errors.email && <p className="text-xs text-red-500">{errors.email.message}</p>}
         </div>
@@ -138,7 +138,7 @@ export default function LoginPage() {
             type="password"
             placeholder="••••••••"
             {...register('password')}
-            className="h-11 border-(--color-border) bg-(--color-background) focus-visible:ring-(--color-coral)"
+            className="h-11 rounded-xl border-(--color-border) bg-(--color-background) focus-visible:ring-(--color-coral)"
           />
           {errors.password && <p className="text-xs text-red-500">{errors.password.message}</p>}
         </div>
@@ -152,7 +152,7 @@ export default function LoginPage() {
         <Button
           type="submit"
           disabled={isSubmitting}
-          className="w-full text-white font-semibold h-11 gap-2 mt-2"
+          className="w-full text-white font-semibold h-11 rounded-xl gap-2 mt-2"
           style={{ background: 'var(--color-coral)' }}
         >
           {isSubmitting

@@ -5,23 +5,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="min-h-screen bg-(--color-background) flex flex-col items-center justify-center px-4 py-12 relative overflow-hidden">
 
-      {/* Dot grid texture */}
+      {/* Faint dot grid texture — calm, onboarding-aligned */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-[0.025] dark:opacity-[0.05]"
+        className="pointer-events-none absolute inset-0 opacity-[0.02] dark:opacity-[0.04]"
         style={{
           backgroundImage: `radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)`,
           backgroundSize: '28px 28px',
         }}
-      />
-
-      {/* Gradient orbs */}
-      <div
-        className="pointer-events-none absolute -top-48 -right-48 w-[600px] h-[600px] rounded-full blur-3xl"
-        style={{ background: 'radial-gradient(circle, var(--color-coral) 0%, transparent 65%)', opacity: 0.07 }}
-      />
-      <div
-        className="pointer-events-none absolute -bottom-48 -left-32 w-[500px] h-[500px] rounded-full blur-3xl"
-        style={{ background: 'radial-gradient(circle, var(--color-teal) 0%, transparent 65%)', opacity: 0.05 }}
       />
 
       <div className="relative z-10 w-full max-w-[400px] space-y-6">
@@ -29,12 +19,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         {/* Logo */}
         <div className="flex justify-center pb-2">
           <Link href="/">
-            <FloqLogo size="md" />
+            <FloqLogo size="md" beta />
           </Link>
         </div>
 
-        {/* Form card */}
-        <div className="rounded-2xl border border-(--color-border) bg-(--color-background) shadow-xl shadow-black/[0.06] dark:shadow-black/30 p-8">
+        {/* Form card — flat & calm */}
+        <div className="rounded-2xl border border-(--color-border) bg-(--color-background-secondary) p-8">
           {children}
         </div>
 

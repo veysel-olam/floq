@@ -139,7 +139,7 @@ function RegisterForm() {
               <Input
                 id="inviteCode"
                 placeholder="A3F9B2C1D4"
-                className="pl-9 border-(--color-border) bg-(--color-background) focus-visible:ring-(--color-coral) uppercase"
+                className="pl-9 rounded-xl border-(--color-border) bg-(--color-background) focus-visible:ring-(--color-coral) uppercase"
                 {...register('inviteCode')}
                 onChange={(e) => setValue('inviteCode', e.target.value.toUpperCase())}
               />
@@ -157,7 +157,7 @@ function RegisterForm() {
               id="name"
               placeholder="Adın Soyadın"
               {...register('name')}
-              className="border-(--color-border) bg-(--color-background) focus-visible:ring-(--color-coral)"
+              className="rounded-xl border-(--color-border) bg-(--color-background) focus-visible:ring-(--color-coral)"
             />
             {errors.name && <p className="text-xs text-red-500">{errors.name.message}</p>}
           </div>
@@ -169,7 +169,7 @@ function RegisterForm() {
               <Input
                 id="handle"
                 placeholder="kullanici"
-                className="pl-7 border-(--color-border) bg-(--color-background) focus-visible:ring-(--color-coral)"
+                className="pl-7 rounded-xl border-(--color-border) bg-(--color-background) focus-visible:ring-(--color-coral)"
                 {...register('handle')}
               />
             </div>
@@ -191,7 +191,7 @@ function RegisterForm() {
             type="email"
             placeholder="ornek@mail.com"
             {...register('email')}
-            className="border-(--color-border) bg-(--color-background) focus-visible:ring-(--color-coral)"
+            className="rounded-xl border-(--color-border) bg-(--color-background) focus-visible:ring-(--color-coral)"
           />
           {errors.email && <p className="text-xs text-red-500">{errors.email.message}</p>}
         </div>
@@ -203,7 +203,7 @@ function RegisterForm() {
             type="password"
             placeholder="En az 8 karakter"
             {...register('password')}
-            className="border-(--color-border) bg-(--color-background) focus-visible:ring-(--color-coral)"
+            className="rounded-xl border-(--color-border) bg-(--color-background) focus-visible:ring-(--color-coral)"
           />
           {errors.password && <p className="text-xs text-red-500">{errors.password.message}</p>}
         </div>
@@ -216,7 +216,7 @@ function RegisterForm() {
             inputMode="numeric"
             placeholder="örn. 2000"
             {...register('birthYear')}
-            className="border-(--color-border) bg-(--color-background) focus-visible:ring-(--color-coral)"
+            className="rounded-xl border-(--color-border) bg-(--color-background) focus-visible:ring-(--color-coral)"
           />
           {errors.birthYear && <p className="text-xs text-red-500">{errors.birthYear.message}</p>}
           <p className="text-[11px] text-(--color-text-tertiary)">13 yaş ve üzeri kayıt olabilir. 13-17 yaş için bazı özellikler kısıtlıdır.</p>
@@ -245,7 +245,7 @@ function RegisterForm() {
         <Button
           type="submit"
           disabled={isSubmitting || (requireInvite && inviteValid === false)}
-          className="w-full text-white font-semibold h-11 gap-2"
+          className="w-full text-white font-semibold h-11 rounded-xl gap-2"
           style={{ background: 'var(--color-coral)' }}
         >
           {isSubmitting
