@@ -103,11 +103,16 @@ function ServerInfoSidebar() {
 
   return (
     <aside className="hidden lg:flex flex-col sticky top-0 h-screen w-[280px] xl:w-[300px] flex-shrink-0 border-r border-(--color-border-secondary) px-6 py-6 gap-5 overflow-y-auto scrollbar-none">
-      <FloqLogo size="md" />
+      <FloqLogo size="md" beta />
 
       {/* Tagline */}
       <p className="text-base font-semibold text-(--color-text-primary) leading-snug" style={{ fontFamily: 'var(--font-outfit)' }}>
         Sosyal medya, senin kurallarınla.
+      </p>
+
+      {/* Beta note */}
+      <p className="-mt-3 text-xs text-(--color-text-tertiary) leading-relaxed">
+        floq erken aşamada bir projedir; özellikler ve veriler zamanla değişebilir.
       </p>
 
       {/* Differentiators */}
@@ -276,7 +281,7 @@ export default function Page() {
 
           {/* Mobile sticky header — hidden on desktop */}
           <div className="lg:hidden sticky top-0 z-20 bg-(--color-background)/95 backdrop-blur-sm border-b border-(--color-border-secondary) px-4 py-3 flex items-center justify-between">
-            <FloqLogo size="sm" />
+            <FloqLogo size="sm" beta />
             <div className="flex gap-2">
               <Link href="/login" className="px-4 py-1.5 rounded-full text-sm font-medium border border-(--color-border) text-(--color-text-secondary) hover:bg-(--color-background-secondary) transition-colors">
                 Giriş

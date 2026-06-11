@@ -12,6 +12,7 @@ interface FloqLogoProps {
   size?: LogoSize
   iconOnly?: boolean
   light?: boolean
+  beta?: boolean
   className?: string
 }
 
@@ -19,6 +20,7 @@ export function FloqLogo({
   size = 'md',
   iconOnly = false,
   light = false,
+  beta = false,
   className,
 }: FloqLogoProps) {
   const { icon, wordmark, gap } = sizes[size]
@@ -35,6 +37,17 @@ export function FloqLogo({
           style={{ fontFamily: 'var(--font-outfit)' }}
         >
           floq
+        </span>
+      )}
+      {beta && (
+        <span
+          className={cn(
+            'self-start -ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide leading-none',
+            light ? 'bg-white/20 text-white' : 'bg-(--color-coral)/12 text-(--color-coral)',
+          )}
+          title="floq erken aşamada (beta) bir projedir"
+        >
+          beta
         </span>
       )}
     </div>

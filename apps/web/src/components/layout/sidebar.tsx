@@ -137,7 +137,7 @@ export function Sidebar() {
       {/* Logo */}
       <div className="px-4 pt-5 pb-3 lg:px-5">
         <Link href="/home" aria-label="floq ana sayfa">
-          <span className="hidden lg:flex"><FloqLogo size="sm" /></span>
+          <span className="hidden lg:flex"><FloqLogo size="sm" beta /></span>
           <span className="lg:hidden"><FloqLogo size="sm" iconOnly /></span>
         </Link>
       </div>
